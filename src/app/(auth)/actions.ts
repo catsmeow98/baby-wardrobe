@@ -43,7 +43,10 @@ export async function signUp(formData: FormData) {
     ...parsed.data,
     options: { emailRedirectTo: `${env.siteUrl()}/auth/callback` },
   });
-  if (error) return go('/signup', { error: 'We could not create that account. Try a different email or password.' });
+  if (error) {
+    console.error('Supabase sign-up error:', error);
+    return go('/signup', { error: error.message });
+  }
   if (data.session) return redirect('/children'); // email confirmation is switched off
   return go('/login', { message: 'Check your email to confirm your account, then sign in.' });
 }
