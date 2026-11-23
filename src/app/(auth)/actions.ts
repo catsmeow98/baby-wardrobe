@@ -44,7 +44,14 @@ export async function signUp(formData: FormData) {
     options: { emailRedirectTo: `${env.siteUrl()}/auth/callback` },
   });
   if (error) {
-    console.error('Supabase sign-up error:', error);
+    console.error('SUPABASE SIGNUP ERROR:', {
+      name: error.name,
+      message: error.message,
+      status: error.status,
+      code: error.code,
+      details: error,
+    });
+
     return go('/signup', { error: error.message });
   }
   if (data.session) return redirect('/children'); // email confirmation is switched off
