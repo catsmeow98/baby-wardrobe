@@ -50,13 +50,30 @@ export async function signUp(formData: FormData) {
 
 export async function requestPasswordReset(formData: FormData) {
   const parsed = email.safeParse(formData.get('email'));
-  if (!parsed.success) return go('/forgot-password', { error: parsed.error.issues[0].message });
+
+  if (!parsed.success) {
+    return go('/forgot-password', {
+      error: parsed.error.issues[0].message,
+    });
+  }
+
   const supabase = await createClient();
-  await supabase.auth.resetPasswordForEmail(parsed.data, {
-    redirectTo: `${env.siteUrl()}/auth/callback?next=/reset-password`,
+
+  const { error } = await supabase.auth.resetPasswordForEmail(
+    parsed.data,
+    {
+      redirectTo: `${env.siteUrl()}/auth/callback?next=/reset-password`,
+    }
+  );
+
+  if (error) {
+    console.error('Password reset failed:', error);
+  }
+
+  // Keep the same public response for security.
+  return go('/forgot-password', {
+    message: 'If that email has an account, a reset link is on its way.',
   });
-  // Same answer whether or not the address has an account.
-  return go('/forgot-password', { message: 'If that email has an account, a reset link is on its way.' });
 }
 
 export async function updatePassword(formData: FormData) {
