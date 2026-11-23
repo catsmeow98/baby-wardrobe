@@ -27,7 +27,17 @@ export async function signIn(formData: FormData) {
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword(parsed.data);
   // One message for every failure, so the form never reveals whether an email has an account.
-  if (error) return go('/login', { error: 'Email or password is incorrect.', next });
+  if (error) {
+    console.error('SUPABASE SIGN IN ERROR:', {
+      name: error.name,
+      message: error.message,
+      status: error.status,
+      code: error.code,
+      details: error,
+    });
+
+    return go('/signup', { error: error.message });
+  };
   return redirect(next);
 }
 
@@ -77,7 +87,15 @@ export async function requestPasswordReset(formData: FormData) {
   );
 
   if (error) {
-    console.error('Password reset failed:', error);
+    console.error('SUPABASE PASSWORD RESET ERROR:', {
+      name: error.name,
+      message: error.message,
+      status: error.status,
+      code: error.code,
+      details: error,
+    });
+
+    return go('/signup', { error: error.message });
   }
 
   // Keep the same public response for security.
