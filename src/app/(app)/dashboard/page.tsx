@@ -2,11 +2,13 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { getContext, toGoals, toInventory, toShopping } from '@/lib/context';
 import { NoChild } from '@/components/no-child';
+import { Pill } from '@/components/pill';
 import { ProgressBar } from '@/components/progress-bar';
-import { btnGhostCls } from '@/components/ui';
-import { sizeName } from '@/lib/db';
+import { btnCls, btnGhostCls } from '@/components/ui';
+import { FIT_LABELS, sizeName } from '@/lib/db';
 import type { GoalRow, ItemRow, ShoppingRow } from '@/lib/db';
-import { fitStateFor, goalProgress, sizeProgress } from '@/lib/domain';
+import { fitStateFor, goalProgress, sizeProgress, transition, type FitState } from '@/lib/domain';
+import { forecastFor, loadMeasurements } from '@/lib/forecast-data';
 
 export const metadata: Metadata = { title: 'Dashboard' };
 
@@ -20,6 +22,9 @@ function Stat({ label, value, note }: { label: string; value: React.ReactNode; n
   );
 }
 
+const monthOf = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' });
+const FIT_ORDER: FitState[] = ['fits', 'small', 'notyet', 'outgrown', 'unknown'];
+
 export default async function DashboardPage() {
   const ctx = await getContext();
   if (!ctx.active) return <NoChild />;
@@ -29,7 +34,8 @@ export default async function DashboardPage() {
     ctx.supabase.from('wardrobe_goals').select('*').eq('child_id', child.id),
     ctx.supabase.from('shopping_items').select('*').eq('child_id', child.id),
   ]);
-  const items = toInventory((itemRows ?? []) as ItemRow[], ctx);
+  const rawItems = (itemRows ?? []) as ItemRow[];
+  const items = toInventory(rawItems, ctx);
   const shopRowsT = (shopRows ?? []) as ShoppingRow[];
   const progress = goalProgress(toGoals((goalRows ?? []) as GoalRow[], ctx), items, toShopping(shopRowsT, ctx));
 
@@ -45,6 +51,25 @@ export default async function DashboardPage() {
   const gaps = progress.filter((p) => p.remaining > 0 && (cur === null || p.size >= cur)).sort((a, b) => b.remaining - a.remaining);
   const openNeeds = gaps.length + shopRowsT.filter((s) => s.status === 'needed').length;
 
+  // Fit breakdown across everything being kept (active or stored), by number of pieces.
+  const kept = items.filter((i) => i.status === 'active' || i.status === 'stored');
+  const byFit = new Map<FitState, number>();
+  for (const i of kept) byFit.set(fitStateFor(i, cur), (byFit.get(fitStateFor(i, cur)) ?? 0) + i.quantity);
+  const unknownFit = items.filter((i) => ['active', 'stored'].includes(i.status) && i.fitFrom === null && !i.fitOverride).length;
+  const unusable = items.filter((i) => i.condition === 'unusable' && ['active', 'stored'].includes(i.status)).length;
+
+  // Progress for each size that has goals.
+  const goalSizes = [...new Set(progress.filter((p) => p.target > 0).map((p) => p.size))].sort((a, b) => a - b);
+
+  // Orders on the way.
+  const onTheWay = shopRowsT.filter((s) => s.status === 'ordered' || s.status === 'partially_received');
+  const arriving = onTheWay.reduce((t, s) => t + Math.max(0, s.quantity_ordered - s.quantity_received), 0);
+
+  // Next size from the forecast, on the standard chart.
+  const f = child.birth_date && child.growth_reference ? forecastFor(ctx, await loadMeasurements(ctx, child.id), 12) : null;
+  const t = f ? transition(f, 0) : null;
+  const projected = t?.next ? ctx.sizeByOrder.get(t.next.size) : null;
+
   return (
     <>
       <div>
@@ -53,6 +78,13 @@ export default async function DashboardPage() {
           {curSize ? `Size ${sizeName(curSize)} now.${nextSize ? ` Next size up is ${sizeName(nextSize)}.` : ''}` : 'No current size set.'}
           {cur === null && <> <Link className="text-accent underline" href="/children">Set a size</Link> to see fit and goal progress.</>}
         </p>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <Link className={btnCls} href="/closet/new">Add item</Link>
+        <Link className={btnGhostCls} href="/closet/bulk">Bulk add</Link>
+        <Link className={btnGhostCls} href="/survey">Goal survey</Link>
+        <Link className={btnGhostCls} href="/goals">Set goals</Link>
       </div>
 
       {items.length === 0 && (
@@ -70,13 +102,51 @@ export default async function DashboardPage() {
         <Stat label="Open needs" value={openNeeds} note={`${gaps.length} goal gaps`} />
       </div>
 
+      <div className="grid gap-3 lg:grid-cols-2">
+        <section className="rounded-xl border border-line bg-surface p-4">
+          <h2 className="mb-1 font-display text-lg font-bold">Next size</h2>
+          {t && f ? (
+            <>
+              <p>
+                {projected && t.next
+                  ? <>{child.name} is likely to move into <b>{sizeName(projected)}</b> around <b>{monthOf(t.next.date)}</b>.</>
+                  : <>{child.name} is likely to stay in the current size through {monthOf(t.end)}.</>}
+              </p>
+              <p className="mt-1 text-sm text-muted">An estimate on the standard chart. <Link className="text-accent underline" href="/forecast">See the forecast</Link></p>
+            </>
+          ) : (
+            <p className="text-sm text-muted">
+              Add a birth date, a growth reference and a measurement to see when {child.name} is likely to need the next size.{' '}
+              <Link className="text-accent underline" href="/forecast">Open the forecast</Link>
+            </p>
+          )}
+        </section>
+
+        <section className="rounded-xl border border-line bg-surface p-4">
+          <h2 className="mb-1 font-display text-lg font-bold">On the way</h2>
+          {onTheWay.length === 0 ? (
+            <p className="text-sm text-muted">No open orders. <Link className="text-accent underline" href="/shopping">Open the shopping list</Link></p>
+          ) : (
+            <>
+              <p><b className="tabular-nums">{arriving}</b> piece{arriving === 1 ? '' : 's'} across {onTheWay.length} order{onTheWay.length === 1 ? '' : 's'} still to arrive.</p>
+              <ul className="mt-1 text-sm text-muted">
+                {onTheWay.slice(0, 4).map((s) => (
+                  <li key={s.id}>{Math.max(0, s.quantity_ordered - s.quantity_received)} × {ctx.catById.get(s.category_id)?.name} in {sizeName(ctx.sizeById.get(s.size_id) ?? { label: '' , alias: null })}</li>
+                ))}
+              </ul>
+              <Link className="mt-1 inline-block text-sm text-accent underline" href="/shopping">Record a delivery</Link>
+            </>
+          )}
+        </section>
+      </div>
+
       <section className="rounded-xl border border-line bg-surface p-4">
         <div className="mb-2 flex items-baseline justify-between">
           <h2 className="font-display text-lg font-bold">Largest gaps</h2>
           <Link className="text-sm text-accent underline" href="/shopping">Open shopping list</Link>
         </div>
         {gaps.length === 0 ? (
-          <p className="py-4 text-center text-muted">{progress.length ? 'Every goal is covered.' : 'No goals yet. Set some on the Goals page.'}</p>
+          <p className="py-4 text-center text-muted">{progress.length ? 'Every goal is covered.' : 'No goals yet. Set some on the Goals page or take the goal survey.'}</p>
         ) : (
           <ul>
             {gaps.slice(0, 6).map((g) => {
@@ -94,6 +164,52 @@ export default async function DashboardPage() {
           </ul>
         )}
       </section>
+
+      {goalSizes.length > 0 && (
+        <section className="rounded-xl border border-line bg-surface p-4">
+          <h2 className="mb-2 font-display text-lg font-bold">Progress by size</h2>
+          <ul>
+            {goalSizes.map((order) => {
+              const s = ctx.sizeByOrder.get(order);
+              const p = sizeProgress(progress, child.id, order);
+              return (
+                <li key={order} className="grid grid-cols-[6rem_1fr_3rem] items-center gap-3 border-t border-line py-2 first:border-t-0">
+                  <Link className="text-accent underline" href={`/goals?size=${order}`}>{s ? sizeName(s) : ''}{order === cur ? ' (now)' : ''}</Link>
+                  <ProgressBar owned={p.ownedTowardGoal} incoming={0} goal={p.goalTotal} />
+                  <span className="text-right text-sm tabular-nums">{p.percent ?? 0}%</span>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+
+      {kept.length > 0 && (
+        <section className="rounded-xl border border-line bg-surface p-4">
+          <h2 className="mb-2 font-display text-lg font-bold">Closet by fit</h2>
+          <div className="flex flex-wrap gap-2">
+            {FIT_ORDER.filter((k) => byFit.get(k)).map((k) => (
+              <Pill key={k} tone={k}>{FIT_LABELS[k]}: {byFit.get(k)}</Pill>
+            ))}
+          </div>
+          {(unknownFit > 0 || unusable > 0) && (
+            <ul className="mt-3 text-sm">
+              {unknownFit > 0 && (
+                <li>
+                  <b>{unknownFit}</b> item{unknownFit === 1 ? ' has' : 's have'} no fit range, so {unknownFit === 1 ? 'it does' : 'they do'} not count toward goals.{' '}
+                  <Link className="text-accent underline" href="/closet?fit=unknown">Review</Link>
+                </li>
+              )}
+              {unusable > 0 && (
+                <li>
+                  <b>{unusable}</b> item{unusable === 1 ? ' is' : 's are'} marked unusable but still in your closet.{' '}
+                  <Link className="text-accent underline" href="/closet">Review</Link>
+                </li>
+              )}
+            </ul>
+          )}
+        </section>
+      )}
     </>
   );
 }

@@ -4,7 +4,10 @@ import { z } from 'zod';
 import { getContext } from '@/lib/context';
 import { FormMessage } from '@/components/form-message';
 import type { ItemRow, SizeLabelRow } from '@/lib/db';
+import { PhotoUploader } from '@/components/photo-uploader';
+import { MAX_PHOTOS_PER_ITEM, signedUrls } from '@/lib/photos';
 import { ItemForm } from '../item-form';
+import { deletePhoto } from '../photo-actions';
 import { deleteItem, saveItem } from '../actions';
 
 export const metadata: Metadata = { title: 'Edit item' };
@@ -32,11 +35,37 @@ export default async function EditItemPage({
     (a, b) => (ctx.orderOf.get(a.size_id) ?? 0) - (ctx.orderOf.get(b.size_id) ?? 0) || a.sort_order - b.sort_order,
   );
   const brandList = (brands ?? []) as { id: string; name: string }[];
+  const { data: photoRows } = await ctx.supabase
+    .from('inventory_photos').select('id, storage_path').eq('inventory_item_id', item.id).order('sort_order');
+  const photos = (photoRows ?? []) as { id: string; storage_path: string }[];
+  const urls = await signedUrls(ctx.supabase, photos.map((p) => p.storage_path));
   const brandName = brandList.find((b) => b.id === item.brand_id)?.name ?? '';
   return (
     <>
       <h1 className="font-display text-2xl font-bold">Edit item</h1>
       <FormMessage error={error} />
+      <section className="rounded-xl border border-line bg-surface p-4">
+        <h2 className="mb-2 font-display text-lg font-bold">Photos</h2>
+        {photos.length > 0 && (
+          <ul className="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {photos.map((p) => (
+              <li key={p.id} className="flex flex-col gap-1.5">
+                {urls.get(p.storage_path) ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={urls.get(p.storage_path)} alt={`${item.name}`} className="aspect-square w-full rounded-lg object-cover" />
+                ) : (
+                  <div className="flex aspect-square items-center justify-center rounded-lg bg-line text-sm text-muted">Unavailable</div>
+                )}
+                <form action={deletePhoto}>
+                  <input type="hidden" name="photoId" value={p.id} />
+                  <button type="submit" className="text-sm text-bad underline">Delete photo</button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        )}
+        <PhotoUploader itemId={item.id} userId={ctx.user.id} childId={item.child_id} remaining={MAX_PHOTOS_PER_ITEM - photos.length} />
+      </section>
       <ItemForm
         action={saveItem}
         categories={ctx.categories}

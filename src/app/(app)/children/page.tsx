@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { createClient } from '@/lib/supabase/server';
 import { FormMessage } from '@/components/form-message';
+import { safeNext } from '@/lib/auth/redirect';
 import { btnCls, btnGhostCls, inputCls, labelCls } from '@/components/ui';
 import { createChild, deleteChild, updateChild } from './actions';
 
@@ -11,12 +12,13 @@ interface ChildRow { id: string; name: string; birth_date: string | null; curren
 
 const sizeName = (s: SizeRow) => (s.alias ? `${s.label} (${s.alias})` : s.label);
 
-export default async function ChildrenPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
-  const { error } = await searchParams;
+export default async function ChildrenPage({ searchParams }: { searchParams: Promise<{ error?: string; next?: string }> }) {
+  const { error, next } = await searchParams;
+  const dest = safeNext(next, '');
   const supabase = await createClient();
   // Both queries run as the signed-in user. Row-level security returns only their own children.
   const [{ data: children }, { data: sizes }] = await Promise.all([
-    supabase.from('children').select('id, name, birth_date, current_size_id').order('created_at'),
+    supabase.from('children').select('id, name, birth_date, current_size_id, growth_reference').order('created_at'),
     supabase.from('sizes').select('id, label, alias, sort_order').order('sort_order'),
   ]);
   const sizeList = (sizes ?? []) as SizeRow[];
@@ -61,6 +63,11 @@ export default async function ChildrenPage({ searchParams }: { searchParams: Pro
                       </select>
                     </label>
                     <label className={labelCls}>Birth date (optional)<input className={inputCls} type="date" name="birthDate" defaultValue={c.birth_date ?? ''} /></label>
+                    <label className={labelCls}>Growth reference (for forecasts)
+                      <select className={inputCls} name="growthReference" defaultValue={c.growth_reference ?? ''}>
+                        <option value="">Not set</option><option value="girls">Girls</option><option value="boys">Boys</option>
+                      </select>
+                    </label>
                     <div><button className={btnCls} type="submit">Save changes</button></div>
                   </form>
                   <form action={deleteChild} className="mt-4 flex flex-col gap-2 border-t border-line pt-3">
@@ -79,6 +86,8 @@ export default async function ChildrenPage({ searchParams }: { searchParams: Pro
 
       <form action={createChild} className="flex flex-col gap-4 rounded-xl border border-line bg-surface p-4">
         <h2 className="font-display text-lg font-bold">Add a child</h2>
+        <input type="hidden" name="next" value={dest} />
+        {dest && <p className="text-sm text-muted">After you add them, you will go straight back to your suggestions.</p>}
         <div className="grid gap-4 sm:grid-cols-2">
           <label className={labelCls}>
             Name
@@ -96,7 +105,14 @@ export default async function ChildrenPage({ searchParams }: { searchParams: Pro
           <label className={labelCls}>
             Birth date (optional)
             <input className={inputCls} type="date" name="birthDate" />
-            <span className="text-xs">Only used if you turn on size forecasts.</span>
+            <span className="text-xs">Only used for size forecasts.</span>
+          </label>
+          <label className={labelCls}>
+            Growth reference (optional)
+            <select className={inputCls} name="growthReference" defaultValue="">
+              <option value="">Not set</option><option value="girls">Girls</option><option value="boys">Boys</option>
+            </select>
+            <span className="text-xs">Picks which published growth curve the forecast compares against.</span>
           </label>
         </div>
         <div><button className={btnCls} type="submit">Add child</button></div>

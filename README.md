@@ -13,8 +13,8 @@ rules from phases 2 to 4, so they can be validated before any screens depend on 
 | Database schema, defaults, RLS, goal views, shopping functions, private photo bucket | Written and **tested** against Postgres 16 (`npm run test:db`) |
 | Size, fit, goal and shopping rules in `src/lib/domain` | Written and **tested** (`npm run test:unit`), typechecked under `strict` |
 | Next.js app: sign up, sign in, reset password, children page, route protection | Written, **not yet installed, built or run**. Expect to fix small compile or API issues on first `npm install && npm run build` |
-| Closet, goals, shopping screens, photo upload | Not started (phases 2 to 4). The behavior is prototyped in the clickable prototype |
-| Forecast, brand fit feedback, goal survey | Not started (phases 6 to 8). Prototyped; logic to be ported and validated |
+| Dashboard, closet (add, edit, bulk add, photos), goals, shopping screens | Written. Built on Vercel but not yet exercised end to end; no browser tests yet |
+| Forecast, brand fit feedback, goal survey | Written (migration 05, `domain/forecast.ts`, `domain/survey.ts`, 13 new unit tests, SQL tests). **The growth table, size chart and survey weights are approximations or guesses and need validating before launch** |
 
 The tests need no Supabase account. The database tests run the migrations on a plain local Postgres with a small stand-in
 for Supabase's `auth` and `storage` schemas (`supabase/tests/00_supabase_stub.sql`).

@@ -13,6 +13,7 @@ export const childSchema = z.object({
       .refine((v) => !Number.isNaN(Date.parse(v)) && Date.parse(`${v}T00:00:00Z`) <= Date.now(), 'Birth date cannot be in the future.')
       .optional(),
   ),
+  growthReference: z.preprocess(emptyToUndefined, z.enum(['girls', 'boys'], { message: 'Choose a growth reference from the list.' }).optional()),
   currentSizeId: z.preprocess(emptyToUndefined, z.string().uuid('Choose a size from the list.').optional()),
 });
 

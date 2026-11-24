@@ -23,9 +23,10 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
       </label>
       <button className={btnCls} type="submit">Sign in</button>
       <div className="flex justify-between text-sm">
-        <Link className="text-accent underline" href="/signup">Create an account</Link>
+        <Link className="text-accent underline" href={next ? `/signup?next=${encodeURIComponent(next)}` : '/signup'}>Create an account</Link>
         <Link className="text-accent underline" href="/forgot-password">Forgot password?</Link>
       </div>
+      <p className="text-center text-sm"><Link className="text-accent underline" href="/calculator">Try the free clothes calculator</Link></p>
     </form>
   );
 }

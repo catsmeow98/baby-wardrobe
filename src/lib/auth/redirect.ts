@@ -9,7 +9,7 @@ export function safeNext(next: string | null | undefined, fallback = '/children'
   return next;
 }
 
-export const PUBLIC_PATHS = ['/login', '/signup', '/forgot-password'];
+export const PUBLIC_PATHS = ['/login', '/signup', '/forgot-password', '/calculator'];
 
 export const isPublicPath = (pathname: string): boolean =>
   PUBLIC_PATHS.includes(pathname) || pathname.startsWith('/auth/');

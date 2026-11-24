@@ -7,8 +7,12 @@ const links = [
   ['/dashboard', 'Dashboard'],
   ['/closet', 'Closet'],
   ['/goals', 'Goals'],
+  ['/survey', 'Goal survey'],
+  ['/forecast', 'Forecast'],
   ['/shopping', 'Shopping'],
   ['/children', 'Children'],
+  ['/brands', 'Brands'],
+  ['/account', 'Account'],
 ] as const;
 
 export function Nav() {

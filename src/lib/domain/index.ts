@@ -4,3 +4,5 @@ export * from './fit';
 export * from './goals';
 export * from './shopping';
 export * from './closet';
+export * from './forecast';
+export * from './survey';

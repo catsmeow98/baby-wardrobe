@@ -32,20 +32,22 @@ export async function signIn(formData: FormData) {
 }
 
 export async function signUp(formData: FormData) {
+  const next = safeNext(String(formData.get('next') ?? ''));
   const parsed = z.object({ email, password }).safeParse({
     email: formData.get('email'),
     password: formData.get('password'),
   });
-  if (!parsed.success) return go('/signup', { error: parsed.error.issues[0].message });
+  if (!parsed.success) return go('/signup', { error: parsed.error.issues[0].message, next: formData.get('next') ? next : undefined });
 
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signUp({
     ...parsed.data,
-    options: { emailRedirectTo: `${env.siteUrl()}/auth/callback` },
+    options: { emailRedirectTo: `${env.siteUrl()}/auth/callback?next=${encodeURIComponent(next)}` },
   });
-  if (error) return go('/signup', { error: 'We could not create that account. Try a different email or password.' });
-  if (data.session) return redirect('/children'); // email confirmation is switched off
-  return go('/login', { message: 'Check your email to confirm your account, then sign in.' });
+  if (error) return go('/signup', { error: 'We could not create that account. Try a different email or password.', next: formData.get('next') ? next : undefined });
+  if (data.session) return redirect(next); // email confirmation is switched off
+  // The next page travels with the sign-in form too, in case the confirmation link opens somewhere that drops it.
+  return go('/login', { message: 'Check your email to confirm your account, then sign in.', next: formData.get('next') ? next : undefined });
 }
 
 export async function requestPasswordReset(formData: FormData) {

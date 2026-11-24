@@ -6,6 +6,7 @@ import { Pill } from '@/components/pill';
 import { btnCls, btnGhostCls, inputCls } from '@/components/ui';
 import { CONDITIONS, FIT_FEEDBACK, FIT_LABELS, SEASONS, STATUSES, sizeName } from '@/lib/db';
 import type { ItemRow, SizeLabelRow } from '@/lib/db';
+import { signedUrls } from '@/lib/photos';
 import { filterItems, fitStateFor, type FitState } from '@/lib/domain';
 
 export const metadata: Metadata = { title: 'Closet' };
@@ -27,6 +28,14 @@ export default async function ClosetPage({ searchParams }: { searchParams: Promi
   const tagGroupOf = new Map(labels.map((l) => [l.id, ctx.orderOf.get(l.size_id) ?? 0]));
   const brandById = new Map(((brandData ?? []) as { id: string; name: string }[]).map((b) => [b.id, b.name]));
   const rows = (itemRows ?? []) as ItemRow[];
+  const { data: photoData } = rows.length
+    ? await ctx.supabase.from('inventory_photos').select('inventory_item_id, storage_path, sort_order').in('inventory_item_id', rows.map((r) => r.id)).order('sort_order')
+    : { data: [] };
+  const coverPath = new Map<string, string>();
+  for (const p of (photoData ?? []) as { inventory_item_id: string; storage_path: string }[]) {
+    if (!coverPath.has(p.inventory_item_id)) coverPath.set(p.inventory_item_id, p.storage_path);
+  }
+  const coverUrls = await signedUrls(ctx.supabase, [...coverPath.values()]);
   const feedbackById = new Map(rows.map((r) => [r.id, r.fit_feedback]));
   const items = toInventory(rows, ctx, tagGroupOf).map((i, n) => ({ ...i, brand: brandById.get(rows[n].brand_id ?? '') ?? null }));
 
@@ -116,6 +125,10 @@ export default async function ClosetPage({ searchParams }: { searchParams: Promi
             return (
               <li key={i.id}>
                 <Link href={`/closet/${i.id}`} className="flex h-full flex-col gap-1.5 rounded-xl border border-line bg-surface p-3 hover:border-accent">
+                  {coverPath.has(i.id) && coverUrls.get(coverPath.get(i.id)!) && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={coverUrls.get(coverPath.get(i.id)!)} alt="" loading="lazy" className="mb-1 aspect-[4/3] w-full rounded-lg object-cover" />
+                  )}
                   <div className="flex items-start justify-between gap-2">
                     <span className="font-bold [overflow-wrap:anywhere]">{i.name}</span>
                     {i.quantity > 1 && <span className="rounded-full bg-line px-2 text-xs">×{i.quantity}</span>}

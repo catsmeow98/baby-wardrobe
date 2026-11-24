@@ -2,7 +2,9 @@
 export interface SizeRow { id: string; label: string; alias: string | null; sort_order: number }
 export interface SizeLabelRow { id: string; size_id: string; label: string; sort_order: number }
 export interface CategoryRow { id: string; name: string; sort_order: number }
-export interface ChildRow { id: string; name: string; birth_date: string | null; current_size_id: string | null }
+export interface ChildRow { id: string; name: string; birth_date: string | null; current_size_id: string | null; growth_reference: 'girls' | 'boys' | null }
+export interface MeasurementRow { id: string; child_id: string; measured_on: string; length_in: number | string }
+export interface BrandRow { id: string; name: string; owner_id: string | null; size_offset: number | string }
 export interface ItemRow {
   id: string; child_id: string; tracking_type: 'individual' | 'grouped'; name: string; brand_id: string | null;
   category_id: string; label_id: string | null; fit_from_size_id: string | null; fit_to_size_id: string | null;
