@@ -3,12 +3,12 @@ import { createClient } from '@/lib/supabase/server';
 import { FormMessage } from '@/components/form-message';
 import { safeNext } from '@/lib/auth/redirect';
 import { btnCls, btnGhostCls, inputCls, labelCls } from '@/components/ui';
+import type { ChildRow } from '@/lib/db';
 import { createChild, deleteChild, updateChild } from './actions';
 
 export const metadata: Metadata = { title: 'Children' };
 
 interface SizeRow { id: string; label: string; alias: string | null; sort_order: number }
-interface ChildRow { id: string; name: string; birth_date: string | null; current_size_id: string | null }
 
 const sizeName = (s: SizeRow) => (s.alias ? `${s.label} (${s.alias})` : s.label);
 
