@@ -53,7 +53,6 @@ export async function updateChild(formData: FormData) {
       birth_date: parsed.data.birthDate ?? null,
       current_size_id: parsed.data.currentSizeId ?? null,
       growth_reference: parsed.data.growthReference ?? null,
-    growth_reference: parsed.data.growthReference ?? null,
     })
     .eq('id', id.data);
   if (error) return back('We could not save those changes. Try again.');
