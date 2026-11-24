@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { getContext } from '@/lib/context';
 import { FormMessage } from '@/components/form-message';
 import { NoChild } from '@/components/no-child';
+import { PhotoPicker } from '@/components/photo-picker';
 import { btnCls, inputCls, labelCls } from '@/components/ui';
 import { CONDITIONS, SEASONS, STATUSES, sizeName } from '@/lib/db';
 import type { SizeLabelRow } from '@/lib/db';
@@ -74,6 +75,10 @@ export default async function BulkPage({ searchParams }: { searchParams: Promise
             <label className={labelCls}>Quantity
               <input className={inputCls} type="number" name={`qty_${i}`} min={1} max={999} defaultValue={1} />
             </label>
+            <div className={`${labelCls} sm:col-span-6`}>
+              Photos (optional)
+              <PhotoPicker userId={ctx.user.id} childId={ctx.active.id} name={`photo_${i}`} />
+            </div>
           </fieldset>
         ))}
         <div className="flex flex-wrap items-center gap-4">

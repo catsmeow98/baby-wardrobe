@@ -4,24 +4,9 @@ import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { PHOTO_BUCKET } from '@/lib/photos';
+import { shrinkImage } from '@/lib/photo-client';
 import { btnGhostCls } from '@/components/ui';
 import { addPhoto } from '@/app/(app)/closet/photo-actions';
-
-const MAX_SIDE = 1600;
-
-/** Shrinks a phone photo to at most 1600px on the long side and re-encodes it as JPEG. */
-async function shrink(file: File): Promise<Blob> {
-  const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' });
-  const scale = Math.min(1, MAX_SIDE / Math.max(bmp.width, bmp.height));
-  const canvas = document.createElement('canvas');
-  canvas.width = Math.round(bmp.width * scale);
-  canvas.height = Math.round(bmp.height * scale);
-  canvas.getContext('2d')!.drawImage(bmp, 0, 0, canvas.width, canvas.height);
-  bmp.close();
-  const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/jpeg', 0.85));
-  if (!blob) throw new Error('encode');
-  return blob;
-}
 
 export function PhotoUploader({ itemId, userId, childId, remaining }: { itemId: string; userId: string; childId: string; remaining: number }) {
   const router = useRouter();
@@ -39,7 +24,7 @@ export function PhotoUploader({ itemId, userId, childId, remaining }: { itemId: 
     for (const file of files) {
       let blob: Blob;
       try {
-        blob = await shrink(file);
+        blob = await shrinkImage(file);
       } catch {
         setError('That image could not be read. Try a JPEG or PNG photo.');
         continue;

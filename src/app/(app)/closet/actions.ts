@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { getContext, type Ctx } from '@/lib/context';
 import { itemSchema, CONDITION_VALUES, SEASON_VALUES, STATUS_VALUES } from '@/lib/validation/items';
 import { autoName, resolveFitRange } from '@/lib/domain';
+import { attachPhotos, discardPhotos } from '@/lib/photo-attach';
 
 const fail = (path: string, message: string): never => redirect(`${path}?error=${encodeURIComponent(message)}`);
 
@@ -58,11 +59,21 @@ export async function saveItem(formData: FormData) {
     notes: v.notes || null,
   };
 
-  const { error } = id.success
-    ? await ctx.supabase.from('inventory_items').update(row).eq('id', id.data)
-    : await ctx.supabase.from('inventory_items').insert({ ...row, child_id: ctx.active.id });
-  if (error) return fail(path, 'We could not save that item. Check the sizes and try again.');
+  if (id.success) {
+    const { error } = await ctx.supabase.from('inventory_items').update(row).eq('id', id.data);
+    if (error) return fail(path, 'We could not save that item. Check the sizes and try again.');
+    revalidatePath('/closet');
+    return redirect('/closet');
+  }
+  const { data: made, error } = await ctx.supabase.from('inventory_items').insert({ ...row, child_id: ctx.active.id }).select('id').single();
+  if (error || !made) return fail(path, 'We could not save that item. Check the sizes and try again.');
+  // Photos were uploaded by the browser while the form was open. Attach them now that the item exists.
+  const wanted = formData.getAll('photoPath').map(String);
+  const attached = wanted.length ? await attachPhotos(ctx.supabase, ctx.user.id, ctx.active.id, made.id as string, wanted) : 0;
   revalidatePath('/closet');
+  if (attached < wanted.length) {
+    return redirect(`/closet/${made.id}?error=${encodeURIComponent('The item was saved, but some photos could not be added. You can add them below.')}`);
+  }
   return redirect('/closet');
 }
 
@@ -93,6 +104,7 @@ export async function bulkCreate(formData: FormData) {
   const brandCache = new Map<string, string | null>();
 
   const rows: Record<string, unknown>[] = [];
+  const sourceRow: number[] = []; // which form row each kept row came from, so photos find their item
   for (let i = 0; i < count; i++) {
     const text = (k: string) => String(formData.get(`${k}_${i}`) ?? '').trim();
     const name = text('name');
@@ -110,6 +122,7 @@ export async function bulkCreate(formData: FormData) {
     const range = resolveFitRange(tagO, null, thruO);
     if ('error' in range) return fail(path, `${n}: ${range.error}`);
     if (brand && !brandCache.has(brand.toLowerCase())) brandCache.set(brand.toLowerCase(), await brandId(ctx, brand));
+    sourceRow.push(i);
     rows.push({
       child_id: ctx.active.id,
       name: autoName(name, brand, ctx.catById.get(cat.data)?.name ?? 'Item'),
@@ -125,10 +138,24 @@ export async function bulkCreate(formData: FormData) {
       status: shared.data.status,
     });
   }
+  // Photos picked on rows that were left blank will never be used, so delete them.
+  const unused: string[] = [];
+  for (let i = 0; i < count; i++) if (!sourceRow.includes(i)) unused.push(...formData.getAll(`photo_${i}`).map(String));
+  if (unused.length) await discardPhotos(ctx.supabase, ctx.user.id, ctx.active.id, unused);
   if (!rows.length) return fail(path, 'Fill in at least one row. Add a name or a brand.');
   // One insert, so either every row is saved or none is.
-  const { error } = await ctx.supabase.from('inventory_items').insert(rows);
+  const { data: made, error } = await ctx.supabase.from('inventory_items').insert(rows).select('id');
   if (error) return fail(path, 'We could not save those items. Nothing was added. Try again.');
+  // Attach each row's photos. Rows come back in the order they were sent, so index i matches sourceRow[i].
+  let photoProblem = false;
+  if (made && made.length === rows.length) {
+    for (let k = 0; k < made.length; k++) {
+      const wanted = formData.getAll(`photo_${sourceRow[k]}`).map(String);
+      if (!wanted.length) continue;
+      const attached = await attachPhotos(ctx.supabase, ctx.user.id, ctx.active.id, made[k].id as string, wanted);
+      if (attached < wanted.length) photoProblem = true;
+    }
+  } else if ([...formData.keys()].some((key) => key.startsWith('photo_'))) photoProblem = true;
   revalidatePath('/closet');
-  return redirect(`/closet?added=${rows.length}`);
+  return redirect(`/closet?added=${rows.length}${photoProblem ? '&photos=partial' : ''}`);
 }

@@ -11,7 +11,7 @@ import { filterItems, fitStateFor, type FitState } from '@/lib/domain';
 
 export const metadata: Metadata = { title: 'Closet' };
 
-type SP = { q?: string; fit?: string; cat?: string; size?: string; status?: string; season?: string; added?: string };
+type SP = { q?: string; fit?: string; cat?: string; size?: string; status?: string; season?: string; added?: string; photos?: string };
 
 export default async function ClosetPage({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
@@ -72,6 +72,7 @@ export default async function ClosetPage({ searchParams }: { searchParams: Promi
             {shown.length} record{shown.length === 1 ? '' : 's'}, {pieces} piece{pieces === 1 ? '' : 's'}
             {sp.added ? ` · ${sp.added} added` : ''}
           </p>
+          {sp.photos === 'partial' && <p role="status" className="text-sm text-warn">Items were added, but some photos could not be attached. Open an item to add them again.</p>}
         </div>
         <div className="flex gap-2">
           <Link className={btnGhostCls} href="/closet/bulk">Bulk add</Link>

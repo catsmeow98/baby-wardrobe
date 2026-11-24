@@ -28,7 +28,8 @@ export default async function NewItemPage({ searchParams }: { searchParams: Prom
       </div>
       <FormMessage error={error} />
       <ItemForm action={saveItem} categories={ctx.categories} sizes={ctx.sizes} labels={sorted}
-        brands={(brands ?? []).map((b: { name: string }) => b.name)} submitLabel="Add item" />
+        brands={(brands ?? []).map((b: { name: string }) => b.name)} submitLabel="Add item"
+        photos={{ userId: ctx.user.id, childId: ctx.active.id }} />
     </>
   );
 }

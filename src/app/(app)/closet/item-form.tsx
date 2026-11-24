@@ -1,3 +1,4 @@
+import { PhotoPicker } from '@/components/photo-picker';
 import { btnCls, inputCls, labelCls } from '@/components/ui';
 import { CONDITIONS, FIT_FEEDBACK, FIT_LABELS, SEASONS, STATUSES, sizeName } from '@/lib/db';
 import type { CategoryRow, SizeLabelRow, SizeRow } from '@/lib/db';
@@ -27,9 +28,11 @@ interface Props {
   brands: string[];
   defaults?: ItemDefaults;
   submitLabel: string;
+  /** Shows a photo field. Only for a new item, since existing items add photos from their own Photos section. */
+  photos?: { userId: string; childId: string };
 }
 
-export function ItemForm({ action, categories, sizes, labels, brands, defaults: d = {}, submitLabel }: Props) {
+export function ItemForm({ action, categories, sizes, labels, brands, defaults: d = {}, submitLabel, photos }: Props) {
   const sameSize = <option value="">Same as tag size</option>;
   return (
     <form action={action} className="flex flex-col gap-4 rounded-xl border border-line bg-surface p-4">
@@ -112,6 +115,12 @@ export function ItemForm({ action, categories, sizes, labels, brands, defaults: 
           Notes
           <textarea className={inputCls} name="notes" rows={2} maxLength={1000} defaultValue={d.notes ?? ''} placeholder="Runs small, long torso, and so on" />
         </label>
+        {photos && (
+          <div className={`${labelCls} sm:col-span-2`}>
+            Photos (optional)
+            <PhotoPicker userId={photos.userId} childId={photos.childId} name="photoPath" />
+          </div>
+        )}
       </div>
       <div><button className={btnCls} type="submit">{submitLabel}</button></div>
     </form>
