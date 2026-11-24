@@ -11,6 +11,10 @@
   --color-accent-soft: var(--accent-soft);
   --color-bad: var(--bad);
   --color-bad-soft: var(--bad-soft);
+  --color-good: var(--good);
+  --color-good-soft: var(--good-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
   --font-sans: var(--font-body), system-ui, sans-serif;
   --font-display: var(--font-display), 'Trebuchet MS', system-ui, sans-serif;
 }
@@ -26,6 +30,10 @@
   --accent-soft: #d9eeef;
   --bad: #b03f2e;
   --bad-soft: #f7e0db;
+  --good: #2b7a4b;
+  --good-soft: #ddf0e4;
+  --warn: #9a6414;
+  --warn-soft: #faedd2;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -41,6 +49,10 @@
     --accent-soft: #1b3a3f;
     --bad: #f09685;
     --bad-soft: #3e211b;
+    --good: #7fd39d;
+    --good-soft: #1a3325;
+    --warn: #e5b65f;
+    --warn-soft: #3a2f17;
   }
 }
 

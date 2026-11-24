@@ -1,4 +1,3 @@
-import type { CookieOptions } from "@supabase/ssr";
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { env } from '@/lib/env';
@@ -9,7 +8,7 @@ export async function updateSession(request: NextRequest) {
   const supabase = createServerClient(env.supabaseUrl(), env.supabaseAnonKey(), {
     cookies: {
       getAll: () => request.cookies.getAll(),
-      setAll: (list: { name: string; value: string; options: CookieOptions }[]) => {
+      setAll: (list) => {
         list.forEach(({ name, value }) => request.cookies.set(name, value));
         response = NextResponse.next({ request });
         list.forEach(({ name, value, options }) => response.cookies.set(name, value, options));

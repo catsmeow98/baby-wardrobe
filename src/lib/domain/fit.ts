@@ -20,3 +20,9 @@ export function fitState(i: InventoryItem, currentSize: number): FitState {
   if (currentSize === i.fitTo && i.fitFrom < i.fitTo) return 'small';
   return 'fits';
 }
+
+/** Like fitState, but a child with no current size set gets 'unknown' (unless a parent override applies). */
+export function fitStateFor(i: InventoryItem, currentSize: number | null): FitState {
+  if (i.fitOverride) return i.fitOverride;
+  return currentSize === null ? 'unknown' : fitState(i, currentSize);
+}

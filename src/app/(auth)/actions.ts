@@ -27,17 +27,7 @@ export async function signIn(formData: FormData) {
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword(parsed.data);
   // One message for every failure, so the form never reveals whether an email has an account.
-  if (error) {
-    console.error('SUPABASE SIGN IN ERROR:', {
-      name: error.name,
-      message: error.message,
-      status: error.status,
-      code: error.code,
-      details: error,
-    });
-
-    return go('/signup', { error: error.message });
-  };
+  if (error) return go('/login', { error: 'Email or password is incorrect.', next });
   return redirect(next);
 }
 
@@ -53,55 +43,20 @@ export async function signUp(formData: FormData) {
     ...parsed.data,
     options: { emailRedirectTo: `${env.siteUrl()}/auth/callback` },
   });
-  if (error) {
-    console.error('SUPABASE SIGNUP ERROR:', {
-      name: error.name,
-      message: error.message,
-      status: error.status,
-      code: error.code,
-      details: error,
-    });
-
-    return go('/signup', { error: error.message });
-  }
+  if (error) return go('/signup', { error: 'We could not create that account. Try a different email or password.' });
   if (data.session) return redirect('/children'); // email confirmation is switched off
   return go('/login', { message: 'Check your email to confirm your account, then sign in.' });
 }
 
 export async function requestPasswordReset(formData: FormData) {
   const parsed = email.safeParse(formData.get('email'));
-
-  if (!parsed.success) {
-    return go('/forgot-password', {
-      error: parsed.error.issues[0].message,
-    });
-  }
-
+  if (!parsed.success) return go('/forgot-password', { error: parsed.error.issues[0].message });
   const supabase = await createClient();
-
-  const { error } = await supabase.auth.resetPasswordForEmail(
-    parsed.data,
-    {
-      redirectTo: `${env.siteUrl()}/auth/callback?next=/reset-password`,
-    }
-  );
-
-  if (error) {
-    console.error('SUPABASE PASSWORD RESET ERROR:', {
-      name: error.name,
-      message: error.message,
-      status: error.status,
-      code: error.code,
-      details: error,
-    });
-
-    return go('/signup', { error: error.message });
-  }
-
-  // Keep the same public response for security.
-  return go('/forgot-password', {
-    message: 'If that email has an account, a reset link is on its way.',
+  await supabase.auth.resetPasswordForEmail(parsed.data, {
+    redirectTo: `${env.siteUrl()}/auth/callback?next=/reset-password`,
   });
+  // Same answer whether or not the address has an account.
+  return go('/forgot-password', { message: 'If that email has an account, a reset link is on its way.' });
 }
 
 export async function updatePassword(formData: FormData) {

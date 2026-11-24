@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { createClient } from '@/lib/supabase/server';
 import { FormMessage } from '@/components/form-message';
 import { btnCls, btnGhostCls, inputCls, labelCls } from '@/components/ui';
-import { createChild, deleteChild } from './actions';
+import { createChild, deleteChild, updateChild } from './actions';
 
 export const metadata: Metadata = { title: 'Children' };
 
@@ -30,6 +30,11 @@ export default async function ChildrenPage({ searchParams }: { searchParams: Pro
         <p className="text-muted">Each child has their own closet, goals, and shopping list.</p>
       </div>
       <FormMessage error={error} />
+      {sizeList.length === 0 && (
+        <p role="alert" className="rounded-lg bg-warn-soft p-3 text-sm text-warn">
+          The size list is empty, so sizes cannot be chosen. In Supabase, run the file 20260101000002_seed_defaults.sql once.
+        </p>
+      )}
 
       {kids.length > 0 ? (
         <ul className="flex flex-col gap-3">
@@ -44,9 +49,21 @@ export default async function ChildrenPage({ searchParams }: { searchParams: Pro
                     {c.birth_date ? ` · born ${c.birth_date}` : ''}
                   </p>
                 </div>
-                <details className="text-sm">
-                  <summary className={`${btnGhostCls} cursor-pointer list-none`}>Remove</summary>
-                  <form action={deleteChild} className="mt-2 flex flex-col gap-2">
+                <details className="w-full text-sm sm:w-auto">
+                  <summary className={`${btnGhostCls} cursor-pointer list-none`}>Edit</summary>
+                  <form action={updateChild} className="mt-2 flex flex-col gap-2">
+                    <input type="hidden" name="id" value={c.id} />
+                    <label className={labelCls}>Name<input className={inputCls} name="name" defaultValue={c.name} maxLength={80} required /></label>
+                    <label className={labelCls}>Current size
+                      <select className={inputCls} name="currentSizeId" defaultValue={c.current_size_id ?? ''}>
+                        <option value="">Not set</option>
+                        {sizeList.map((s) => <option key={s.id} value={s.id}>{sizeName(s)}</option>)}
+                      </select>
+                    </label>
+                    <label className={labelCls}>Birth date (optional)<input className={inputCls} type="date" name="birthDate" defaultValue={c.birth_date ?? ''} /></label>
+                    <div><button className={btnCls} type="submit">Save changes</button></div>
+                  </form>
+                  <form action={deleteChild} className="mt-4 flex flex-col gap-2 border-t border-line pt-3">
                     <input type="hidden" name="id" value={c.id} />
                     <p className="max-w-xs text-muted">This deletes {c.name}&apos;s items, goals, and shopping list. It cannot be undone.</p>
                     <button className="rounded-lg bg-bad-soft px-3 py-1.5 font-bold text-bad" type="submit">Delete {c.name}</button>
