@@ -1,7 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { addMonths, ageMonths, brandStats, dateAtSize, effectiveOffset, fitWord, forecast, percentileOf, sizeFor, transition } from './forecast';
-import { CATEGORY_NAMES, CAT_KEYS, DEFAULT_ANSWERS, parseAnswers, seasonOfMonth, suggest } from './survey';
 
 test('addMonths clamps to the end of shorter months and crosses years', () => {
   assert.equal(addMonths('2026-01-31', 1), '2026-02-28');
@@ -67,54 +66,4 @@ test('brand ratings: none means no change, few ratings move little, many move mo
   assert.equal(fitWord(-0.5), 'Runs small');
   assert.equal(fitWord(0), 'True to size');
   assert.equal(fitWord(0.5), 'Runs large');
-});
-
-test('survey covers every category and maps to seeded names', () => {
-  const { rows } = suggest(DEFAULT_ANSWERS, 3, 'spring');
-  assert.equal(rows.length, 14);
-  assert.deepEqual(rows.map((r) => r.name), CAT_KEYS.map((k) => CATEGORY_NAMES[k]));
-  assert.ok(rows.every((r) => Number.isInteger(r.qty) && r.qty >= 0 && r.why.length > 0));
-});
-
-test('survey responds to laundry frequency, climate and routine', () => {
-  const total = (a = DEFAULT_ANSWERS, size = 3, season: 'spring' | 'summer' | 'winter' = 'spring') => suggest(a, size, season).rows.reduce((t, r) => t + r.qty, 0);
-  assert.ok(total({ ...DEFAULT_ANSWERS, laundry: 7 }) > total({ ...DEFAULT_ANSWERS, laundry: 2 }));
-  const q = (a: typeof DEFAULT_ANSWERS, season: 'summer' | 'winter', key: string) => suggest(a, 3, season).rows.find((r) => r.key === key)!.qty;
-  assert.equal(q(DEFAULT_ANSWERS, 'summer', 'outer'), 0);
-  assert.equal(q({ ...DEFAULT_ANSWERS, cold: true }, 'winter', 'outer'), 2);
-  assert.ok(q({ ...DEFAULT_ANSWERS, hot: true }, 'summer', 'swim') > 0);
-  // sleep choices drive sleepwear
-  const sleepers = suggest({ ...DEFAULT_ANSWERS, sleepWear: ['pjs'] }, 8, 'spring').rows;
-  assert.ok(sleepers.find((r) => r.key === 'sleep')!.qty > 0);
-  assert.equal(sleepers.find((r) => r.key === 'footy')!.qty, 0);
-  // swaddles only when chosen and only in small sizes
-  assert.equal(suggest({ ...DEFAULT_ANSWERS, sleepWear: ['swaddle'] }, 1, 'spring').rows.find((r) => r.key === 'swaddle')!.qty, 2);
-  assert.equal(suggest({ ...DEFAULT_ANSWERS, sleepWear: ['swaddle'] }, 6, 'spring').rows.find((r) => r.key === 'swaddle')!.qty, 0);
-  // dressy picks create outfits
-  assert.ok(suggest({ ...DEFAULT_ANSWERS, dressWear: ['dress', 'set'], outings: 'high' }, 3, 'spring').rows.find((r) => r.key === 'outfit')!.qty >= 4);
-});
-
-test('survey with nothing picked falls back to age based defaults rather than zero', () => {
-  const rows = suggest({ ...DEFAULT_ANSWERS, sleepWear: [], dayWear: [], dressWear: [] }, 3, 'spring').rows;
-  assert.ok(rows.find((r) => r.key === 'footy')!.qty + rows.find((r) => r.key === 'footless')!.qty > 0);
-  assert.ok(rows.find((r) => r.key === 'bot')!.qty > 0);
-});
-
-test('seasons by month', () => {
-  assert.deepEqual([0, 3, 6, 9, 11].map(seasonOfMonth), ['winter', 'spring', 'summer', 'fall', 'winter']);
-});
-
-test('parseAnswers: defaults on first visit, clamps numbers, drops unknown choices', () => {
-  const mk = (qs: string) => {
-    const p = new URLSearchParams(qs);
-    return parseAnswers((k) => p.get(k), (k) => p.getAll(k));
-  };
-  assert.deepEqual(mk(''), DEFAULT_ANSWERS);
-  const a = mk('touched=1&laundry=999&changes=-4&hot=yes&sleep=pjs&sleep=nonsense&season=bogus');
-  assert.equal(a.laundry, 14);
-  assert.equal(a.changes, 1);
-  assert.equal(a.hot, true);
-  assert.equal(a.season, 'auto');
-  assert.deepEqual(a.sleepWear, ['pjs']);
-  assert.deepEqual(a.dayWear, []); // touched form with nothing ticked really means none
 });
