@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { BrandSelect } from '@/components/brand-select';
 import { CategoryPicker } from '@/components/category-picker';
 import { PhotoPicker } from '@/components/photo-picker';
 import { btnCls, inputCls, labelCls } from '@/components/ui';
@@ -46,12 +47,11 @@ export function ItemForm({ action, categories, sizes, labels, brands, defaults: 
           Name (optional)
           <input className={inputCls} name="name" maxLength={160} defaultValue={d.name ?? ''} placeholder="Made from brand and item type if left blank" />
         </label>
-        <CategoryPicker categories={categories} name="categoryId" defaultId={d.categoryId} />
-        <span className="text-xs text-muted sm:col-span-2">Not listed? <Link className="text-accent underline" href="/categories">Add your own item type or item category</Link></span>
+        <CategoryPicker categories={categories} name="categoryId" defaultId={d.categoryId} allowNew />
+        <span className="text-xs text-muted sm:col-span-2">Not listed? Choose &quot;+ New item type&quot; above, or <Link className="text-accent underline" href="/categories">manage your item types</Link>.</span>
         <label className={labelCls}>
           Brand
-          <input className={inputCls} name="brand" maxLength={80} list="brand-list" defaultValue={d.brand ?? ''} />
-          <datalist id="brand-list">{brands.map((b) => <option key={b} value={b} />)}</datalist>
+          <BrandSelect brands={brands} name="brand" defaultValue={d.brand ?? ''} />
         </label>
         <label className={labelCls}>
           Quantity

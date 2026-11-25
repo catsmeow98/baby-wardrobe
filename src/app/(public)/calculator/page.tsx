@@ -38,7 +38,7 @@ export default async function CalculatorPage({ searchParams }: { searchParams: P
       <form method="get" className="grid gap-4 rounded-xl border border-line bg-surface p-4 sm:grid-cols-2">
         <input type="hidden" name="touched" value="1" />
         <LifestyleFields answers={answers} />
-        <SurveyBuilder initial={answers.stages} initialSizes={answers.sizes} birthMonth={answers.birthMonth} currentSize={null} />
+        <SurveyBuilder initial={answers.stages} initialSizes={answers.sizes} birthMonth={answers.birthMonth} currentSize={null} hot={answers.hot} cold={answers.cold} />
         <div className="col-span-full"><button className={btnCls} type="submit">Update suggestions</button></div>
       </form>
 

@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { getContext, type Ctx } from '@/lib/context';
+import type { CategoryRow } from '@/lib/db';
 import { itemSchema, CONDITION_VALUES, GENDER_VALUES, SEASON_VALUES, STATUS_VALUES } from '@/lib/validation/items';
 import { autoName, parseTagRange, resolveFitRange } from '@/lib/domain';
 import { attachPhotos, discardPhotos } from '@/lib/photo-attach';
@@ -21,6 +22,52 @@ async function brandId(ctx: Ctx, name: string): Promise<string | null> {
   return error || !made ? null : (made.id as string);
 }
 
+const CUSTOM_ORDER = 1000; // custom item types and item categories sort after the built-in ones
+
+/**
+ * The item type a form row asked for. Normally the posted id. When the picker's "+ New item type" was chosen (the field is
+ * "__new"), this creates the item type, and the item category too if "+ New item category" was chosen, then returns the new id.
+ * A name that matches an item type the person already has is reused instead of failing. Errors go back to the form.
+ */
+async function typeFor(ctx: Ctx, formData: FormData, field: string, path: string, prefix = ''): Promise<string> {
+  const posted = String(formData.get(field) ?? '');
+  if (posted !== '__new') return posted;
+  const bad = (m: string): never => fail(path, `${prefix}${m}`);
+  const name = z.string().trim().min(1).max(60).safeParse(formData.get(`${field}_newType`));
+  if (!name.success) return bad('enter a name for the new item type (60 characters or fewer).');
+  const same = (a: string) => a.toLowerCase() === name.data.toLowerCase();
+  const hit = ctx.categories.find((c) => same(c.name));
+  if (hit) return hit.id;
+  if (ctx.allCategories.some((c) => same(c.name))) return bad('that name is already used by a hidden item type. Restore it on the Item types page, or pick another name.');
+
+  let groupId = String(formData.get(`${field}_group`) ?? '');
+  let groupName = ctx.groups.find((g) => g.id === groupId)?.name ?? '';
+  if (groupId === '__new') {
+    const gn = z.string().trim().min(1).max(60).safeParse(formData.get(`${field}_newGroup`));
+    if (!gn.success) return bad('enter a name for the new item category (60 characters or fewer).');
+    const existing = ctx.groups.find((g) => g.name.toLowerCase() === gn.data.toLowerCase());
+    if (existing) {
+      groupId = existing.id;
+      groupName = existing.name;
+    } else {
+      if (ctx.allGroups.some((g) => g.name.toLowerCase() === gn.data.toLowerCase())) return bad('that name is already used by a hidden item category.');
+      const { data: g, error } = await ctx.supabase.from('category_groups').insert({ name: gn.data, owner_id: ctx.user.id, sort_order: CUSTOM_ORDER }).select('id').single();
+      if (error || !g) return bad(error?.code === '22023' ? 'you can have up to 30 custom item categories.' : 'we could not add that item category.');
+      groupId = g.id as string;
+      groupName = gn.data;
+    }
+  }
+  if (!z.string().uuid().safeParse(groupId).success || !groupName) return bad('choose an item category for the new item type.');
+  const { data: made, error } = await ctx.supabase.from('categories').insert({ name: name.data, owner_id: ctx.user.id, group_id: groupId, sort_order: CUSTOM_ORDER }).select('id').single();
+  if (error || !made) return bad(error?.code === '22023' ? 'you can have up to 60 custom item types.' : error?.code === '23505' ? 'that name is already a built-in item type.' : 'we could not add that item type.');
+  // Make it visible to the rest of this request, including later rows of a bulk add.
+  const row: CategoryRow = { id: made.id as string, name: name.data, base_name: name.data, sort_order: CUSTOM_ORDER, group_id: groupId, grp: groupName, group_order: CUSTOM_ORDER, owner_id: ctx.user.id, is_default: false, hidden: false };
+  ctx.categories.push(row);
+  ctx.allCategories.push(row);
+  ctx.catById.set(row.id, row);
+  return row.id;
+}
+
 /** Looks up the size group (as a sort order) of a tag label id. */
 async function tagOrder(ctx: Ctx, tagId: string | undefined): Promise<number | null> {
   if (!tagId) return null;
@@ -31,11 +78,13 @@ async function tagOrder(ctx: Ctx, tagId: string | undefined): Promise<number | n
 export async function saveItem(formData: FormData) {
   const id = z.string().uuid().safeParse(formData.get('id') || undefined);
   const path = id.success ? `/closet/${id.data}` : '/closet/new';
+  const ctx = await getContext();
+  // A "+ New item type" choice becomes a real item type first, so the rest of the form is checked as usual.
+  formData.set('categoryId', await typeFor(ctx, formData, 'categoryId', path));
   const parsed = itemSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return fail(path, parsed.error.issues[0].message);
   const v = parsed.data;
 
-  const ctx = await getContext();
   if (!ctx.active) return fail('/closet', 'Add a child first.');
   const order = (sizeId?: string) => (sizeId ? (ctx.orderOf.get(sizeId) ?? null) : null);
   // A tag from the list wins. Otherwise a custom range such as "6-12" stands in for the tag.
@@ -125,7 +174,7 @@ export async function bulkCreate(formData: FormData) {
     const photo = formData.getAll(`photo_${i}`).map(String).filter(Boolean);
     if (!name && !brand && photo.length === 0) continue; // an untouched row. A row with a photo is kept, even with no name.
     const n = `Row ${i + 1}`;
-    const cat = z.string().uuid().safeParse(text('cat'));
+    const cat = z.string().uuid().safeParse(text('cat') === '__new' ? await typeFor(ctx, formData, `cat_${i}`, path, `${n}: `) : text('cat'));
     if (!cat.success) return fail(path, `${n}: choose an item type.`);
     const qty = z.coerce.number().int().min(1).max(999).safeParse(text('qty') || '1');
     if (!qty.success) return fail(path, `${n}: quantity must be a whole number from 1 to 999.`);

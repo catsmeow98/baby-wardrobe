@@ -23,7 +23,7 @@ export default async function SurveyPage({ searchParams }: { searchParams: Promi
     const v = sp[k];
     return v === undefined ? [] : Array.isArray(v) ? v : [v];
   }, defaultBirthMonth(child?.birth_date), defaultSizes(ctx.currentSize));
-  const { results, usedForecast, windows, missing } = await surveyAll(ctx, answers);
+  const { results, usedForecast, windows, missing, options, gearOptions } = await surveyAll(ctx, answers);
   const qs = answersToParams(answers).toString();
 
   return (
@@ -45,7 +45,8 @@ export default async function SurveyPage({ searchParams }: { searchParams: Promi
       <form method="get" className="grid gap-4 rounded-xl border border-line bg-surface p-4 sm:grid-cols-2">
         <input type="hidden" name="touched" value="1" />
         <LifestyleFields answers={answers} />
-        <SurveyBuilder initial={answers.stages} initialSizes={answers.sizes} birthMonth={answers.birthMonth} currentSize={ctx.currentSize} windows={windows} />
+        <SurveyBuilder initial={answers.stages} initialSizes={answers.sizes} birthMonth={answers.birthMonth} currentSize={ctx.currentSize} windows={windows}
+          options={options} gearOptions={gearOptions} hot={answers.hot} cold={answers.cold} />
         <div className="col-span-full"><button className={btnCls} type="submit">Update suggestions</button></div>
       </form>
 

@@ -37,6 +37,8 @@ export default async function GoalsPage({ searchParams }: { searchParams: Promis
   const shownTypes = ctx.categories.filter((c) => matchesCategory(c, { group: sp.group, cat: sp.cat }));
   const shownIds = new Set(shownTypes.map((c) => c.id));
   const filtering = Boolean(sp.group || sp.cat);
+  // Items with a goal come first within each item category. Items with no goal or a goal of zero follow, greyed out.
+  const targetOf = (id: string) => goals.find((x) => x.categoryId === id && x.size === sizeOrder)?.target ?? 0;
   const keepQs = `${sp.group ? `&group=${sp.group}` : ''}${sp.cat ? `&cat=${sp.cat}` : ''}`;
   // Sizes other than this one that already have goals: the choices for "copy goals from".
   const copyFrom = ctx.sizes.filter((s) => s.sort_order !== sizeOrder && goals.some((g) => g.size === s.sort_order && g.target > 0));
@@ -100,7 +102,7 @@ export default async function GoalsPage({ searchParams }: { searchParams: Promis
             <li key={g.label} className="border-t border-line first:border-t-0">
               <h3 className="pt-3 text-xs font-medium uppercase tracking-wide text-muted">{g.label}</h3>
               <ul>
-            {g.items.map((c) => {
+            {[...g.items].sort((p, q) => Number(targetOf(q.id) > 0) - Number(targetOf(p.id) > 0)).map((c) => {
             const goal = goals.find((x) => x.categoryId === c.id && x.size === sizeOrder);
             const owned = ownedFor(items, child.id, c.id, sizeOrder);
             const incoming = incomingFor(shopping, child.id, c.id, sizeOrder);

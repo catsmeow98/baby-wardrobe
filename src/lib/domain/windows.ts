@@ -20,7 +20,8 @@ export function windowFromDates(startIso: string, endIso: string, isNow = false)
   const mid = (((Math.floor((total(startIso) + total(last)) / 2)) % 12) + 12) % 12;
   const from = isNow ? 'Now' : stamp(startIso, false);
   const age = `Expected ${from} to ${stamp(endIso, false)}`;
-  const base = { startAge: 0, endAge: 0, age, source: 'forecast' as const, season: seasonOfMonth(mid) };
+  const monthIdx = Array.from({ length: Math.min(span, 12) }, (_, k) => (first + k) % 12);
+  const base = { startAge: 0, endAge: 0, age, monthIdx, source: 'forecast' as const, season: seasonOfMonth(mid) };
   if (span >= 12) return { ...base, months: 'All year', short: 'All year' };
   if (span <= 1) return { ...base, months: MONTH_NAMES[first], short: SHORT[first] };
   return { ...base, months: `${MONTH_NAMES[first]} to ${MONTH_NAMES[lastM]}`, short: `${SHORT[first]}-${SHORT[lastM]}` };

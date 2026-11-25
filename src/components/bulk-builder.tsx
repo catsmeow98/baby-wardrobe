@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { BrandSelect } from '@/components/brand-select';
 import { CategoryPicker } from '@/components/category-picker';
 import { PhotoPicker } from '@/components/photo-picker';
 import { TagSizeField, type TagValue } from '@/components/tag-size-field';
@@ -100,7 +101,6 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
   return (
     <>
       <input type="hidden" name="rows" value={rows.length} />
-      <datalist id="brand-list">{brands.map((b) => <option key={b} value={b} />)}</datalist>
       {/* Blocks submit while photos upload. Not read-only, because read-only fields skip validation. */}
       <input ref={guard} className="sr-only" tabIndex={-1} aria-hidden="true" value="ok" onChange={() => undefined} required />
 
@@ -118,7 +118,7 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
 
       {rows.map((row, pos) => (
         <BulkRow key={row.id} row={row} pos={pos} onRemove={() => removeRow(row)} userId={userId} childId={childId}
-          categories={categories} labels={labels} sizes={sizes} defaultTagId={defaultTagId} />
+          categories={categories} labels={labels} sizes={sizes} defaultTagId={defaultTagId} brands={brands} />
       ))}
 
       <div className="flex flex-wrap items-center gap-4">
@@ -130,7 +130,7 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
   );
 }
 
-function BulkRow({ row, pos, onRemove, userId, childId, categories, labels, sizes, defaultTagId }: {
+function BulkRow({ row, pos, onRemove, userId, childId, categories, labels, sizes, defaultTagId, brands }: {
   row: Row;
   pos: number;
   onRemove: () => void;
@@ -140,6 +140,7 @@ function BulkRow({ row, pos, onRemove, userId, childId, categories, labels, size
   labels: SizeLabelRow[];
   sizes: SizeRow[];
   defaultTagId: string;
+  brands: string[];
 }) {
   const [tag, setTag] = useState<TagValue>({ tagId: defaultTagId, custom: false, text: '' });
   return (
@@ -152,12 +153,12 @@ function BulkRow({ row, pos, onRemove, userId, childId, categories, labels, size
           <img src={row.photo.preview} alt={`Photo for row ${pos + 1}`} className="size-24 rounded-lg object-cover" />
         </div>
       )}
-      <CategoryPicker categories={categories} name={`cat_${pos}`} className={`${labelCls} sm:col-span-2`} />
+      <CategoryPicker categories={categories} name={`cat_${pos}`} className={`${labelCls} sm:col-span-2`} allowNew />
       <label className={`${labelCls} sm:col-span-2`}>Name (optional)
         <input className={inputCls} name={`name_${pos}`} maxLength={160} />
       </label>
       <label className={`${labelCls} sm:col-span-2`}>Brand
-        <input className={inputCls} name={`brand_${pos}`} maxLength={80} list="brand-list" />
+        <BrandSelect brands={brands} name={`brand_${pos}`} />
       </label>
       <TagSizeField labels={labels} value={tag} onChange={setTag} tagName={`tag_${pos}`} customName={`ctag_${pos}`} className={`${labelCls} sm:col-span-2`} />
       <label className={`${labelCls} sm:col-span-2`}>Fits through
