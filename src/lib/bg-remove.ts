@@ -1,3 +1,5 @@
+import { cleanMask } from '@/lib/mask-clean';
+
 /**
  * The one place that knows how backgrounds are removed. Runs in the browser, loaded only when a photo is picked with the
  * setting on. Engine: IS-Net "general use" (Apache-2.0, from the DIS project by Xuebin Qin et al.), the 8-bit version from the
@@ -82,17 +84,21 @@ export async function removeBackgroundFrom(image: Blob): Promise<Blob> {
     if (sal[i] > hi) hi = sal[i];
   }
   if (!(hi - lo > 1e-6)) throw new Error(`the model gave a flat result (${lo} to ${hi})`);
+  const soft = new Uint8Array(plane);
+  for (let i = 0; i < plane; i++) soft[i] = Math.round((255 * (sal[i] - lo)) / (hi - lo));
+  // Keep the main piece, drop stray bits and fill holes, then soften the edge a little when the browser can.
+  const clean = cleanMask(soft, SIDE, SIDE);
   const m = small.ctx.createImageData(SIDE, SIDE);
   for (let i = 0; i < plane; i++) {
-    const v = Math.round((255 * (sal[i] - lo)) / (hi - lo));
-    m.data[i * 4] = v;
-    m.data[i * 4 + 1] = v;
-    m.data[i * 4 + 2] = v;
+    m.data[i * 4] = clean[i];
+    m.data[i * 4 + 1] = clean[i];
+    m.data[i * 4 + 2] = clean[i];
     m.data[i * 4 + 3] = 255;
   }
   small.ctx.putImageData(m, 0, 0);
   const big = canvasOf(w, h);
   big.ctx.imageSmoothingQuality = 'high';
+  big.ctx.filter = 'blur(1px)';
   big.ctx.drawImage(small.c, 0, 0, w, h);
   const mask = big.ctx.getImageData(0, 0, w, h).data;
 
