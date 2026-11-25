@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   CATEGORY_NAMES, CAT_KEYS, FREQ_KEYS, SURVEY_SIZES, answersToParams, comboToString, defaultAnswers, defaultSizes, defaultStages, gearQty, monthClass, parseAnswers,
-  parseCombo, seasonForSize, seasonOfMonth, sizeWindow, suggest, suggestAll, suggestGear, type Answers, type CatKey, type Combo, type Freq,
+  parseCombo, seasonForSize, seasonOfMonth, sizeWindow, suggest, suggestAll, suggestGear, type Answers, type Combo, type Freq,
 } from './survey';
 
 const base = (): Answers => defaultAnswers(0);

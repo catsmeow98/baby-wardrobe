@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { ColorDot } from '@/components/color-dot';
 import { btnCls, btnGhostCls, inputCls, labelCls } from '@/components/ui';
@@ -114,7 +115,7 @@ export function OutfitBuilder({ action, items, groups, types, initial }: {
 
       <div className="flex flex-wrap gap-2">
         <button className={btnCls} type="submit">{initial ? 'Save outfit' : 'Create outfit'}</button>
-        <a className={btnGhostCls} href="/outfits">Cancel</a>
+        <Link className={btnGhostCls} href="/outfits">Cancel</Link>
       </div>
     </form>
   );
