@@ -54,8 +54,24 @@ export async function removeBackgroundFrom(image: Blob): Promise<Blob> {
   const img = await RawImage.fromBlob(image);
   const { pixel_values } = await processor(img);
   const out = await model({ [inputName]: pixel_values });
-  const logits = Object.values(out)[0];
-  const mask = await RawImage.fromTensor((logits as unknown as Record<number, typeof logits>)[0].sigmoid().mul(255).to('uint8') as never).resize(img.width, img.height);
+  // Pick the model's final output by name (the conversion calls it "logits"; other copies call it "output_image").
+  const keys = Object.keys(out);
+  const key = ['logits', 'output_image', 'output'].find((k) => k in out) ?? keys[keys.length - 1];
+  const logits = out[key] as unknown as Record<number, typeof out[string]> & { dims?: number[] };
+  console.debug('Background removal output', key, keys, logits.dims);
+  const mask = await RawImage.fromTensor(logits[0].sigmoid().mul(255).to('uint8') as never).resize(img.width, img.height);
+
+  const ch = Math.max(1, Math.round(mask.data.length / (img.width * img.height))); // channels per pixel in the mask
+
+  // A mask that is all one value would give a blank or unchanged photo: report it instead of saving that.
+  let lo = 255;
+  let hi = 0;
+  for (let i = 0; i < img.width * img.height; i += 7) {
+    const v = mask.data[i * ch];
+    if (v < lo) lo = v;
+    if (v > hi) hi = v;
+  }
+  if (hi < 8 || lo > 247) throw new Error(`the mask came out empty (range ${lo} to ${hi}, output ${key}, shape ${logits.dims?.join('x')})`);
 
   // Original pixels with the mask as the alpha channel.
   const canvas = document.createElement('canvas');
@@ -66,7 +82,7 @@ export async function removeBackgroundFrom(image: Blob): Promise<Blob> {
   const bmp = await createImageBitmap(image);
   ctx.drawImage(bmp, 0, 0, img.width, img.height);
   const px = ctx.getImageData(0, 0, img.width, img.height);
-  for (let i = 0; i < img.width * img.height; i++) px.data[i * 4 + 3] = mask.data[i];
+  for (let i = 0; i < img.width * img.height; i++) px.data[i * 4 + 3] = mask.data[i * ch];
   ctx.putImageData(px, 0, 0);
   return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('encode failed'))), 'image/png'));
 }
