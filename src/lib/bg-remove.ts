@@ -63,15 +63,22 @@ export async function removeBackgroundFrom(image: Blob): Promise<Blob> {
 
   const ch = Math.max(1, Math.round(mask.data.length / (img.width * img.height))); // channels per pixel in the mask
 
-  // A mask that is all one value would give a blank or unchanged photo: report it instead of saving that.
+  // Measure how much of the photo the mask keeps. Almost nothing, or almost everything, means the model output was misread:
+  // report it (with numbers) instead of saving a blank or unchanged photo.
   let lo = 255;
   let hi = 0;
+  let kept = 0;
+  let n = 0;
   for (let i = 0; i < img.width * img.height; i += 7) {
     const v = mask.data[i * ch];
     if (v < lo) lo = v;
     if (v > hi) hi = v;
+    if (v > 127) kept++;
+    n++;
   }
-  if (hi < 8 || lo > 247) throw new Error(`the mask came out empty (range ${lo} to ${hi}, output ${key}, shape ${logits.dims?.join('x')})`);
+  const pct = Math.round((kept / n) * 100);
+  console.debug('Background removal mask', { lo, hi, keptPercent: pct, width: img.width, height: img.height, channels: ch });
+  if (pct < 2 || pct > 98) throw new Error(`the mask keeps ${pct}% of the photo (range ${lo} to ${hi}, output ${key}, shape ${logits.dims?.join('x')}, ${ch} channel)`);
 
   // Original pixels with the mask as the alpha channel.
   const canvas = document.createElement('canvas');
