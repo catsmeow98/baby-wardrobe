@@ -16,7 +16,7 @@ interface Picked {
  * storage path is carried in a hidden field. The server attaches the photos once the item has been created.
  * The form cannot be submitted while an upload is still running.
  */
-export function PhotoPicker({ userId, childId, name, label = 'Add photos' }: { userId: string; childId: string; name: string; label?: string }) {
+export function PhotoPicker({ userId, childId, name, label = 'Add photos', max = MAX_PHOTOS_PER_ITEM }: { userId: string; childId: string; name: string; label?: string; max?: number }) {
   const file = useRef<HTMLInputElement>(null);
   const guard = useRef<HTMLInputElement>(null);
   const [picked, setPicked] = useState<Picked[]>([]);
@@ -28,7 +28,7 @@ export function PhotoPicker({ userId, childId, name, label = 'Add photos' }: { u
   }, [busy]);
 
   async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
-    const chosen = Array.from(e.target.files ?? []).slice(0, MAX_PHOTOS_PER_ITEM - picked.length);
+    const chosen = Array.from(e.target.files ?? []).slice(0, max - picked.length);
     e.target.value = '';
     if (chosen.length === 0) return;
     setBusy(true);
@@ -78,9 +78,9 @@ export function PhotoPicker({ userId, childId, name, label = 'Add photos' }: { u
           ))}
         </ul>
       )}
-      {picked.length < MAX_PHOTOS_PER_ITEM && (
+      {picked.length < max && (
         <div>
-          <input ref={file} type="file" accept="image/*" multiple className="sr-only" onChange={onPick} aria-label="Choose photos" />
+          <input ref={file} type="file" accept="image/*" multiple={max > 1} className="sr-only" onChange={onPick} aria-label="Choose photos" />
           <button type="button" className={btnGhostCls} disabled={busy} onClick={() => file.current?.click()}>
             {busy ? 'Uploading…' : picked.length ? 'Add more photos' : label}
           </button>

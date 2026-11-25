@@ -1,5 +1,5 @@
 import { inputCls, labelCls } from '@/components/ui';
-import { CHANGES, DRESSY, MONTH_NAMES, SPARE, type Answers } from '@/lib/domain';
+import { CHANGES, DRESSY, PJ_CHANGE, SPARE, type Answers } from '@/lib/domain';
 
 export function SurveySelect({ name, label, value, options }: { name: string; label: string; value: string; options: readonly (readonly [string, string])[] }) {
   return (
@@ -20,11 +20,11 @@ export function LifestyleFields({ answers }: { answers: Answers }) {
         <input className={inputCls} type="number" name="laundry" min={1} max={14} defaultValue={answers.laundry} />
       </label>
       <SurveySelect name="changes" label="Outfit changes on a typical day" value={answers.changes} options={entries(CHANGES)} />
+      <SurveySelect name="pj" label="How often do you change pajamas?" value={answers.pjChange} options={entries(PJ_CHANGE)} />
       <SurveySelect name="spare" label="Spare outfits needed (extra changes, daycare, etc.)" value={answers.spare} options={entries(SPARE)} />
       <SurveySelect name="dressy" label="How many times a week does baby wear dressy clothes?" value={answers.dressyPerWeek} options={entries(DRESSY)} />
       <SurveySelect name="hot" label="Hot summers where you live?" value={answers.hot ? 'yes' : 'no'} options={yesNo} />
       <SurveySelect name="cold" label="Cold winters where you live?" value={answers.cold ? 'yes' : 'no'} options={yesNo} />
-      <SurveySelect name="birth" label="Birth month, or due month" value={String(answers.birthMonth)} options={MONTH_NAMES.map((m, i) => [String(i), m] as [string, string])} />
     </>
   );
 }

@@ -75,7 +75,7 @@ export default async function EditItemPage({
         submitLabel="Save changes"
         defaults={{
           id: item.id, name: item.name, categoryId: item.category_id, brand: brandName, quantity: item.quantity,
-          tagId: item.label_id, fitFromId: item.fit_from_size_id, fitToId: item.fit_to_size_id, condition: item.condition,
+          tagId: item.label_id, customTag: item.custom_tag, fitFromId: item.fit_from_size_id, fitToId: item.fit_to_size_id, condition: item.condition,
           season: item.season, status: item.status, fitOverride: item.fit_override, fitFeedback: item.fit_feedback, notes: item.notes,
         }}
       />

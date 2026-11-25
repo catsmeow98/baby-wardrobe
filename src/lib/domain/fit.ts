@@ -1,8 +1,11 @@
 import type { FitState, InventoryItem } from './types';
 
-/** Active and stored pieces that are not unusable can be worn. */
+/** Statuses of pieces being kept: in the closet, in storage, or spares at daycare. */
+export const KEPT_STATUSES: readonly string[] = ['active', 'stored', 'daycare'];
+
+/** Kept pieces that are not unusable can be worn, and count toward goals. */
 export const isUsable = (i: Pick<InventoryItem, 'status' | 'condition'>): boolean =>
-  (i.status === 'active' || i.status === 'stored') && i.condition !== 'unusable';
+  KEPT_STATUSES.includes(i.status) && i.condition !== 'unusable';
 
 /** True when the item's fit range includes the size. Items with an unknown fit never count. */
 export const fitsSize = (i: Pick<InventoryItem, 'fitFrom' | 'fitTo'>, size: number): boolean =>

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { CATEGORY_NAMES, SURVEY_SIZES, parseAnswers } from '@/lib/domain';
+import { CATEGORY_NAMES, defaultSizes, parseAnswers } from '@/lib/domain';
 import { getContext } from '@/lib/context';
 import { defaultBirthMonth, surveyAll } from './compute';
 
@@ -17,11 +17,10 @@ export async function applySurvey(formData: FormData) {
   if (!ctx.active) return stop('Add a child first.');
   const child = ctx.active;
 
-  const chosen = [...new Set(formData.getAll('save').map(Number))].filter((n) => (SURVEY_SIZES as readonly number[]).includes(n)).sort((a, b) => a - b);
-  if (chosen.length === 0) return stop('Tick at least one size to save.');
-
   const p = new URLSearchParams(q);
-  const answers = parseAnswers((k) => p.get(k), (k) => p.getAll(k), defaultBirthMonth(child.birth_date));
+  const answers = parseAnswers((k) => p.get(k), (k) => p.getAll(k), defaultBirthMonth(child.birth_date), defaultSizes(ctx.currentSize));
+  const chosen = [...new Set(formData.getAll('save').map(Number))].filter((n) => answers.sizes.includes(n)).sort((a, b) => a - b);
+  if (chosen.length === 0) return stop('Tick at least one size to save.');
   const { results } = await surveyAll(ctx, answers);
 
   const goals = results
@@ -32,7 +31,7 @@ export async function applySurvey(formData: FormData) {
       return r.rows
         .filter((x) => x.qty > 0)
         .flatMap((x) => {
-          const cat = ctx.categories.find((c) => c.name === CATEGORY_NAMES[x.key]);
+          const cat = ctx.categories.find((c) => c.owner_id === null && c.name === CATEGORY_NAMES[x.key]);
           return cat ? [{ child_id: child.id, category_id: cat.id, size_id: size.id, target_quantity: x.qty }] : [];
         });
     });

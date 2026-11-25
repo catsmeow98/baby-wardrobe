@@ -3,7 +3,7 @@
  * from newborn to 2T.
  *
  * Lifestyle answers (laundry, outfit changes, spare outfits, climate, dressy frequency) apply to every size. What baby
- * wears is answered per stage, because routines change as baby grows: swaddles give way to sleep sacks, shoes start
+ * wears is answered per size, because routines change as baby grows: swaddles give way to sleep sacks, shoes start
  * once walking begins. Each answer is a list of combinations, such as "long-sleeve bodysuit + bottoms + socks", each
  * with a how-often setting.
  *
@@ -13,44 +13,55 @@
 export type Season = 'spring' | 'summer' | 'fall' | 'winter';
 export type Temp = 'hot' | 'warm' | 'mild' | 'cool' | 'cold';
 
-/** Keys used inside the survey. CATEGORY_NAMES maps each to the category name in the database. */
+/** Keys used inside the survey. Each maps to the name of a built-in category in the database. */
 export const CATEGORY_NAMES = {
-  sbs: 'Short-sleeve bodysuits',
-  lsb: 'Long-sleeve bodysuits',
-  tops: 'Tops',
-  bot: 'Bottoms',
-  footy: 'Footy sleepers',
-  footless: 'Footless sleepers',
-  sleep: 'Other sleepwear',
-  swaddle: 'Swaddles',
-  sack: 'Sleep sacks',
-  outfit: 'Outfits',
-  outer: 'Outerwear',
-  acc: 'Accessories',
-  shoes: 'Footwear',
-  swim: 'Swimwear',
+  sbs: 'Short-sleeve bodysuit',
+  lsb: 'Long-sleeve bodysuit',
+  top: 'Top',
+  sweater: 'Sweater',
+  pants: 'Pants',
+  shorts: 'Shorts',
+  leggings: 'Leggings',
+  footy: 'Footy sleeper',
+  footless: 'Footless sleeper',
+  pjs: 'Pajama set',
+  gown: 'Sleep gown',
+  sack: 'Sleep sack',
+  swaddle: 'Swaddle',
+  romper: 'Romper',
+  dress: 'Dress',
+  dshirt: 'Dress shirt',
+  dpants: 'Dress pants',
+  set: 'Matching set',
+  coat: 'Coat',
+  jacket: 'Light jacket',
+  bunting: 'Bunting',
+  snowsuit: 'Snowsuit',
+  socks: 'Socks',
+  hat: 'Hat',
+  mittens: 'Mittens',
+  bib: 'Bib',
+  shoes: 'Shoes',
+  boots: 'Boots',
+  swim: 'Swimsuit',
+  rash: 'Rash guard',
 } as const;
 export type CatKey = keyof typeof CATEGORY_NAMES;
 export const CAT_KEYS = Object.keys(CATEGORY_NAMES) as CatKey[];
 
-/** Short names for the combination chips, in the order they are shown. */
-export const CAT_LABELS: Record<CatKey, string> = {
-  sbs: 'Short-sleeve bodysuit',
-  lsb: 'Long-sleeve bodysuit',
-  tops: 'Top',
-  bot: 'Pants / bottoms',
-  outfit: 'Romper, dress or set',
-  acc: 'Socks, hat or accessory',
-  shoes: 'Shoes',
-  outer: 'Coat or jacket',
-  swim: 'Swimsuit',
-  footy: 'Footed sleeper',
-  footless: 'Footless sleeper',
-  sleep: 'Other sleepwear',
-  sack: 'Sleep sack',
-  swaddle: 'Swaddle',
-};
-export const CHIP_ORDER: readonly CatKey[] = ['sbs', 'lsb', 'tops', 'bot', 'outfit', 'acc', 'shoes', 'outer', 'swim', 'footy', 'footless', 'sleep', 'sack', 'swaddle'];
+/** The names shown on the combination chips. The same as the category names. */
+export const CAT_LABELS: Record<CatKey, string> = CATEGORY_NAMES;
+
+/** How the chips are grouped in the combination builder. */
+export const CHIP_GROUPS: readonly { label: string; keys: readonly CatKey[] }[] = [
+  { label: 'Bodysuits and tops', keys: ['sbs', 'lsb', 'top', 'sweater'] },
+  { label: 'Bottoms', keys: ['pants', 'shorts', 'leggings'] },
+  { label: 'Sleep', keys: ['footy', 'footless', 'pjs', 'gown', 'sack', 'swaddle'] },
+  { label: 'Outfits and dressy', keys: ['romper', 'dress', 'dshirt', 'dpants', 'set'] },
+  { label: 'Outerwear', keys: ['coat', 'jacket', 'bunting', 'snowsuit'] },
+  { label: 'Accessories', keys: ['socks', 'hat', 'mittens', 'bib'] },
+  { label: 'Footwear and swim', keys: ['shoes', 'boots', 'swim', 'rash'] },
+];
 
 /* ---- how often ---- */
 export type Freq = 'most' | 'some' | 'rare';
@@ -72,22 +83,15 @@ export const OCCASIONS: readonly (readonly [Occasion, string])[] = [
   ['dressy', 'What does baby wear for a dressy outfit?'],
 ];
 
-/* ---- stages ---- */
-export type StageId = 's1' | 's2' | 's3' | 's4';
-export interface Stage {
-  id: StageId;
-  label: string;
-  /** Size group orders (see sizes.ts). */
-  sizes: readonly number[];
-}
-export const STAGES: readonly Stage[] = [
-  { id: 's1', label: 'Newborn to 3 months', sizes: [0, 1] },
-  { id: 's2', label: '3 to 9 months', sizes: [2, 3] },
-  { id: 's3', label: '9 to 18 months', sizes: [4, 5] },
-  { id: 's4', label: '18 months to 2T', sizes: [6, 7] },
-];
+/* ---- sizes ---- */
+/** Size group orders covered by the survey: Newborn to 2T. */
 export const SURVEY_SIZES: readonly number[] = [0, 1, 2, 3, 4, 5, 6, 7];
-export const stageOfSize = (size: number): Stage => STAGES.find((s) => s.sizes.includes(size)) ?? STAGES[STAGES.length - 1];
+
+/** The sizes worth planning for: the current size and up, or all of them when there is no current size. */
+export const defaultSizes = (current: number | null): number[] => {
+  const list = SURVEY_SIZES.filter((x) => current === null || x >= current);
+  return list.length ? list : [SURVEY_SIZES[SURVEY_SIZES.length - 1]];
+};
 
 /* ---- lifestyle choices ---- */
 export const CHANGES = {
@@ -106,6 +110,14 @@ export const SPARE = {
   many: { label: 'A lot (7 or more)', n: 8 },
 } as const;
 export type SpareKey = keyof typeof SPARE;
+
+/** How often pajamas are changed. Together with the days between laundry loads this decides how many sets are needed. */
+export const PJ_CHANGE = {
+  daily: { label: 'Every day', days: 1 },
+  '2-3': { label: 'Every 2 to 3 days', days: 2.5 },
+  '4-plus': { label: 'Every 4 days or more', days: 4 },
+} as const;
+export type PjKey = keyof typeof PJ_CHANGE;
 
 export const DRESSY = {
   rare: { label: 'Less than once a week', perWeek: 0.5 },
@@ -126,47 +138,60 @@ export interface Answers {
   laundry: number; // days between loads, 1 to 14
   changes: ChangesKey;
   spare: SpareKey;
+  pjChange: PjKey;
   dressyPerWeek: DressyKey;
   hot: boolean; // hot summers
   cold: boolean; // cold winters
-  birthMonth: number; // 0 to 11, birth or due month. Decides which season each size falls in.
-  stages: Record<StageId, StageAnswers>;
+  birthMonth: number; // 0 to 11, birth or due month. Decides which months and season each size falls in.
+  sizes: number[]; // size orders to plan for, ascending
+  stages: Record<number, StageAnswers>; // combinations for every size order, 0 to 7
 }
 
 const c = (freq: Freq, ...cats: CatKey[]): Combo => ({ cats, freq });
 
-/** Typical routines for each stage, used as the starting point and as a fallback when a section is left empty. */
-export const defaultStages = (): Record<StageId, StageAnswers> => ({
-  s1: {
-    sleep: [c('most', 'footy', 'swaddle')],
-    day: [c('most', 'sbs', 'bot', 'acc'), c('some', 'footy')],
-    dressy: [c('most', 'outfit')],
-  },
-  s2: {
-    sleep: [c('most', 'footy', 'sack')],
-    day: [c('most', 'sbs', 'bot', 'acc'), c('some', 'tops', 'bot')],
-    dressy: [c('most', 'outfit')],
-  },
-  s3: {
-    sleep: [c('most', 'footless', 'sack')],
-    day: [c('most', 'tops', 'bot', 'acc'), c('some', 'sbs', 'bot')],
-    dressy: [c('most', 'outfit')],
-  },
-  s4: {
-    sleep: [c('most', 'sleep')],
-    day: [c('most', 'tops', 'bot', 'acc')],
-    dressy: [c('most', 'outfit')],
-  },
+const cloneAnswers = (x: StageAnswers): StageAnswers => ({
+  sleep: x.sleep.map((y) => ({ cats: [...y.cats], freq: y.freq })),
+  day: x.day.map((y) => ({ cats: [...y.cats], freq: y.freq })),
+  dressy: x.dressy.map((y) => ({ cats: [...y.cats], freq: y.freq })),
 });
 
-export const defaultAnswers = (birthMonth = 0): Answers => ({
+/** Typical routines, used as the starting point for each size and as a fallback when a section is left empty. */
+const TYPICAL: readonly StageAnswers[] = [
+  { // newborn and 0-3M
+    sleep: [c('most', 'footy', 'swaddle')],
+    day: [c('most', 'sbs', 'pants', 'socks'), c('some', 'footy')],
+    dressy: [c('most', 'romper')],
+  },
+  { // 3-9M
+    sleep: [c('most', 'footy', 'sack')],
+    day: [c('most', 'sbs', 'pants', 'socks'), c('some', 'top', 'pants')],
+    dressy: [c('most', 'romper')],
+  },
+  { // 9-18M
+    sleep: [c('most', 'footless', 'sack')],
+    day: [c('most', 'top', 'pants', 'socks'), c('some', 'sbs', 'pants')],
+    dressy: [c('most', 'romper')],
+  },
+  { // 18M-2T
+    sleep: [c('most', 'pjs')],
+    day: [c('most', 'top', 'pants', 'socks')],
+    dressy: [c('most', 'dress')],
+  },
+];
+const typicalFor = (size: number): StageAnswers => cloneAnswers(TYPICAL[size <= 1 ? 0 : size <= 3 ? 1 : size <= 5 ? 2 : 3]);
+
+export const defaultStages = (): Record<number, StageAnswers> => Object.fromEntries(SURVEY_SIZES.map((size) => [size, typicalFor(size)]));
+
+export const defaultAnswers = (birthMonth = 0, sizes: readonly number[] = SURVEY_SIZES): Answers => ({
   laundry: 3,
   changes: 'one-two',
   spare: 'few',
+  pjChange: 'daily',
   dressyPerWeek: 'rare',
   hot: false,
   cold: false,
   birthMonth,
+  sizes: [...sizes],
   stages: defaultStages(),
 });
 
@@ -180,6 +205,36 @@ const START_AGE = [0, 1, 3, 6, 9, 12, 18, 24, 30, 36];
 /** The season baby is likely to wear a size, from the birth or due month. Assumes a month into the size. */
 export const seasonForSize = (birthMonth: number, size: number): Season =>
   seasonOfMonth((((birthMonth + (START_AGE[size] ?? 36) + 1) % 12) + 12) % 12);
+
+const MONTH_SHORT = MONTH_NAMES.map((m) => m.slice(0, 3));
+
+export interface SizeWindow {
+  startAge: number;
+  endAge: number;
+  /** "Age 3 to 6 months" */
+  age: string;
+  /** "July to September" */
+  months: string;
+  /** "Jul-Sep" */
+  short: string;
+}
+
+/**
+ * The ages (and so the calendar months) in which a typical baby wears a size, from the birth or due month.
+ * A baby born in April wears Newborn in April and 0-3M in May and June. Real babies vary, so this is a guide.
+ */
+export function sizeWindow(birthMonth: number, size: number): SizeWindow {
+  const startAge = START_AGE[size] ?? 36;
+  const endAge = START_AGE[size + 1] ?? startAge + 6;
+  const span = endAge - startAge;
+  const month = (n: number) => (((birthMonth + n) % 12) + 12) % 12;
+  const first = month(startAge);
+  const last = month(endAge - 1);
+  const age = startAge === 0 ? `Birth to ${endAge} month${endAge === 1 ? '' : 's'}` : `Age ${startAge} to ${endAge} months`;
+  if (span >= 12) return { startAge, endAge, age, months: 'All year', short: 'All year' };
+  if (span === 1) return { startAge, endAge, age, months: MONTH_NAMES[first], short: MONTH_SHORT[first] };
+  return { startAge, endAge, age, months: `${MONTH_NAMES[first]} to ${MONTH_NAMES[last]}`, short: `${MONTH_SHORT[first]}-${MONTH_SHORT[last]}` };
+}
 
 /* ---- the engine ---- */
 const TEMP_TEXT: Record<Temp, string> = { hot: 'hot weather', warm: 'warm weather', mild: 'mild weather', cool: 'cool weather', cold: 'cold weather' };
@@ -196,7 +251,7 @@ export interface Suggestion {
 }
 export interface SizeSuggestion {
   size: number;
-  stage: StageId;
+  window: SizeWindow;
   season: Season;
   temp: Temp;
   rows: Suggestion[];
@@ -207,8 +262,7 @@ export const comboText = (combo: Combo): string => combo.cats.map((k) => CAT_LAB
 
 /** size is a size group order (0 to 7). season is the season in which baby is expected to wear that size. */
 export function suggest(a: Answers, size: number, season: Season): SizeSuggestion {
-  const stage = stageOfSize(size);
-  const defaults = defaultStages()[stage.id];
+  const defaults = typicalFor(size);
   const notes: string[] = [];
   const L = a.laundry;
   const changes = CHANGES[a.changes].n;
@@ -236,45 +290,54 @@ export function suggest(a: Answers, size: number, season: Season): SizeSuggestio
     }
   };
 
-  const st = a.stages[stage.id];
-  const sleepCombos = st.sleep.length ? st.sleep : (notes.push('No sleep combinations were chosen for this stage, so typical ones were used.'), defaults.sleep);
-  const dayCombos = st.day.length ? st.day : (notes.push('No daytime combinations were chosen for this stage, so typical ones were used.'), defaults.day);
+  const st = a.stages[size] ?? defaults;
+  const sleepCombos = st.sleep.length ? st.sleep : (notes.push('No sleep combinations were chosen for this size, so typical ones were used.'), defaults.sleep);
+  const dayCombos = st.day.length ? st.day : (notes.push('No daytime combinations were chosen for this size, so typical ones were used.'), defaults.day);
 
   const dayOutfits = Math.ceil(L * changes) + spare;
   place(dayCombos, dayOutfits, `${dayOutfits} daytime outfits`);
 
-  const nights = L + (changes >= 3 ? 1 : 0);
-  place(sleepCombos, nights, `${nights} nights`);
+  // One pajama set per change between laundry loads: changed daily means a set for every day between loads.
+  const nights = Math.max(1, Math.ceil(L / PJ_CHANGE[a.pjChange].days));
+  place(sleepCombos, nights, `${nights} pajama change${nights > 1 ? 's' : ''} between loads`);
 
   if (st.dressy.length) {
     const dressyOutfits = Math.max(1, Math.ceil((DRESSY[a.dressyPerWeek].perWeek * L) / 7));
     place(st.dressy, dressyOutfits, `${dressyOutfits} dressy outfit${dressyOutfits > 1 ? 's' : ''}`);
   }
 
-  // Weather decides coats and swimwear. They are whichever is larger: what the combinations ask for, or what the weather needs.
-  const coats = { cold: 2, cool: 1, mild: 1, warm: 0, hot: 0 }[temp];
-  if (coats > (qty.outer ?? 0)) {
-    qty.outer = coats;
-    why.outer = [temp === 'cold' ? 'A coat and a warmer layer for cold winters.' : 'A light jacket or coat.'];
-  }
+  // Weather decides outerwear, mittens, hats and swimwear. For outerwear, mittens and swimwear it is whichever is
+  // larger: what the combinations ask for, or what the weather needs.
+  const ensure = (cat: CatKey, n: number, w: string) => {
+    if (n > (qty[cat] ?? 0)) {
+      qty[cat] = n;
+      why[cat] = [w];
+    }
+  };
+  const young = size <= 3;
+  if (temp === 'cold') {
+    ensure('coat', 1, 'A coat for cold winters.');
+    ensure(young ? 'bunting' : 'snowsuit', 1, young ? 'A bunting keeps a small baby warm outdoors.' : 'A snowsuit for playing in the cold.');
+    ensure('mittens', 1, 'Mittens for cold winters.');
+  } else if (temp === 'cool') ensure('jacket', 1, 'A light jacket for cool weather.');
+  else if (temp === 'mild') ensure('jacket', 1, 'A light jacket for changeable weather.');
   const swim = size >= 2 ? ({ hot: 2, warm: 1 } as Partial<Record<Temp, number>>)[temp] ?? 0 : 0;
-  if (swim > (qty.swim ?? 0)) {
-    qty.swim = swim;
-    why.swim = ['Warm weather means water play.'];
-  }
+  ensure('swim', swim, 'Warm weather means water play.');
   const hats = { cold: 2, cool: 1, mild: 0, warm: 1, hot: 1 }[temp];
-  add('acc', hats, `${hats} hat${hats > 1 ? 's' : ''} for ${T}.`);
+  add('hat', hats, `${hats} hat${hats > 1 ? 's' : ''} for ${T}.`);
 
   // Shoes only make sense once walking starts, whatever the combinations say.
-  if (stage.id === 's1' || stage.id === 's2') {
-    if (qty.shoes) notes.push('Shoes were left out: they are not needed before walking.');
-    qty.shoes = 0;
-    why.shoes = ['Not needed before walking.'];
+  if (young) {
+    if (qty.shoes || qty.boots) notes.push('Shoes and boots were left out: they are not needed before walking.');
+    for (const k of ['shoes', 'boots'] as const) {
+      qty[k] = 0;
+      why[k] = ['Not needed before walking.'];
+    }
   }
 
   return {
     size,
-    stage: stage.id,
+    window: sizeWindow(a.birthMonth, size),
     season,
     temp,
     notes,
@@ -304,7 +367,7 @@ export function parseCombo(s: string): Combo | null {
   return cats.length ? { cats, freq: freq as Freq } : null;
 }
 
-export const stageKey = (stage: StageId, occasion: Occasion): string => `${stage}_${occasion}`;
+export const stageKey = (size: number, occasion: Occasion): string => `z${size}_${occasion}`;
 
 export function answersToParams(a: Answers): URLSearchParams {
   const p = new URLSearchParams({
@@ -312,21 +375,23 @@ export function answersToParams(a: Answers): URLSearchParams {
     laundry: String(a.laundry),
     changes: a.changes,
     spare: a.spare,
+    pj: a.pjChange,
     dressy: a.dressyPerWeek,
     hot: a.hot ? 'yes' : 'no',
     cold: a.cold ? 'yes' : 'no',
     birth: String(a.birthMonth),
   });
-  for (const stage of STAGES) for (const [occ] of OCCASIONS) for (const x of a.stages[stage.id][occ]) if (x.cats.length) p.append(stageKey(stage.id, occ), comboToString(x));
+  for (const size of a.sizes) p.append('size', String(size));
+  for (const size of a.sizes) for (const [occ] of OCCASIONS) for (const x of a.stages[size][occ]) if (x.cats.length) p.append(stageKey(size, occ), comboToString(x));
   return p;
 }
 
 /**
  * Reads answers from a query string. Anything missing or invalid falls back to a default, numbers are clamped, and
- * unknown categories are dropped. On the first visit (no "touched" field) the stage combinations are the typical ones.
+ * unknown categories are dropped. On the first visit (no "touched" field) the combinations are the typical ones.
  */
-export function parseAnswers(get: (k: string) => string | null, getAll: (k: string) => string[], fallbackBirthMonth = 0): Answers {
-  const D = defaultAnswers(fallbackBirthMonth);
+export function parseAnswers(get: (k: string) => string | null, getAll: (k: string) => string[], fallbackBirthMonth = 0, fallbackSizes: readonly number[] = SURVEY_SIZES): Answers {
+  const D = defaultAnswers(fallbackBirthMonth, fallbackSizes);
   const num = (k: string, d: number, lo: number, hi: number) => {
     const raw = get(k);
     const v = Number(raw);
@@ -334,11 +399,14 @@ export function parseAnswers(get: (k: string) => string | null, getAll: (k: stri
   };
   const pick = <T extends string>(k: string, allowed: readonly T[], d: T): T => ((allowed as readonly string[]).includes(get(k) ?? '') ? (get(k) as T) : d);
   const touched = get('touched') !== null;
+  const chosen = touched ? [...new Set(getAll('size').map(Number))].filter((n) => SURVEY_SIZES.includes(n)).sort((x, y) => x - y) : [];
+  const sizes = chosen.length ? chosen : [...D.sizes];
   const stages = defaultStages();
+  // A planned size reads exactly what was submitted (empty means empty). Sizes left out keep the typical answers.
   if (touched) {
-    for (const stage of STAGES) {
+    for (const size of sizes) {
       for (const [occ] of OCCASIONS) {
-        stages[stage.id][occ] = getAll(stageKey(stage.id, occ))
+        stages[size][occ] = getAll(stageKey(size, occ))
           .slice(0, MAX_COMBOS)
           .map(parseCombo)
           .filter((x): x is Combo => x !== null);
@@ -349,10 +417,12 @@ export function parseAnswers(get: (k: string) => string | null, getAll: (k: stri
     laundry: num('laundry', D.laundry, 1, 14),
     changes: pick('changes', Object.keys(CHANGES) as ChangesKey[], D.changes),
     spare: pick('spare', Object.keys(SPARE) as SpareKey[], D.spare),
+    pjChange: pick('pj', Object.keys(PJ_CHANGE) as PjKey[], D.pjChange),
     dressyPerWeek: pick('dressy', Object.keys(DRESSY) as DressyKey[], D.dressyPerWeek),
     hot: get('hot') === 'yes',
     cold: get('cold') === 'yes',
     birthMonth: num('birth', D.birthMonth, 0, 11),
+    sizes,
     stages,
   };
 }

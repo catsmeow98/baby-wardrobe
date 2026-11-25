@@ -6,3 +6,4 @@ export * from './shopping';
 export * from './closet';
 export * from './forecast';
 export * from './survey';
+export * from './tagrange';

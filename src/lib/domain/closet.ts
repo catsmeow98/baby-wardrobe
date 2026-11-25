@@ -6,15 +6,17 @@ import type { FitState, InventoryItem } from './types';
  * - Nothing picked: the fit is unknown (both ends null).
  * - Only a tag size: the item fits that size.
  * - "Fits from" defaults to the tag size, and "fits through" defaults to "fits from".
+ * - A custom tag range (tagTo) fills both ends when neither is picked.
  */
 export function resolveFitRange(
   tag: number | null,
   from: number | null,
   to: number | null,
+  tagTo: number | null = null,
 ): { fitFrom: number | null; fitTo: number | null } | { error: string } {
   const start = from ?? tag ?? to;
   if (start === null) return { fitFrom: null, fitTo: null };
-  const end = to ?? start;
+  const end = to ?? (from === null && tagTo !== null ? tagTo : start);
   if (end < start) return { error: 'Fits through must be the same size as fits from, or larger.' };
   return { fitFrom: start, fitTo: end };
 }

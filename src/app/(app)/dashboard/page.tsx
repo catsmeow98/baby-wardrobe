@@ -7,7 +7,7 @@ import { ProgressBar } from '@/components/progress-bar';
 import { btnCls, btnGhostCls } from '@/components/ui';
 import { FIT_LABELS, sizeName } from '@/lib/db';
 import type { GoalRow, ItemRow, ShoppingRow } from '@/lib/db';
-import { fitStateFor, goalProgress, sizeProgress, transition, type FitState } from '@/lib/domain';
+import { KEPT_STATUSES, fitStateFor, goalProgress, sizeProgress, transition, type FitState } from '@/lib/domain';
 import { forecastFor, loadMeasurements } from '@/lib/forecast-data';
 
 export const metadata: Metadata = { title: 'Dashboard' };
@@ -52,11 +52,11 @@ export default async function DashboardPage() {
   const openNeeds = gaps.length + shopRowsT.filter((s) => s.status === 'needed').length;
 
   // Fit breakdown across everything being kept (active or stored), by number of pieces.
-  const kept = items.filter((i) => i.status === 'active' || i.status === 'stored');
+  const kept = items.filter((i) => KEPT_STATUSES.includes(i.status));
   const byFit = new Map<FitState, number>();
   for (const i of kept) byFit.set(fitStateFor(i, cur), (byFit.get(fitStateFor(i, cur)) ?? 0) + i.quantity);
-  const unknownFit = items.filter((i) => ['active', 'stored'].includes(i.status) && i.fitFrom === null && !i.fitOverride).length;
-  const unusable = items.filter((i) => i.condition === 'unusable' && ['active', 'stored'].includes(i.status)).length;
+  const unknownFit = items.filter((i) => KEPT_STATUSES.includes(i.status) && i.fitFrom === null && !i.fitOverride).length;
+  const unusable = items.filter((i) => i.condition === 'unusable' && KEPT_STATUSES.includes(i.status)).length;
 
   // Progress for each size that has goals.
   const goalSizes = [...new Set(progress.filter((p) => p.target > 0).map((p) => p.size))].sort((a, b) => a - b);

@@ -1,6 +1,9 @@
+import Link from 'next/link';
+import { CategoryOptions } from '@/components/category-options';
 import { PhotoPicker } from '@/components/photo-picker';
 import { btnCls, inputCls, labelCls } from '@/components/ui';
-import { CONDITIONS, FIT_FEEDBACK, FIT_LABELS, SEASONS, STATUSES, sizeName } from '@/lib/db';
+import { FitFields } from '@/components/fit-fields';
+import { CONDITIONS, FIT_LABELS, SEASONS, STATUSES } from '@/lib/db';
 import type { CategoryRow, SizeLabelRow, SizeRow } from '@/lib/db';
 
 export interface ItemDefaults {
@@ -10,6 +13,7 @@ export interface ItemDefaults {
   brand?: string;
   quantity?: number;
   tagId?: string | null;
+  customTag?: string | null;
   fitFromId?: string | null;
   fitToId?: string | null;
   condition?: string;
@@ -33,7 +37,6 @@ interface Props {
 }
 
 export function ItemForm({ action, categories, sizes, labels, brands, defaults: d = {}, submitLabel, photos }: Props) {
-  const sameSize = <option value="">Same as tag size</option>;
   return (
     <form action={action} className="flex flex-col gap-4 rounded-xl border border-line bg-surface p-4">
       {d.id && <input type="hidden" name="id" value={d.id} />}
@@ -45,8 +48,9 @@ export function ItemForm({ action, categories, sizes, labels, brands, defaults: 
         <label className={labelCls}>
           Category
           <select className={inputCls} name="categoryId" defaultValue={d.categoryId ?? categories[0]?.id} required>
-            {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            <CategoryOptions categories={categories} />
           </select>
+          <span className="text-xs">Not listed? <Link className="text-accent underline" href="/categories">Add your own category</Link></span>
         </label>
         <label className={labelCls}>
           Brand
@@ -54,31 +58,21 @@ export function ItemForm({ action, categories, sizes, labels, brands, defaults: 
           <datalist id="brand-list">{brands.map((b) => <option key={b} value={b} />)}</datalist>
         </label>
         <label className={labelCls}>
-          Tag size (as printed)
-          <select className={inputCls} name="tagId" defaultValue={d.tagId ?? ''}>
-            <option value="">Not set</option>
-            {labels.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
-          </select>
-        </label>
-        <label className={labelCls}>
           Quantity
           <input className={inputCls} type="number" name="quantity" min={1} max={999} defaultValue={d.quantity ?? 1} required />
           <span className="text-xs">Above 1 makes a group, like a 5-pack.</span>
         </label>
-        <label className={labelCls}>
-          Fits from
-          <select className={inputCls} name="fitFromId" defaultValue={d.fitFromId ?? ''}>
-            {sameSize}
-            {sizes.map((s) => <option key={s.id} value={s.id}>{sizeName(s)}</option>)}
-          </select>
-        </label>
-        <label className={labelCls}>
-          Fits through
-          <select className={inputCls} name="fitToId" defaultValue={d.fitToId ?? ''}>
-            {sameSize}
-            {sizes.map((s) => <option key={s.id} value={s.id}>{sizeName(s)}</option>)}
-          </select>
-        </label>
+        <FitFields
+          labels={labels}
+          sizes={sizes}
+          defaults={{
+            tagId: d.tagId ?? '',
+            customTag: d.customTag ?? '',
+            fitFromId: d.fitFromId ?? '',
+            fitToId: d.fitToId ?? '',
+            fitFeedback: d.fitFeedback === null || d.fitFeedback === undefined ? '' : String(d.fitFeedback),
+          }}
+        />
         <label className={labelCls}>
           Condition
           <select className={inputCls} name="condition" defaultValue={d.condition ?? 'good'}>
@@ -102,13 +96,6 @@ export function ItemForm({ action, categories, sizes, labels, brands, defaults: 
           <select className={inputCls} name="fitOverride" defaultValue={d.fitOverride ?? ''}>
             <option value="">Work it out from the child&apos;s size</option>
             {['fits', 'notyet', 'small', 'outgrown'].map((v) => <option key={v} value={v}>{FIT_LABELS[v]}</option>)}
-          </select>
-        </label>
-        <label className={labelCls}>
-          How did it fit?
-          <select className={inputCls} name="fitFeedback" defaultValue={d.fitFeedback === null || d.fitFeedback === undefined ? '' : String(d.fitFeedback)}>
-            <option value="">Not rated</option>
-            {FIT_FEEDBACK.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select>
         </label>
         <label className={`${labelCls} sm:col-span-2`}>

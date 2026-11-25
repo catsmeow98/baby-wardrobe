@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { getContext, type Ctx } from '@/lib/context';
 import { itemSchema, CONDITION_VALUES, SEASON_VALUES, STATUS_VALUES } from '@/lib/validation/items';
-import { autoName, resolveFitRange } from '@/lib/domain';
+import { autoName, parseTagRange, resolveFitRange } from '@/lib/domain';
 import { attachPhotos, discardPhotos } from '@/lib/photo-attach';
 
 const fail = (path: string, message: string): never => redirect(`${path}?error=${encodeURIComponent(message)}`);
@@ -38,7 +38,18 @@ export async function saveItem(formData: FormData) {
   const ctx = await getContext();
   if (!ctx.active) return fail('/closet', 'Add a child first.');
   const order = (sizeId?: string) => (sizeId ? (ctx.orderOf.get(sizeId) ?? null) : null);
-  const range = resolveFitRange(await tagOrder(ctx, v.tagId), order(v.fitFromId), order(v.fitToId));
+  // A tag from the list wins. Otherwise a custom range such as "6-12" stands in for the tag.
+  let tagFrom = await tagOrder(ctx, v.tagId);
+  let tagTo: number | null = null;
+  let customTag: string | null = null;
+  if (!v.tagId && v.customTag) {
+    const custom = parseTagRange(v.customTag);
+    if ('error' in custom) return fail(path, custom.error);
+    tagFrom = custom.fitFrom;
+    tagTo = custom.fitTo;
+    customTag = custom.label;
+  }
+  const range = resolveFitRange(tagFrom, order(v.fitFromId), order(v.fitToId), tagTo);
   if ('error' in range) return fail(path, range.error);
 
   const bId = await brandId(ctx, v.brand);
@@ -49,6 +60,7 @@ export async function saveItem(formData: FormData) {
     tracking_type: v.quantity > 1 ? 'grouped' : 'individual',
     quantity: v.quantity,
     label_id: v.tagId ?? null,
+    custom_tag: customTag,
     fit_from_size_id: range.fitFrom === null ? null : (ctx.sizeByOrder.get(range.fitFrom)?.id ?? null),
     fit_to_size_id: range.fitTo === null ? null : (ctx.sizeByOrder.get(range.fitTo)?.id ?? null),
     condition: v.condition,
@@ -109,7 +121,8 @@ export async function bulkCreate(formData: FormData) {
     const text = (k: string) => String(formData.get(`${k}_${i}`) ?? '').trim();
     const name = text('name');
     const brand = text('brand');
-    if (!name && !brand) continue; // an untouched row
+    const photo = formData.getAll(`photo_${i}`).map(String).filter(Boolean);
+    if (!name && !brand && photo.length === 0) continue; // an untouched row. A row with a photo is kept, even with no name.
     const n = `Row ${i + 1}`;
     const cat = z.string().uuid().safeParse(text('cat'));
     if (!cat.success) return fail(path, `${n}: choose a category.`);
@@ -117,9 +130,19 @@ export async function bulkCreate(formData: FormData) {
     if (!qty.success) return fail(path, `${n}: quantity must be a whole number from 1 to 999.`);
     const tag = z.string().uuid().safeParse(text('tag') || undefined);
     const thru = z.string().uuid().safeParse(text('thru') || undefined);
-    const tagO = tag.success ? (labelOrder.get(tag.data) ?? null) : null;
+    let tagO = tag.success ? (labelOrder.get(tag.data) ?? null) : null;
+    let tagTo: number | null = null;
+    let customTag: string | null = null;
+    const customText = text('ctag');
+    if (!tag.success && customText) {
+      const custom = parseTagRange(customText);
+      if ('error' in custom) return fail(path, `${n}: ${custom.error}`);
+      tagO = custom.fitFrom;
+      tagTo = custom.fitTo;
+      customTag = custom.label;
+    }
     const thruO = thru.success ? (ctx.orderOf.get(thru.data) ?? null) : null;
-    const range = resolveFitRange(tagO, null, thruO);
+    const range = resolveFitRange(tagO, null, thruO, tagTo);
     if ('error' in range) return fail(path, `${n}: ${range.error}`);
     if (brand && !brandCache.has(brand.toLowerCase())) brandCache.set(brand.toLowerCase(), await brandId(ctx, brand));
     sourceRow.push(i);
@@ -131,6 +154,7 @@ export async function bulkCreate(formData: FormData) {
       tracking_type: qty.data > 1 ? 'grouped' : 'individual',
       quantity: qty.data,
       label_id: tag.success ? tag.data : null,
+      custom_tag: customTag,
       fit_from_size_id: range.fitFrom === null ? null : (ctx.sizeByOrder.get(range.fitFrom)?.id ?? null),
       fit_to_size_id: range.fitTo === null ? null : (ctx.sizeByOrder.get(range.fitTo)?.id ?? null),
       condition: shared.data.condition,

@@ -4,7 +4,7 @@ import { LifestyleFields } from '@/components/survey-fields';
 import { SurveyBuilder } from '@/components/survey-builder';
 import { SurveyResults } from '@/components/survey-results';
 import { btnCls } from '@/components/ui';
-import { SURVEY_SIZES, answersToParams, parseAnswers, seasonForSize, suggestAll } from '@/lib/domain';
+import { answersToParams, parseAnswers, seasonForSize, suggestAll } from '@/lib/domain';
 
 export const metadata: Metadata = {
   title: 'How many baby clothes do you need?',
@@ -21,7 +21,7 @@ export default async function CalculatorPage({ searchParams }: { searchParams: P
     const v = sp[k];
     return v === undefined ? [] : Array.isArray(v) ? v : [v];
   }, new Date().getUTCMonth());
-  const results = suggestAll(answers, SURVEY_SIZES, (size) => seasonForSize(answers.birthMonth, size));
+  const results = suggestAll(answers, answers.sizes, (size) => seasonForSize(answers.birthMonth, size));
 
   // The same answers, handed to the signed-in survey so nothing has to be typed twice.
   const signupHref = `/signup?next=${encodeURIComponent(`/survey?${answersToParams(answers).toString()}`)}`;
@@ -38,16 +38,12 @@ export default async function CalculatorPage({ searchParams }: { searchParams: P
       <form method="get" className="grid gap-4 rounded-xl border border-line bg-surface p-4 sm:grid-cols-2">
         <input type="hidden" name="touched" value="1" />
         <LifestyleFields answers={answers} />
-        <div className="col-span-full">
-          <h2 className="font-display text-lg font-bold">What baby wears, by stage</h2>
-          <p className="text-sm text-muted">Needs change as baby grows, so answer for each stage. Build a combination by ticking the pieces worn together, and say how often it is worn.</p>
-        </div>
-        <SurveyBuilder initial={answers.stages} />
+        <SurveyBuilder initial={answers.stages} initialSizes={answers.sizes} birthMonth={answers.birthMonth} currentSize={null} />
         <div className="col-span-full"><button className={btnCls} type="submit">Update suggestions</button></div>
       </form>
 
       <section className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-4" aria-live="polite">
-        <h2 className="font-display text-xl font-bold">Suggested for every size</h2>
+        <h2 className="font-display text-xl font-bold">Suggested for each size</h2>
         <p className="text-sm text-muted">Each size is planned for the season it is likely to fall in, estimated from the birth or due month.</p>
         <SurveyResults results={results} />
       </section>

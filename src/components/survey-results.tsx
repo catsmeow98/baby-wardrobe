@@ -13,7 +13,12 @@ export function SurveyResults({ results }: { results: SizeSuggestion[] }) {
           <thead>
             <tr className="text-muted">
               <th className="sticky left-0 bg-surface py-1.5 pr-3 font-medium">Category</th>
-              {results.map((r) => <th key={r.size} className="px-2 text-right font-medium">{displaySize(r.size)}</th>)}
+              {results.map((r) => (
+                <th key={r.size} className="px-2 text-right font-medium">
+                  {displaySize(r.size)}
+                  <span className="block text-xs font-normal">{r.window.short}</span>
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
@@ -37,7 +42,7 @@ export function SurveyResults({ results }: { results: SizeSuggestion[] }) {
         {results.map((r) => (
           <details key={r.size} className="rounded-lg border border-line">
             <summary className="cursor-pointer px-3 py-2 font-bold">
-              {displaySize(r.size)} <span className="text-sm font-normal text-muted">· planned for {SEASON_LABEL[r.season]} ({r.temp} weather)</span>
+              {displaySize(r.size)} <span className="text-sm font-normal text-muted">· {r.window.age} · {r.window.months} · planned for {SEASON_LABEL[r.season]} ({r.temp} weather)</span>
             </summary>
             <div className="border-t border-line px-3 py-2">
               {r.notes.map((n) => <p key={n} className="mb-1 text-sm text-warn">{n}</p>)}

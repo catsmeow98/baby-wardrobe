@@ -6,6 +6,7 @@ import { Pill } from '@/components/pill';
 import { btnCls, btnGhostCls, inputCls } from '@/components/ui';
 import { CONDITIONS, FIT_FEEDBACK, FIT_LABELS, SEASONS, STATUSES, sizeName } from '@/lib/db';
 import type { ItemRow, SizeLabelRow } from '@/lib/db';
+import { CategoryOptions } from '@/components/category-options';
 import { signedUrls } from '@/lib/photos';
 import { filterItems, fitStateFor, type FitState } from '@/lib/domain';
 
@@ -88,7 +89,7 @@ export default async function ClosetPage({ searchParams }: { searchParams: Promi
         </select>
         <select className={`${inputCls} w-auto`} name="cat" defaultValue={sp.cat ?? ''} aria-label="Category">
           <option value="">All categories</option>
-          {ctx.categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          <CategoryOptions categories={ctx.categories} />
         </select>
         <select className={`${inputCls} w-auto`} name="size" defaultValue={sp.size ?? ''} aria-label="Tag size">
           <option value="">Any tag size</option>
@@ -121,7 +122,7 @@ export default async function ClosetPage({ searchParams }: { searchParams: Promi
           {shown.map((i) => {
             const state = fitStateFor(i, ctx.currentSize);
             const raw = rowOf.get(i.id)!;
-            const tag = raw.label_id ? labelById.get(raw.label_id)?.label : undefined;
+            const tag = raw.label_id ? labelById.get(raw.label_id)?.label : (raw.custom_tag ?? undefined);
             const fb = fbLabel(feedbackById.get(i.id));
             return (
               <li key={i.id}>
