@@ -25,7 +25,7 @@ export function CategoryPicker({ categories, name, defaultId, className = labelC
   return (
     <>
       <label className={className}>
-        Category
+        Item category
         <select
           className={inputCls}
           value={groupLabel}
@@ -39,7 +39,7 @@ export function CategoryPicker({ categories, name, defaultId, className = labelC
         </select>
       </label>
       <label className={className}>
-        Item
+        Item type
         <select className={inputCls} name={name} value={itemId} onChange={(e) => setItemId(e.target.value)} required>
           {items.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>

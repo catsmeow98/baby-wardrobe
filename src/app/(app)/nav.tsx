@@ -10,7 +10,7 @@ const links: readonly (readonly [string, string, readonly string[]])[] = [
   ['/goals', 'Goals', ['/survey']],
   ['/forecast', 'Forecast', ['/brands']],
   ['/shopping', 'Shopping', []],
-  ['/categories', 'Items', []],
+  ['/categories', 'Item types', []],
   ['/account', 'Account', ['/children']],
 ];
 

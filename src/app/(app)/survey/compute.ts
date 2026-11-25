@@ -1,26 +1,32 @@
 import type { Ctx } from '@/lib/context';
-import { dateAtSize, seasonForSize, seasonOfMonth, suggestAll, type Answers, type Forecast, type Season } from '@/lib/domain';
+import { forecastWindows, seasonForSize, suggestAll, type Answers, type Forecast, type Season, type SizeWindow } from '@/lib/domain';
 import { forecastFor, loadMeasurements, todayIso } from '@/lib/forecast-data';
 
-const monthOf = (iso: string) => Number(iso.slice(5, 7)) - 1;
-
 /**
- * Suggestions for the sizes picked in the answers. A size's season comes from the size forecast when the child has a
- * current size and measurements, otherwise from the birth month.
+ * Suggestions for the sizes picked in the answers. When the child has a birth date, a growth reference and a length
+ * measurement, each size's months and season come from the size forecast. Sizes the forecast cannot place, and
+ * everything when there is no forecast, fall back to the age-based guide from the birth month.
+ * missing lists what is needed for a forecast (only when a child exists).
  */
 export async function surveyAll(ctx: Ctx, answers: Answers) {
-  const cur = ctx.currentSize;
-  const f: Forecast | null = ctx.active && cur !== null ? forecastFor(ctx, await loadMeasurements(ctx, ctx.active.id), 24) : null;
-  const today = todayIso();
-  const seasonOf = (size: number): Season => {
-    if (cur !== null && size === cur) return seasonOfMonth(monthOf(today));
-    if (cur !== null && size > cur && f) {
-      const d = dateAtSize(f, 0, size);
-      if (d) return seasonOfMonth(monthOf(d));
-    }
-    return seasonForSize(answers.birthMonth, size);
+  const child = ctx.active;
+  const measurements = child ? await loadMeasurements(ctx, child.id) : [];
+  const f: Forecast | null = child ? forecastFor(ctx, measurements, 36) : null;
+  const windows: Record<number, SizeWindow & { season: Season }> = forecastWindows(f, todayIso(), ctx.currentSize);
+  const seasonOf = (size: number): Season => windows[size]?.season ?? seasonForSize(answers.birthMonth, size);
+  const missing: string[] = [];
+  if (child && !f) {
+    if (!child.birth_date) missing.push('a birth date');
+    if (!child.growth_reference) missing.push('a growth chart choice');
+    if (!measurements.some((m) => m.lengthIn > 0)) missing.push('a length measurement');
+    if (missing.length === 0) missing.push('a recent length measurement');
+  }
+  return {
+    results: suggestAll(answers, answers.sizes, seasonOf, (s) => windows[s]),
+    usedForecast: Boolean(f),
+    windows,
+    missing,
   };
-  return { results: suggestAll(answers, answers.sizes, seasonOf), usedForecast: Boolean(f) };
 }
 
 /** The birth month to start the form with: the child's, else this month. */

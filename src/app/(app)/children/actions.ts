@@ -46,6 +46,11 @@ export async function updateChild(formData: FormData) {
   if (!id.success) return back('That child could not be found.');
   if (!parsed.success) return back(parsed.error.issues[0].message);
   const supabase = await createClient();
+  const [{ data: before }, { data: sizes }] = await Promise.all([
+    supabase.from('children').select('current_size_id').eq('id', id.data).maybeSingle(),
+    supabase.from('sizes').select('id, sort_order'),
+  ]);
+  const orderOf = new Map(((sizes ?? []) as { id: string; sort_order: number }[]).map((s) => [s.id, s.sort_order]));
   const { error } = await supabase
     .from('children')
     .update({
@@ -57,6 +62,10 @@ export async function updateChild(formData: FormData) {
     .eq('id', id.data);
   if (error) return back('We could not save those changes. Try again.');
   refresh();
+  // A bigger current size usually means some clothes no longer fit: offer to tidy them (see the Account page).
+  const was = before?.current_size_id ? orderOf.get(before.current_size_id) : undefined;
+  const now = parsed.data.currentSizeId ? orderOf.get(parsed.data.currentSizeId) : undefined;
+  if (was !== undefined && now !== undefined && now > was) return redirect(`/account?outgrown=${id.data}#children`);
   return back();
 }
 

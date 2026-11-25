@@ -4,7 +4,7 @@ import { FormMessage } from '@/components/form-message';
 import { NoChild } from '@/components/no-child';
 import { BulkBuilder } from '@/components/bulk-builder';
 import { inputCls, labelCls } from '@/components/ui';
-import { CONDITIONS, SEASONS, STATUSES } from '@/lib/db';
+import { CONDITIONS, GENDERS, SEASONS, STATUSES } from '@/lib/db';
 import type { SizeLabelRow } from '@/lib/db';
 import { bulkCreate } from '../actions';
 
@@ -34,7 +34,7 @@ export default async function BulkPage({ searchParams }: { searchParams: Promise
       </div>
       <FormMessage error={error} />
       <form action={bulkCreate} className="flex flex-col gap-4">
-        <div className="grid gap-3 rounded-xl border border-line bg-surface p-4 sm:grid-cols-3">
+        <div className="grid gap-3 rounded-xl border border-line bg-surface p-4 sm:grid-cols-2">
           <label className={labelCls}>Condition
             <select className={inputCls} name="condition" defaultValue="good">{CONDITIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
           </label>
@@ -43,6 +43,9 @@ export default async function BulkPage({ searchParams }: { searchParams: Promise
           </label>
           <label className={labelCls}>Status
             <select className={inputCls} name="status" defaultValue="active">{STATUSES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
+          </label>
+          <label className={labelCls}>Gender (optional)
+            <select className={inputCls} name="gender" defaultValue=""><option value="">Not set</option>{GENDERS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
           </label>
         </div>
         <BulkBuilder

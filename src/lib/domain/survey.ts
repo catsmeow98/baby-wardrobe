@@ -217,6 +217,8 @@ export interface SizeWindow {
   months: string;
   /** "Jul-Sep" */
   short: string;
+  /** Where the months came from. Absent means the age-based guide. */
+  source?: 'forecast';
 }
 
 /**
@@ -261,7 +263,7 @@ export interface SizeSuggestion {
 export const comboText = (combo: Combo): string => combo.cats.map((k) => CAT_LABELS[k]).join(' + ');
 
 /** size is a size group order (0 to 7). season is the season in which baby is expected to wear that size. */
-export function suggest(a: Answers, size: number, season: Season): SizeSuggestion {
+export function suggest(a: Answers, size: number, season: Season, window?: SizeWindow): SizeSuggestion {
   const defaults = typicalFor(size);
   const notes: string[] = [];
   const L = a.laundry;
@@ -337,7 +339,7 @@ export function suggest(a: Answers, size: number, season: Season): SizeSuggestio
 
   return {
     size,
-    window: sizeWindow(a.birthMonth, size),
+    window: window ?? sizeWindow(a.birthMonth, size),
     season,
     temp,
     notes,
@@ -350,8 +352,8 @@ export function suggest(a: Answers, size: number, season: Season): SizeSuggestio
   };
 }
 
-export function suggestAll(a: Answers, sizes: readonly number[], seasonOf: (size: number) => Season): SizeSuggestion[] {
-  return sizes.map((s) => suggest(a, s, seasonOf(s)));
+export function suggestAll(a: Answers, sizes: readonly number[], seasonOf: (size: number) => Season, windowOf?: (size: number) => SizeWindow | undefined): SizeSuggestion[] {
+  return sizes.map((s) => suggest(a, s, seasonOf(s), windowOf?.(s)));
 }
 
 /* ---- reading and writing answers as a query string ---- */

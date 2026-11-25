@@ -37,3 +37,34 @@ export async function removeAllPhotos(supabase: SupabaseClient, userId: string):
   }
   return true;
 }
+
+/**
+ * Deletes photo files that no item refers to any more (left behind by a failed upload, say). Files newer than an hour are
+ * kept, because an upload in progress has a file before its database row. Returns how many were removed, or null on failure.
+ */
+export async function removeOrphanPhotos(supabase: SupabaseClient, userId: string): Promise<number | null> {
+  const { data: rows, error: rowsError } = await supabase.from('inventory_photos').select('storage_path');
+  if (rowsError) return null;
+  const used = new Set((rows ?? []).map((r: { storage_path: string }) => r.storage_path));
+  const old: string[] = [];
+  const queue = [userId];
+  const cutoff = Date.now() - 3_600_000;
+  while (queue.length) {
+    const prefix = queue.pop()!;
+    for (let offset = 0; ; offset += 1000) {
+      const { data, error } = await supabase.storage.from(PHOTO_BUCKET).list(prefix, { limit: 1000, offset });
+      if (error) return null;
+      for (const e of data ?? []) {
+        const path = `${prefix}/${e.name}`;
+        if (!e.id) queue.push(path);
+        else if (!used.has(path) && e.created_at && Date.parse(e.created_at) < cutoff) old.push(path);
+      }
+      if ((data ?? []).length < 1000) break;
+    }
+  }
+  for (let i = 0; i < old.length; i += 100) {
+    const { error } = await supabase.storage.from(PHOTO_BUCKET).remove(old.slice(i, i + 100));
+    if (error) return null;
+  }
+  return old.length;
+}

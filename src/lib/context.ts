@@ -14,33 +14,47 @@ export async function getContext() {
   } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
-  const [{ data: kids }, { data: sizeData }, { data: catData }, { data: groupData }] = await Promise.all([
+  const [{ data: kids }, { data: sizeData }, { data: catData }, { data: groupData }, { data: catPrefData }, { data: groupPrefData }] = await Promise.all([
     supabase.from('children').select('id, name, birth_date, current_size_id, growth_reference').order('created_at'),
     supabase.from('sizes').select('id, label, alias, sort_order').order('sort_order'),
-    supabase.from('categories').select('id, name, sort_order, owner_id, group_id, category_groups(name, sort_order)'),
-    supabase.from('category_groups').select('id, name, sort_order, owner_id').order('sort_order').order('name'),
+    supabase.from('categories').select('id, name, sort_order, owner_id, group_id'),
+    supabase.from('category_groups').select('id, name, sort_order, owner_id'),
+    supabase.from('user_category_prefs').select('category_id, name, group_id, hidden'),
+    supabase.from('user_group_prefs').select('group_id, name, hidden'),
   ]);
   const children = (kids ?? []) as ChildRow[];
   const sizes = (sizeData ?? []) as SizeRow[];
-  const groups = (groupData ?? []) as GroupRow[];
-  // Each item carries its category's name and order, so pickers and lists can group items without another lookup.
-  type Raw = { id: string; name: string; sort_order: number; owner_id: string | null; group_id: string; category_groups: { name: string; sort_order: number } | { name: string; sort_order: number }[] | null };
-  const categories: CategoryRow[] = ((catData ?? []) as unknown as Raw[])
+  // The person's own renames, moves and hides are applied on top of the shared built-ins here, once, for every page.
+  const gPref = new Map(((groupPrefData ?? []) as { group_id: string; name: string | null; hidden: boolean }[]).map((p) => [p.group_id, p]));
+  const cPref = new Map(((catPrefData ?? []) as { category_id: string; name: string | null; group_id: string | null; hidden: boolean }[]).map((p) => [p.category_id, p]));
+  const allGroups: GroupRow[] = ((groupData ?? []) as { id: string; name: string; sort_order: number; owner_id: string | null }[])
+    .map((g) => ({ ...g, base_name: g.name, name: gPref.get(g.id)?.name ?? g.name, hidden: gPref.get(g.id)?.hidden ?? false, is_default: g.owner_id === null }))
+    .sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
+  const groupById = new Map(allGroups.map((g) => [g.id, g]));
+  const allCategories: CategoryRow[] = ((catData ?? []) as { id: string; name: string; sort_order: number; owner_id: string | null; group_id: string }[])
     .map((r) => {
-      const g = Array.isArray(r.category_groups) ? r.category_groups[0] : r.category_groups;
-      return { id: r.id, name: r.name, sort_order: r.sort_order, owner_id: r.owner_id, group_id: r.group_id, grp: g?.name ?? 'Other', group_order: g?.sort_order ?? 900 };
+      const p = cPref.get(r.id);
+      const gid = p?.group_id && groupById.has(p.group_id) ? p.group_id : r.group_id;
+      const g = groupById.get(gid);
+      return {
+        id: r.id, name: p?.name ?? r.name, base_name: r.name, sort_order: r.sort_order, owner_id: r.owner_id, group_id: gid,
+        grp: g?.name ?? 'Other', group_order: g?.sort_order ?? 900, is_default: r.owner_id === null, hidden: p?.hidden ?? false,
+      };
     })
     .sort((a, b) => a.group_order - b.group_order || a.grp.localeCompare(b.grp) || a.sort_order - b.sort_order || a.name.localeCompare(b.name));
+  // Pickers and lists show only what is not hidden. Records that already use a hidden item type still show its name.
+  const categories = allCategories.filter((c) => !c.hidden && !groupById.get(c.group_id)?.hidden);
+  const groups = allGroups.filter((g) => !g.hidden);
   const picked = (await cookies()).get(CHILD_COOKIE)?.value;
   const active = children.find((c) => c.id === picked) ?? children[0] ?? null;
 
   const orderOf = new Map(sizes.map((s) => [s.id, s.sort_order]));
   const sizeById = new Map(sizes.map((s) => [s.id, s]));
   const sizeByOrder = new Map(sizes.map((s) => [s.sort_order, s]));
-  const catById = new Map(categories.map((c) => [c.id, c]));
+  const catById = new Map(allCategories.map((c) => [c.id, c]));
   const currentSize = active?.current_size_id ? (orderOf.get(active.current_size_id) ?? null) : null;
 
-  return { supabase, user, children, active, sizes, categories, groups, orderOf, sizeById, sizeByOrder, catById, currentSize };
+  return { supabase, user, children, active, sizes, categories, allCategories, groups, allGroups, orderOf, sizeById, sizeByOrder, catById, currentSize };
 }
 export type Ctx = Awaited<ReturnType<typeof getContext>>;
 

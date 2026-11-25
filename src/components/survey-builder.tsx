@@ -4,7 +4,7 @@ import { useState } from 'react';
 
 import {
   CAT_LABELS, CHIP_GROUPS, FREQ, FREQ_KEYS, MONTH_NAMES, OCCASIONS, SURVEY_SIZES, comboText, comboToString, displaySize, sizeWindow, stageKey,
-  type CatKey, type Combo, type Freq, type Occasion, type StageAnswers,
+  type CatKey, type Combo, type Freq, type Occasion, type SizeWindow, type StageAnswers,
 } from '@/lib/domain';
 import { btnGhostCls, inputCls, labelCls } from '@/components/ui';
 
@@ -23,16 +23,19 @@ const HINT: Record<Occasion, string> = {
  * form fields (the "size" checkboxes, "birth", and one hidden field per combination), so the surrounding form can be a
  * plain GET or POST.
  */
-export function SurveyBuilder({ initial, initialSizes, birthMonth, currentSize }: {
+export function SurveyBuilder({ initial, initialSizes, birthMonth, currentSize, windows }: {
   initial: Stages;
   initialSizes: number[];
   birthMonth: number;
   /** The size baby wears now, when known. Used for the "now" tag and the "current size and up" shortcut. */
   currentSize: number | null;
+  /** Months worked out from the size forecast. Sizes not listed use the live age-based guide. */
+  windows?: Record<number, SizeWindow>;
 }) {
   const [stages, setStages] = useState<Stages>(initial);
   const [sizes, setSizes] = useState<number[]>(initialSizes);
   const [birth, setBirth] = useState<number>(birthMonth);
+  const winOf = (size: number): SizeWindow => windows?.[size] ?? sizeWindow(birth, size);
 
   const setSize = (size: number, on: boolean) => setSizes((list) => (on ? [...new Set([...list, size])] : list.filter((x) => x !== size)).sort((x, y) => x - y));
   const change = (size: number, occ: Occasion, fn: (list: Combo[]) => Combo[]) =>
@@ -61,7 +64,7 @@ export function SurveyBuilder({ initial, initialSizes, birthMonth, currentSize }
                 <input type="checkbox" name="size" value={size} checked={sizes.includes(size)} onChange={(e) => setSize(size, e.target.checked)} className="peer sr-only" />
                 <span className="flex flex-col rounded-lg border border-line bg-surface px-3 py-1.5 text-sm peer-checked:border-accent peer-checked:bg-accent peer-checked:text-accent-ink peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-accent">
                   <b>{displaySize(size)}{size === currentSize ? ' (now)' : ''}</b>
-                  <span className="text-xs opacity-80">{sizeWindow(birth, size).short}</span>
+                  <span className="text-xs opacity-80">{winOf(size).short}</span>
                 </span>
               </label>
             ))}
@@ -82,7 +85,7 @@ export function SurveyBuilder({ initial, initialSizes, birthMonth, currentSize }
       {sizes.length === 0 && <p className="rounded-lg bg-accent-soft p-3 text-sm">Pick at least one size above. With none picked, all sizes are used.</p>}
       {sizes.map((size, si) => {
         const st = stages[size];
-        const w = sizeWindow(birth, size);
+        const w = winOf(size);
         const prev = si > 0 ? sizes[si - 1] : null;
         const count = st.sleep.length + st.day.length + st.dressy.length;
         return (

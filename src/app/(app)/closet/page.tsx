@@ -4,15 +4,16 @@ import { getContext, toInventory } from '@/lib/context';
 import { NoChild } from '@/components/no-child';
 import { Pill } from '@/components/pill';
 import { btnCls, btnGhostCls, inputCls } from '@/components/ui';
-import { CONDITIONS, FIT_FEEDBACK, FIT_LABELS, SEASONS, STATUSES, sizeName } from '@/lib/db';
+import { CONDITIONS, FIT_FEEDBACK, FIT_LABELS, GENDERS, SEASONS, STATUSES, sizeName } from '@/lib/db';
 import type { ItemRow, SizeLabelRow } from '@/lib/db';
-import { CategoryOptions } from '@/components/category-options';
+import { TypeFilters } from '@/components/type-filters';
+import { matchesCategory } from '@/lib/categories';
 import { signedUrls } from '@/lib/photos';
 import { filterItems, fitStateFor, type FitState } from '@/lib/domain';
 
 export const metadata: Metadata = { title: 'Closet' };
 
-type SP = { q?: string; fit?: string; cat?: string; size?: string; status?: string; season?: string; added?: string; photos?: string };
+type SP = { q?: string; fit?: string; cat?: string; group?: string; gender?: string; sort?: string; size?: string; status?: string; season?: string; added?: string; photos?: string };
 
 export default async function ClosetPage({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
@@ -40,6 +41,7 @@ export default async function ClosetPage({ searchParams }: { searchParams: Promi
   const feedbackById = new Map(rows.map((r) => [r.id, r.fit_feedback]));
   const items = toInventory(rows, ctx, tagGroupOf).map((i, n) => ({ ...i, brand: brandById.get(rows[n].brand_id ?? '') ?? null }));
 
+  const genderOf = new Map(rows.map((r) => [r.id, r.gender]));
   const status = sp.status ?? 'active';
   const shown = filterItems(
     items,
@@ -53,7 +55,16 @@ export default async function ClosetPage({ searchParams }: { searchParams: Promi
     },
     ctx.currentSize,
   );
-  const pieces = shown.reduce((s, i) => s + i.quantity, 0);
+  const filtered = shown
+    .filter((i) => matchesCategory(ctx.catById.get(i.categoryId), { group: sp.group }))
+    .filter((i) => !sp.gender || (sp.gender === 'none' ? !genderOf.get(i.id) : genderOf.get(i.id) === sp.gender));
+  const sort = sp.sort ?? 'new';
+  const typeName = (id: string) => ctx.catById.get(id)?.name ?? '';
+  const ordered = sort === 'new' ? filtered : [...filtered].sort((a, b) =>
+    sort === 'name' ? a.name.localeCompare(b.name)
+    : sort === 'type' ? typeName(a.categoryId).localeCompare(typeName(b.categoryId)) || a.name.localeCompare(b.name)
+    : (a.fitFrom ?? 99) - (b.fitFrom ?? 99) || a.name.localeCompare(b.name));
+  const pieces = filtered.reduce((s, i) => s + i.quantity, 0);
   const rangeText = (from: number | null, to: number | null) => {
     if (from === null || to === null) return 'Unknown';
     const a = ctx.sizeByOrder.get(from);
@@ -70,7 +81,7 @@ export default async function ClosetPage({ searchParams }: { searchParams: Promi
         <div>
           <h1 className="font-display text-2xl font-bold">{ctx.active.name}&apos;s closet</h1>
           <p className="text-muted">
-            {shown.length} record{shown.length === 1 ? '' : 's'}, {pieces} piece{pieces === 1 ? '' : 's'}
+            {filtered.length} record{filtered.length === 1 ? '' : 's'}, {pieces} piece{pieces === 1 ? '' : 's'}
             {sp.added ? ` · ${sp.added} added` : ''}
           </p>
           {sp.photos === 'partial' && <p role="status" className="text-sm text-warn">Items were added, but some photos could not be attached. Open an item to add them again.</p>}
@@ -87,13 +98,11 @@ export default async function ClosetPage({ searchParams }: { searchParams: Promi
           <option value="">Any fit</option>
           {Object.entries(FIT_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
         </select>
-        <select className={`${inputCls} w-auto`} name="cat" defaultValue={sp.cat ?? ''} aria-label="Category">
-          <option value="">All categories</option>
-          <CategoryOptions categories={ctx.categories} />
-        </select>
-        <select className={`${inputCls} w-auto`} name="size" defaultValue={sp.size ?? ''} aria-label="Tag size">
-          <option value="">Any tag size</option>
-          {ctx.sizes.map((s) => <option key={s.id} value={s.sort_order}>{sizeName(s)}</option>)}
+        <TypeFilters categories={ctx.categories} groups={ctx.groups} sizes={ctx.sizes} group={sp.group} cat={sp.cat} size={sp.size} sizeLabel="Tag size" />
+        <select className={`${inputCls} w-auto`} name="gender" defaultValue={sp.gender ?? ''} aria-label="Gender">
+          <option value="">Any gender</option>
+          {GENDERS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          <option value="none">Not set</option>
         </select>
         <select className={`${inputCls} w-auto`} name="status" defaultValue={status} aria-label="Status">
           <option value="all">Any status</option>
@@ -102,6 +111,12 @@ export default async function ClosetPage({ searchParams }: { searchParams: Promi
         <select className={`${inputCls} w-auto`} name="season" defaultValue={sp.season ?? ''} aria-label="Season">
           <option value="">Any season</option>
           {SEASONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+        </select>
+        <select className={`${inputCls} w-auto`} name="sort" defaultValue={sort} aria-label="Sort by">
+          <option value="new">Newest first</option>
+          <option value="name">Name</option>
+          <option value="type">Item type</option>
+          <option value="size">Size</option>
         </select>
         <button className={btnGhostCls} type="submit">Filter</button>
         <Link className={btnGhostCls} href="/closet">Clear</Link>
@@ -113,13 +128,13 @@ export default async function ClosetPage({ searchParams }: { searchParams: Promi
         </p>
       )}
 
-      {shown.length === 0 ? (
+      {filtered.length === 0 ? (
         <div className="rounded-xl border border-dashed border-line p-8 text-center text-muted">
           {items.length === 0 ? 'Nothing here yet. Add your first item or use bulk add.' : 'Nothing matches these filters.'}
         </div>
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {shown.map((i) => {
+          {ordered.map((i) => {
             const state = fitStateFor(i, ctx.currentSize);
             const raw = rowOf.get(i.id)!;
             const tag = raw.label_id ? labelById.get(raw.label_id)?.label : (raw.custom_tag ?? undefined);
@@ -136,7 +151,7 @@ export default async function ClosetPage({ searchParams }: { searchParams: Promi
                     {i.quantity > 1 && <span className="rounded-full bg-line px-2 text-xs">×{i.quantity}</span>}
                   </div>
                   <span className="text-sm text-muted">
-                    {ctx.catById.get(i.categoryId)?.name}{i.brand ? ` · ${i.brand}` : ''}
+                    {ctx.catById.get(i.categoryId)?.name}{i.brand ? ` · ${i.brand}` : ''}{raw.gender ? ` · ${GENDERS.find(([v]) => v === raw.gender)?.[1]}` : ''}
                   </span>
                   <span className="text-sm text-muted">Tag {tag ?? 'not set'} · Fits {rangeText(i.fitFrom, i.fitTo)}</span>
                   <span className="mt-auto flex flex-wrap gap-1.5 pt-1">

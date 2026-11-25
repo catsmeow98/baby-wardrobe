@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { getContext, type Ctx } from '@/lib/context';
-import { itemSchema, CONDITION_VALUES, SEASON_VALUES, STATUS_VALUES } from '@/lib/validation/items';
+import { itemSchema, CONDITION_VALUES, GENDER_VALUES, SEASON_VALUES, STATUS_VALUES } from '@/lib/validation/items';
 import { autoName, parseTagRange, resolveFitRange } from '@/lib/domain';
 import { attachPhotos, discardPhotos } from '@/lib/photo-attach';
 
@@ -65,6 +65,7 @@ export async function saveItem(formData: FormData) {
     fit_to_size_id: range.fitTo === null ? null : (ctx.sizeByOrder.get(range.fitTo)?.id ?? null),
     condition: v.condition,
     season: v.season,
+    gender: v.gender ?? null,
     status: v.status,
     fit_override: v.fitOverride ?? null,
     fit_feedback: v.fitFeedback ?? null,
@@ -104,8 +105,8 @@ const MAX_BULK_ROWS = 50;
 export async function bulkCreate(formData: FormData) {
   const path = '/closet/bulk';
   const shared = z
-    .object({ condition: z.enum(CONDITION_VALUES), season: z.enum(SEASON_VALUES), status: z.enum(STATUS_VALUES) })
-    .safeParse({ condition: formData.get('condition'), season: formData.get('season'), status: formData.get('status') });
+    .object({ condition: z.enum(CONDITION_VALUES), season: z.enum(SEASON_VALUES), status: z.enum(STATUS_VALUES), gender: z.enum(GENDER_VALUES).nullable() })
+    .safeParse({ condition: formData.get('condition'), season: formData.get('season'), status: formData.get('status'), gender: formData.get('gender') || null });
   if (!shared.success) return fail(path, 'Check the condition, season and status.');
   const count = Math.min(MAX_BULK_ROWS, Math.max(1, Number(formData.get('rows')) || 0));
 
@@ -125,7 +126,7 @@ export async function bulkCreate(formData: FormData) {
     if (!name && !brand && photo.length === 0) continue; // an untouched row. A row with a photo is kept, even with no name.
     const n = `Row ${i + 1}`;
     const cat = z.string().uuid().safeParse(text('cat'));
-    if (!cat.success) return fail(path, `${n}: choose a category.`);
+    if (!cat.success) return fail(path, `${n}: choose an item type.`);
     const qty = z.coerce.number().int().min(1).max(999).safeParse(text('qty') || '1');
     if (!qty.success) return fail(path, `${n}: quantity must be a whole number from 1 to 999.`);
     const tag = z.string().uuid().safeParse(text('tag') || undefined);
@@ -159,6 +160,7 @@ export async function bulkCreate(formData: FormData) {
       fit_to_size_id: range.fitTo === null ? null : (ctx.sizeByOrder.get(range.fitTo)?.id ?? null),
       condition: shared.data.condition,
       season: shared.data.season,
+      gender: shared.data.gender,
       status: shared.data.status,
     });
   }

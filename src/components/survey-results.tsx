@@ -12,7 +12,7 @@ export function SurveyResults({ results }: { results: SizeSuggestion[] }) {
         <table className="w-full min-w-[34rem] text-left text-sm">
           <thead>
             <tr className="text-muted">
-              <th className="sticky left-0 bg-surface py-1.5 pr-3 font-medium">Category</th>
+              <th className="sticky left-0 bg-surface py-1.5 pr-3 font-medium">Item type</th>
               {results.map((r) => (
                 <th key={r.size} className="px-2 text-right font-medium">
                   {displaySize(r.size)}

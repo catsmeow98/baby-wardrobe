@@ -44,7 +44,7 @@ export async function addShoppingItem(formData: FormData) {
       notes: z.string().trim().max(500).default(''),
     })
     .safeParse(Object.fromEntries(formData));
-  if (!parsed.success) return back('Check the category, size, quantity and price.');
+  if (!parsed.success) return back('Check the item type, size, quantity and price.');
   const ctx = await getContext();
   if (!ctx.active) return back('Add a child first.');
   const v = parsed.data;

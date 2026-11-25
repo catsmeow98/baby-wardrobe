@@ -23,7 +23,7 @@ export default async function SurveyPage({ searchParams }: { searchParams: Promi
     const v = sp[k];
     return v === undefined ? [] : Array.isArray(v) ? v : [v];
   }, defaultBirthMonth(child?.birth_date), defaultSizes(ctx.currentSize));
-  const { results, usedForecast } = await surveyAll(ctx, answers);
+  const { results, usedForecast, windows, missing } = await surveyAll(ctx, answers);
   const qs = answersToParams(answers).toString();
 
   return (
@@ -35,18 +35,24 @@ export default async function SurveyPage({ searchParams }: { searchParams: Promi
         </p>
       </div>
       <FormMessage error={first(sp.error)} />
+      {child && !usedForecast && (
+        <div role="note" className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-warn-soft p-3 text-sm text-warn">
+          <span>Complete the forecast for better size and season accuracy. Months and seasons below are estimated from age. Missing: {missing.join(', ')}.</span>
+          <Link className={btnCls} href="/forecast">Go to forecast</Link>
+        </div>
+      )}
 
       <form method="get" className="grid gap-4 rounded-xl border border-line bg-surface p-4 sm:grid-cols-2">
         <input type="hidden" name="touched" value="1" />
         <LifestyleFields answers={answers} />
-        <SurveyBuilder initial={answers.stages} initialSizes={answers.sizes} birthMonth={answers.birthMonth} currentSize={ctx.currentSize} />
+        <SurveyBuilder initial={answers.stages} initialSizes={answers.sizes} birthMonth={answers.birthMonth} currentSize={ctx.currentSize} windows={windows} />
         <div className="col-span-full"><button className={btnCls} type="submit">Update suggestions</button></div>
       </form>
 
       <section className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-4">
         <h2 className="font-display text-lg font-bold">Suggested goals</h2>
         <p className="text-sm text-muted">
-          {usedForecast ? 'Each size is planned for the season the size forecast expects. ' : 'Each size is planned for the season it falls in, estimated from the birth month. '}
+          {usedForecast ? 'Months and seasons come from the size forecast where it reaches a size, and from age elsewhere. ' : 'Each size is planned for the season it falls in, estimated from the birth month. '}
           These are starting suggestions, not rules.
         </p>
         <SurveyResults results={results} />
@@ -59,7 +65,7 @@ export default async function SurveyPage({ searchParams }: { searchParams: Promi
                 <label key={s} className="cursor-pointer">
                   <input type="checkbox" name="save" value={s} defaultChecked className="peer sr-only" />
                   <span className="inline-block rounded-full border border-line bg-surface px-3 py-1 text-sm peer-checked:border-accent peer-checked:bg-accent peer-checked:text-accent-ink peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-accent">
-                    {displaySize(s)}{s === ctx.currentSize ? ' (now)' : ''} · {sizeWindow(answers.birthMonth, s).short}
+                    {displaySize(s)}{s === ctx.currentSize ? ' (now)' : ''} · {(windows[s] ?? sizeWindow(answers.birthMonth, s)).short}
                   </span>
                 </label>
               ))}

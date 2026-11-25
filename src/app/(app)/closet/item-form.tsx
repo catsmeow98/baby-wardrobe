@@ -3,7 +3,7 @@ import { CategoryPicker } from '@/components/category-picker';
 import { PhotoPicker } from '@/components/photo-picker';
 import { btnCls, inputCls, labelCls } from '@/components/ui';
 import { FitFields } from '@/components/fit-fields';
-import { CONDITIONS, FIT_LABELS, SEASONS, STATUSES } from '@/lib/db';
+import { CONDITIONS, FIT_LABELS, GENDERS, SEASONS, STATUSES } from '@/lib/db';
 import type { CategoryRow, SizeLabelRow, SizeRow } from '@/lib/db';
 
 export interface ItemDefaults {
@@ -17,6 +17,7 @@ export interface ItemDefaults {
   fitFromId?: string | null;
   fitToId?: string | null;
   condition?: string;
+  gender?: string | null;
   season?: string;
   status?: string;
   fitOverride?: string | null;
@@ -43,10 +44,10 @@ export function ItemForm({ action, categories, sizes, labels, brands, defaults: 
       <div className="grid gap-4 sm:grid-cols-2">
         <label className={`${labelCls} sm:col-span-2`}>
           Name (optional)
-          <input className={inputCls} name="name" maxLength={160} defaultValue={d.name ?? ''} placeholder="Made from brand and category if left blank" />
+          <input className={inputCls} name="name" maxLength={160} defaultValue={d.name ?? ''} placeholder="Made from brand and item type if left blank" />
         </label>
         <CategoryPicker categories={categories} name="categoryId" defaultId={d.categoryId} />
-        <span className="text-xs text-muted sm:col-span-2">Not listed? <Link className="text-accent underline" href="/categories">Add your own item or category</Link></span>
+        <span className="text-xs text-muted sm:col-span-2">Not listed? <Link className="text-accent underline" href="/categories">Add your own item type or item category</Link></span>
         <label className={labelCls}>
           Brand
           <input className={inputCls} name="brand" maxLength={80} list="brand-list" defaultValue={d.brand ?? ''} />
@@ -72,6 +73,13 @@ export function ItemForm({ action, categories, sizes, labels, brands, defaults: 
           Condition
           <select className={inputCls} name="condition" defaultValue={d.condition ?? 'good'}>
             {CONDITIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
+        </label>
+        <label className={labelCls}>
+          Gender (optional)
+          <select className={inputCls} name="gender" defaultValue={d.gender ?? ''}>
+            <option value="">Not set</option>
+            {GENDERS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select>
         </label>
         <label className={labelCls}>

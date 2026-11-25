@@ -1,7 +1,9 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { z } from 'zod';
+import Link from 'next/link';
 import { getContext } from '@/lib/context';
+import { withCurrent } from '@/lib/categories';
 import { FormMessage } from '@/components/form-message';
 import type { ItemRow, SizeLabelRow } from '@/lib/db';
 import { PhotoUploader } from '@/components/photo-uploader';
@@ -68,17 +70,18 @@ export default async function EditItemPage({
       </section>
       <ItemForm
         action={saveItem}
-        categories={ctx.categories}
+        categories={withCurrent(ctx.categories, ctx.catById, item.category_id)}
         sizes={ctx.sizes}
         labels={sorted}
         brands={brandList.map((b) => b.name)}
         submitLabel="Save changes"
         defaults={{
           id: item.id, name: item.name, categoryId: item.category_id, brand: brandName, quantity: item.quantity,
-          tagId: item.label_id, customTag: item.custom_tag, fitFromId: item.fit_from_size_id, fitToId: item.fit_to_size_id, condition: item.condition,
+          tagId: item.label_id, customTag: item.custom_tag, fitFromId: item.fit_from_size_id, fitToId: item.fit_to_size_id, condition: item.condition, gender: item.gender,
           season: item.season, status: item.status, fitOverride: item.fit_override, fitFeedback: item.fit_feedback, notes: item.notes,
         }}
       />
+      <p className="text-sm"><Link className="text-accent underline" href={`/closet/new?from=${item.id}`}>Add another like this</Link></p>
       <details className="text-sm">
         <summary className="cursor-pointer text-muted">Delete this item</summary>
         <form action={deleteItem} className="mt-2 flex flex-col gap-2">

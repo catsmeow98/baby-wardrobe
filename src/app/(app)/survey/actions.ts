@@ -31,7 +31,8 @@ export async function applySurvey(formData: FormData) {
       return r.rows
         .filter((x) => x.qty > 0)
         .flatMap((x) => {
-          const cat = ctx.categories.find((c) => c.owner_id === null && c.name === CATEGORY_NAMES[x.key]);
+          // Matched on the built-in name, so a person's own rename of it does not matter. An item type they deleted is skipped.
+          const cat = ctx.categories.find((c) => c.is_default && c.base_name === CATEGORY_NAMES[x.key]);
           return cat ? [{ child_id: child.id, category_id: cat.id, size_id: size.id, target_quantity: x.qty }] : [];
         });
     });

@@ -1,19 +1,30 @@
 import type { Metadata } from 'next';
+import { z } from 'zod';
 import { getContext } from '@/lib/context';
 import { FormMessage } from '@/components/form-message';
 import { safeNext } from '@/lib/auth/redirect';
 import { btnCls, btnGhostCls, inputCls, labelCls } from '@/components/ui';
 import { sizeName } from '@/lib/db';
 import { createChild, deleteChild, updateChild } from '../children/actions';
-import { deleteAccount } from './actions';
+import { cleanupPhotos, deleteAccount, markOutgrown } from './actions';
 
 export const metadata: Metadata = { title: 'Account' };
 
-export default async function AccountPage({ searchParams }: { searchParams: Promise<{ error?: string; next?: string }> }) {
-  const { error, next } = await searchParams;
+export default async function AccountPage({ searchParams }: { searchParams: Promise<{ error?: string; ok?: string; next?: string; outgrown?: string }> }) {
+  const { error, ok, next, outgrown } = await searchParams;
   const dest = safeNext(next, '');
   const ctx = await getContext();
   const bySize = new Map(ctx.sizes.map((s) => [s.id, s]));
+
+  // After a size increase: active items whose fit range ends below the new current size.
+  const grown = outgrown && z.string().uuid().safeParse(outgrown).success ? ctx.children.find((c) => c.id === outgrown) : undefined;
+  const grownSize = grown?.current_size_id ? bySize.get(grown.current_size_id) : undefined;
+  let tooSmall = 0;
+  if (grown && grownSize) {
+    const below = new Set(ctx.sizes.filter((s) => s.sort_order < grownSize.sort_order).map((s) => s.id));
+    const { data } = await ctx.supabase.from('inventory_items').select('fit_to_size_id').eq('child_id', grown.id).eq('status', 'active');
+    tooSmall = ((data ?? []) as { fit_to_size_id: string | null }[]).filter((r) => r.fit_to_size_id && below.has(r.fit_to_size_id)).length;
+  }
 
   return (
     <>
@@ -21,7 +32,26 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
         <h1 className="font-display text-2xl font-bold">Account</h1>
         <p className="text-muted">Signed in as {ctx.user.email}.</p>
       </div>
-      <FormMessage error={error} />
+      <FormMessage error={error} message={ok} />
+
+      {grown && grownSize && tooSmall > 0 && (
+        <section role="status" className="flex flex-col gap-3 rounded-xl border border-accent bg-accent-soft p-4">
+          <h2 className="font-display text-lg font-bold">{grown.name} moved up to {sizeName(grownSize)}</h2>
+          <p className="text-sm">
+            {tooSmall} active item{tooSmall === 1 ? '' : 's'} only fit{tooSmall === 1 ? 's' : ''} smaller sizes. Tidy {tooSmall === 1 ? 'it' : 'them'} now, or leave {tooSmall === 1 ? 'it' : 'them'} as is. You can change any item later.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {(['outgrown', 'stored'] as const).map((mode) => (
+              <form key={mode} action={markOutgrown}>
+                <input type="hidden" name="childId" value={grown.id} />
+                <input type="hidden" name="mode" value={mode} />
+                <button className={mode === 'outgrown' ? btnCls : btnGhostCls} type="submit">{mode === 'outgrown' ? 'Mark as outgrown' : 'Move to stored'}</button>
+              </form>
+            ))}
+            <a className={btnGhostCls} href="/account#children">Leave as is</a>
+          </div>
+        </section>
+      )}
 
       <section id="children" className="flex scroll-mt-4 flex-col gap-3">
         <div>
@@ -110,6 +140,19 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
             </label>
           </div>
           <div><button className={btnCls} type="submit">Add child</button></div>
+        </form>
+      </section>
+
+      <section className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-4">
+        <h2 className="font-display text-lg font-bold">Your data</h2>
+        <p className="text-sm text-muted">Download everything as spreadsheet files, for every child.</p>
+        <div className="flex flex-wrap gap-2">
+          <a className={btnGhostCls} href="/export/closet" download>Download closet (CSV)</a>
+          <a className={btnGhostCls} href="/export/goals" download>Download goals (CSV)</a>
+        </div>
+        <form action={cleanupPhotos} className="flex flex-wrap items-center gap-3 border-t border-line pt-3">
+          <button className={btnGhostCls} type="submit">Clean up unused photos</button>
+          <span className="text-sm text-muted">Removes photo files that no item uses, such as ones left by an upload that failed.</span>
         </form>
       </section>
 

@@ -1,5 +1,9 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { getContext, toGoals, toInventory, toShopping } from '@/lib/context';
+import { CopyButton } from '@/components/copy-button';
+import { TypeFilters } from '@/components/type-filters';
+import { matchesCategory } from '@/lib/categories';
 import { CategoryPicker } from '@/components/category-picker';
 import { FormMessage } from '@/components/form-message';
 import { NoChild } from '@/components/no-child';
@@ -13,7 +17,7 @@ import { addShoppingItem, cancelItem, markOrdered, orderFromGap, receiveDelivery
 
 export const metadata: Metadata = { title: 'Shopping' };
 
-export default async function ShoppingPage({ searchParams }: { searchParams: Promise<{ error?: string; ok?: string }> }) {
+export default async function ShoppingPage({ searchParams }: { searchParams: Promise<{ error?: string; ok?: string; group?: string; cat?: string; size?: string }> }) {
   const sp = await searchParams;
   const ctx = await getContext();
   if (!ctx.active) return <NoChild />;
@@ -26,12 +30,24 @@ export default async function ShoppingPage({ searchParams }: { searchParams: Pro
   ]);
   const shopRowsT = (shopRows ?? []) as ShoppingRow[];
   const progress = goalProgress(toGoals((goalRows ?? []) as GoalRow[], ctx), toInventory((itemRows ?? []) as ItemRow[], ctx), toShopping(shopRowsT, ctx));
+  const visibleIds = new Set(ctx.categories.map((c) => c.id));
+  const sizeFilter = sp.size !== undefined && sp.size !== '' ? Number(sp.size) : undefined;
+  const typeOk = (categoryId: string) => visibleIds.has(categoryId) && matchesCategory(ctx.catById.get(categoryId), { group: sp.group, cat: sp.cat });
+  const sizeOk = (order: number | undefined) => sizeFilter === undefined || order === sizeFilter;
+  const filtering = Boolean(sp.group || sp.cat || sizeFilter !== undefined);
   const gaps = progress
-    .filter((p) => p.remaining > 0 && (ctx.currentSize === null || p.size >= ctx.currentSize))
+    .filter((p) => p.remaining > 0 && (ctx.currentSize === null || p.size >= ctx.currentSize) && typeOk(p.categoryId) && sizeOk(p.size))
     .sort((a, b) => a.size - b.size || b.remaining - a.remaining);
 
-  const open = shopRowsT.filter((s) => !['received', 'cancelled'].includes(s.status));
-  const done = shopRowsT.filter((s) => ['received', 'cancelled'].includes(s.status));
+  const passes = (s: ShoppingRow) => typeOk(s.category_id) || (!visibleIds.has(s.category_id) && !sp.group && !sp.cat) ? sizeOk(ctx.orderOf.get(s.size_id)) : false;
+  const open = shopRowsT.filter((s) => !['received', 'cancelled'].includes(s.status) && passes(s));
+  const done = shopRowsT.filter((s) => ['received', 'cancelled'].includes(s.status) && passes(s));
+  // Plain text for pasting into a note or message: what is still to buy, from the gaps and from entries not yet ordered.
+  const wanted = [
+    ...gaps.map((g) => ({ n: g.remaining, type: ctx.catById.get(g.categoryId)?.name ?? 'Item', size: ctx.sizeByOrder.get(g.size) })),
+    ...open.filter((s) => s.status === 'needed').map((s) => ({ n: s.quantity_needed, type: ctx.catById.get(s.category_id)?.name ?? 'Item', size: ctx.sizeById.get(s.size_id) })),
+  ];
+  const listText = wanted.map((w) => `${w.n}× ${w.type}, size ${w.size ? sizeName(w.size) : '?'}`).join('\n');
   const nextSize = ctx.sizeByOrder.get(Math.min((ctx.currentSize ?? 0) + 1, ctx.sizes.length - 1));
 
   const row = (s: ShoppingRow, finished: boolean) => {
@@ -82,10 +98,17 @@ export default async function ShoppingPage({ searchParams }: { searchParams: Pro
       </div>
       <FormMessage error={sp.error} message={sp.ok} />
 
+      <form className="flex flex-wrap items-center gap-2" method="get" role="search">
+        <TypeFilters categories={ctx.categories} groups={ctx.groups} sizes={ctx.sizes} group={sp.group} cat={sp.cat} size={sp.size} />
+        <button className={btnGhostCls} type="submit">Filter</button>
+        {filtering && <Link className={btnGhostCls} href="/shopping">Clear</Link>}
+        <CopyButton text={listText} label="Copy list" />
+      </form>
+
       <section className="rounded-xl border border-line bg-surface p-4">
         <h2 className="font-display text-lg font-bold">Gaps from your goals</h2>
         {gaps.length === 0 ? (
-          <p className="py-4 text-center text-muted">No gaps. Raise a goal on the Goals page to see needs here.</p>
+          <p className="py-4 text-center text-muted">{filtering ? 'No gaps match these filters.' : 'No gaps. Raise a goal on the Goals page to see needs here.'}</p>
         ) : (
           <ul>
             {gaps.map((g) => {

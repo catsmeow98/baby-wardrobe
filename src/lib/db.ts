@@ -1,10 +1,16 @@
 // Row shapes for the tables the pages read. Replace with `supabase gen types` output when convenient.
 export interface SizeRow { id: string; label: string; alias: string | null; sort_order: number }
 export interface SizeLabelRow { id: string; size_id: string; label: string; sort_order: number }
-/** A category such as Sleep, which holds items. Built-in ones have a null owner. */
-export interface GroupRow { id: string; name: string; sort_order: number; owner_id: string | null }
-/** An item such as Sleep sack. Its category is group_id, and grp is that category's name. (The table is still called categories.) */
-export interface CategoryRow { id: string; name: string; sort_order: number; group_id: string; grp: string; group_order: number; owner_id: string | null }
+/**
+ * An item category such as Sleep, which holds item types. Built-in ones (is_default) have a null owner and are shared,
+ * but each person can rename or hide them. name is what that person sees, base_name is the built-in name, and hidden is the person's choice.
+ */
+export interface GroupRow { id: string; name: string; sort_order: number; owner_id: string | null; base_name: string; hidden: boolean; is_default: boolean }
+/**
+ * An item type such as Sleep sack. group_id is its item category (after any move the person made) and grp is that category's name.
+ * The table is still called categories. name is the person's name for it, base_name the built-in one (the survey matches on that).
+ */
+export interface CategoryRow { id: string; name: string; sort_order: number; group_id: string; grp: string; group_order: number; owner_id: string | null; base_name: string; hidden: boolean; is_default: boolean }
 export interface ChildRow { id: string; name: string; birth_date: string | null; current_size_id: string | null; growth_reference: 'girls' | 'boys' | null }
 export interface MeasurementRow { id: string; child_id: string; measured_on: string; length_in: number | string }
 export interface BrandRow { id: string; name: string; owner_id: string | null; size_offset: number | string }
@@ -12,7 +18,7 @@ export interface ItemRow {
   id: string; child_id: string; tracking_type: 'individual' | 'grouped'; name: string; brand_id: string | null;
   category_id: string; label_id: string | null; fit_from_size_id: string | null; fit_to_size_id: string | null;
   quantity: number; condition: string; season: string; status: string; fit_override: string | null;
-  fit_feedback: number | null; notes: string | null; custom_tag: string | null;
+  fit_feedback: number | null; notes: string | null; custom_tag: string | null; gender: string | null;
 }
 export interface GoalRow { id: string; child_id: string; category_id: string; size_id: string; target_quantity: number }
 export interface ShoppingRow {
@@ -22,6 +28,7 @@ export interface ShoppingRow {
 
 export const CONDITIONS: [string, string][] = [['new', 'New'], ['like_new', 'Like new'], ['good', 'Good'], ['worn', 'Worn'], ['unusable', 'Unusable']];
 export const SEASONS: [string, string][] = [['year_round', 'Year-round'], ['spring', 'Spring'], ['summer', 'Summer'], ['fall', 'Fall'], ['winter', 'Winter']];
+export const GENDERS = [['boy', 'Boy'], ['girl', 'Girl'], ['neutral', 'Neutral']] as const;
 export const STATUSES: [string, string][] = [['active', 'Active'], ['stored', 'Stored'], ['daycare', 'Spare at daycare'], ['outgrown', 'Outgrown'], ['donated', 'Donated'], ['sold', 'Sold']];
 export const FIT_LABELS: Record<string, string> = { fits: 'Fits now', small: 'Getting small', notyet: 'Not yet', outgrown: 'Outgrown', unknown: 'Fit unknown' };
 export const FIT_FEEDBACK: [string, string][] = [['-1', 'Ran small'], ['0', 'True to size'], ['1', 'Ran large']];

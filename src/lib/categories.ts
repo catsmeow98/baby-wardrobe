@@ -21,3 +21,17 @@ export function groupCategories(categories: readonly CategoryRow[]): CategoryGro
   }
   return groups;
 }
+
+/** Does an item type pass the item category and item type filters? An empty filter passes everything. */
+export function matchesCategory(c: CategoryRow | undefined, f: { group?: string; cat?: string }): boolean {
+  if (!c) return !f.group && !f.cat;
+  if (f.cat && c.id !== f.cat) return false;
+  if (f.group && c.group_id !== f.group) return false;
+  return true;
+}
+
+/** The pickable item types, plus the one a record already uses even if the person has since deleted it, so editing never changes it silently. */
+export function withCurrent(visible: readonly CategoryRow[], all: ReadonlyMap<string, CategoryRow>, currentId: string | undefined): CategoryRow[] {
+  const cur = currentId ? all.get(currentId) : undefined;
+  return cur && !visible.some((c) => c.id === cur.id) ? [...visible, cur] : [...visible];
+}
