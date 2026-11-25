@@ -1,13 +1,14 @@
 /**
  * The one place that knows how backgrounds are removed. Runs in the browser, loaded only when a photo is picked with the
- * setting on. Engine: BiRefNet (lite) from the onnx-community Hugging Face repo (MIT licence), run by Transformers.js
+ * setting on. Engine: BiRefNet (lite, 512 pixels) from the studioludens Hugging Face repo (MIT licence, a copy of ZhengPeng7/BiRefNet_lite), run by Transformers.js
  * (Apache-2.0). Nothing is sent to a server: the model downloads once and the browser caches it.
  *
  * Check before shipping: that the model files you serve still carry the MIT licence, and how the cutouts look on real photos.
  * To use a different engine, change this file only. Failures here are caught by the caller, which keeps the original photo.
  */
-const MODEL = 'onnx-community/BiRefNet_lite-ONNX';
-const SIDE = 1024; // the model's working size; the photo is shrunk to this before it gets here
+// A 512 x 512 conversion of BiRefNet_lite (MIT, by studioludens). The 1024 version runs out of memory on the plain browser engine.
+const MODEL = 'studioludens/birefnet-lite-512';
+const SIDE = 512; // the model's working size
 
 type Engine = {
   model: (inputs: Record<string, unknown>) => Promise<Record<string, { sigmoid: () => { mul: (n: number) => { to: (t: string) => unknown } } }>>;
@@ -23,8 +24,8 @@ let loading: Promise<Engine> | null = null;
 
 async function build(device: 'webgpu' | 'wasm'): Promise<Engine> {
   const tf = await import('@huggingface/transformers');
-  // fp16 weights need WebGPU; the plain browser engine uses the 8-bit file, which is smaller and a little rougher.
-  const model = await tf.AutoModel.from_pretrained(MODEL, { device, dtype: device === 'webgpu' ? 'fp16' : 'q8' });
+  // fp16 weights (94 MB) need WebGPU; the plain browser engine uses the fp32 file (183 MB). Both download once, then are cached.
+  const model = await tf.AutoModel.from_pretrained(MODEL, { device, dtype: device === 'webgpu' ? 'fp16' : 'fp32' });
   const processor = await tf.AutoProcessor.from_pretrained(MODEL, {});
   const m = model as unknown as { sessions?: { model?: { inputNames?: string[] } }; session?: { inputNames?: string[] } };
   const names = m.sessions?.model?.inputNames ?? m.session?.inputNames ?? [];
@@ -54,7 +55,7 @@ export async function removeBackgroundFrom(image: Blob): Promise<Blob> {
   const { pixel_values } = await processor(img);
   const out = await model({ [inputName]: pixel_values });
   const logits = Object.values(out)[0];
-  const mask = await RawImage.fromTensor(logits.sigmoid().mul(255).to('uint8') as never).resize(img.width, img.height);
+  const mask = await RawImage.fromTensor((logits as unknown as Record<number, typeof logits>)[0].sigmoid().mul(255).to('uint8') as never).resize(img.width, img.height);
 
   // Original pixels with the mask as the alpha channel.
   const canvas = document.createElement('canvas');
