@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { CategoryOptions } from '@/components/category-options';
+import { CategoryPicker } from '@/components/category-picker';
 import { PhotoPicker } from '@/components/photo-picker';
 import { TagSizeField, type TagValue } from '@/components/tag-size-field';
 import { createClient } from '@/lib/supabase/client';
@@ -152,11 +152,7 @@ function BulkRow({ row, pos, onRemove, userId, childId, categories, labels, size
           <img src={row.photo.preview} alt={`Photo for row ${pos + 1}`} className="size-24 rounded-lg object-cover" />
         </div>
       )}
-      <label className={`${labelCls} sm:col-span-2`}>Category
-        <select className={inputCls} name={`cat_${pos}`} defaultValue={categories[0]?.id}>
-          <CategoryOptions categories={categories} />
-        </select>
-      </label>
+      <CategoryPicker categories={categories} name={`cat_${pos}`} className={`${labelCls} sm:col-span-2`} />
       <label className={`${labelCls} sm:col-span-2`}>Name (optional)
         <input className={inputCls} name={`name_${pos}`} maxLength={160} />
       </label>

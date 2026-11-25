@@ -1,7 +1,10 @@
 // Row shapes for the tables the pages read. Replace with `supabase gen types` output when convenient.
 export interface SizeRow { id: string; label: string; alias: string | null; sort_order: number }
 export interface SizeLabelRow { id: string; size_id: string; label: string; sort_order: number }
-export interface CategoryRow { id: string; name: string; sort_order: number; grp: string | null; owner_id: string | null }
+/** A category such as Sleep, which holds items. Built-in ones have a null owner. */
+export interface GroupRow { id: string; name: string; sort_order: number; owner_id: string | null }
+/** An item such as Sleep sack. Its category is group_id, and grp is that category's name. (The table is still called categories.) */
+export interface CategoryRow { id: string; name: string; sort_order: number; group_id: string; grp: string; group_order: number; owner_id: string | null }
 export interface ChildRow { id: string; name: string; birth_date: string | null; current_size_id: string | null; growth_reference: 'girls' | 'boys' | null }
 export interface MeasurementRow { id: string; child_id: string; measured_on: string; length_in: number | string }
 export interface BrandRow { id: string; name: string; owner_id: string | null; size_offset: number | string }

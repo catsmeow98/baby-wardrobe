@@ -7,6 +7,7 @@ import { Pill } from '@/components/pill';
 import { btnCls, btnGhostCls, inputCls, labelCls } from '@/components/ui';
 import { sizeName } from '@/lib/db';
 import { fitWord, sizeFor, transition, MAX_AGE_MONTHS } from '@/lib/domain';
+import { BrandsSection } from '@/components/brands-section';
 import { forecastFor, loadBrands, loadMeasurements, todayIso } from '@/lib/forecast-data';
 import { addMeasurement, clearRatings, deleteMeasurement, saveBrandOffset } from './actions';
 
@@ -16,7 +17,7 @@ const month = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('
 const signed = (n: number) => `${n > 0 ? '+' : ''}${n.toFixed(2)}`;
 const HORIZONS = [6, 12, 18, 24];
 
-export default async function ForecastPage({ searchParams }: { searchParams: Promise<{ brand?: string; h?: string; error?: string; ok?: string }> }) {
+export default async function ForecastPage({ searchParams }: { searchParams: Promise<{ brand?: string; h?: string; error?: string; ok?: string; brandError?: string; brandOk?: string }> }) {
   const sp = await searchParams;
   const ctx = await getContext();
   if (!ctx.active) return <NoChild />;
@@ -50,7 +51,7 @@ export default async function ForecastPage({ searchParams }: { searchParams: Pro
       {!ready && (
         <div className="rounded-xl border border-dashed border-line p-5">
           <p className="mb-3">To place measurements on a growth curve, {child.name} needs a birth date and a growth reference.</p>
-          <Link className={btnGhostCls} href="/children">Edit {child.name}</Link>
+          <Link className={btnGhostCls} href="/account#children">Edit {child.name}</Link>
         </div>
       )}
 
@@ -180,6 +181,8 @@ export default async function ForecastPage({ searchParams }: { searchParams: Pro
           </ul>
         )}
       </section>
+
+      <BrandsSection ctx={ctx} error={sp.brandError} ok={sp.brandOk} />
     </>
   );
 }

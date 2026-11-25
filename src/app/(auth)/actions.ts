@@ -68,7 +68,7 @@ export async function updatePassword(formData: FormData) {
   const supabase = await createClient();
   const { error } = await supabase.auth.updateUser({ password: parsed.data });
   if (error) return go('/reset-password', { error: 'The reset link has expired. Request a new one.' });
-  return redirect('/children');
+  return redirect('/account');
 }
 
 export async function signOut() {

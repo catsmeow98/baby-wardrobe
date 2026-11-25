@@ -76,7 +76,7 @@ export default async function DashboardPage() {
         <h1 className="font-display text-2xl font-bold">{child.name}&apos;s wardrobe</h1>
         <p className="text-muted">
           {curSize ? `Size ${sizeName(curSize)} now.${nextSize ? ` Next size up is ${sizeName(nextSize)}.` : ''}` : 'No current size set.'}
-          {cur === null && <> <Link className="text-accent underline" href="/children">Set a size</Link> to see fit and goal progress.</>}
+          {cur === null && <> <Link className="text-accent underline" href="/account#children">Set a size</Link> to see fit and goal progress.</>}
         </p>
       </div>
 

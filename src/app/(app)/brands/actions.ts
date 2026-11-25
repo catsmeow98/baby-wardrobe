@@ -5,9 +5,9 @@ import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { getContext } from '@/lib/context';
 
-const fail = (m: string): never => redirect(`/brands?error=${encodeURIComponent(m)}`);
-const ok = (m: string): never => redirect(`/brands?ok=${encodeURIComponent(m)}`);
-const refresh = () => ['/brands', '/forecast', '/closet', '/survey', '/dashboard'].forEach((p) => revalidatePath(p));
+const fail = (m: string): never => redirect(`/forecast?brandError=${encodeURIComponent(m)}#brands`);
+const ok = (m: string): never => redirect(`/forecast?brandOk=${encodeURIComponent(m)}#brands`);
+const refresh = () => ['/forecast', '/closet', '/survey', '/dashboard'].forEach((p) => revalidatePath(p));
 const uuid = z.string().uuid();
 const name = z.string().trim().min(1, 'Enter a brand name.').max(80, 'Use 80 characters or fewer.');
 const offset = z.coerce.number().min(-3).max(3);

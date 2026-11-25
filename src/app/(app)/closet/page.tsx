@@ -109,7 +109,7 @@ export default async function ClosetPage({ searchParams }: { searchParams: Promi
 
       {ctx.currentSize === null && (
         <p className="rounded-lg bg-warn-soft p-3 text-sm text-warn">
-          {ctx.active.name} has no current size, so fit shows as unknown. <Link className="underline" href="/children">Set a size</Link>.
+          {ctx.active.name} has no current size, so fit shows as unknown. <Link className="underline" href="/account#children">Set a size</Link>.
         </p>
       )}
 

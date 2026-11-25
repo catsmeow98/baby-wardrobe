@@ -5,12 +5,12 @@ export interface CategoryGroup {
   items: CategoryRow[];
 }
 
-/** Groups categories for display, keeping their order. The person's own categories land in the last group. */
+/** Groups items by category for display, keeping their order. Categories with no items are not listed. */
 export function groupCategories(categories: readonly CategoryRow[]): CategoryGroup[] {
   const groups: CategoryGroup[] = [];
   const byLabel = new Map<string, CategoryGroup>();
   for (const c of categories) {
-    const label = c.grp ?? 'Your categories';
+    const label = c.grp;
     let g = byLabel.get(label);
     if (!g) {
       g = { label, items: [] };

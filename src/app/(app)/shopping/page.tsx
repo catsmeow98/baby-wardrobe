@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { getContext, toGoals, toInventory, toShopping } from '@/lib/context';
+import { CategoryPicker } from '@/components/category-picker';
 import { FormMessage } from '@/components/form-message';
 import { NoChild } from '@/components/no-child';
 import { Pill } from '@/components/pill';
@@ -114,9 +115,7 @@ export default async function ShoppingPage({ searchParams }: { searchParams: Pro
       <section className="rounded-xl border border-line bg-surface p-4">
         <h2 className="font-display text-lg font-bold">Your list</h2>
         <form action={addShoppingItem} className="my-3 flex flex-wrap items-end gap-2">
-          <label className={labelCls}>Category
-            <select className={inputCls} name="categoryId">{ctx.categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
-          </label>
+          <CategoryPicker categories={ctx.categories} name="categoryId" />
           <label className={labelCls}>Size
             <select className={inputCls} name="sizeId" defaultValue={nextSize?.id}>{ctx.sizes.map((s) => <option key={s.id} value={s.id}>{sizeName(s)}</option>)}</select>
           </label>

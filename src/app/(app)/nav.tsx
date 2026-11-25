@@ -3,24 +3,23 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-const links = [
-  ['/dashboard', 'Dashboard'],
-  ['/closet', 'Closet'],
-  ['/goals', 'Goals'],
-  ['/survey', 'Goal survey'],
-  ['/forecast', 'Forecast'],
-  ['/shopping', 'Shopping'],
-  ['/children', 'Children'],
-  ['/brands', 'Brands'],
-  ['/account', 'Account'],
-] as const;
+/** [path, label, other paths that keep this tab highlighted]. The survey lives under Goals, and brands under Forecast. */
+const links: readonly (readonly [string, string, readonly string[]])[] = [
+  ['/dashboard', 'Dashboard', []],
+  ['/closet', 'Closet', []],
+  ['/goals', 'Goals', ['/survey']],
+  ['/forecast', 'Forecast', ['/brands']],
+  ['/shopping', 'Shopping', []],
+  ['/categories', 'Items', []],
+  ['/account', 'Account', ['/children']],
+];
 
 export function Nav() {
   const path = usePathname();
   return (
     <nav aria-label="Main" className="mt-3 flex gap-1 overflow-x-auto border-b border-line">
-      {links.map(([href, label]) => {
-        const on = path === href || path.startsWith(`${href}/`);
+      {links.map(([href, label, also]) => {
+        const on = [href, ...also].some((p) => path === p || path.startsWith(`${p}/`));
         return (
           <Link
             key={href}

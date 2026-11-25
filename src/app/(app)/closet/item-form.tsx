@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { CategoryOptions } from '@/components/category-options';
+import { CategoryPicker } from '@/components/category-picker';
 import { PhotoPicker } from '@/components/photo-picker';
 import { btnCls, inputCls, labelCls } from '@/components/ui';
 import { FitFields } from '@/components/fit-fields';
@@ -45,13 +45,8 @@ export function ItemForm({ action, categories, sizes, labels, brands, defaults: 
           Name (optional)
           <input className={inputCls} name="name" maxLength={160} defaultValue={d.name ?? ''} placeholder="Made from brand and category if left blank" />
         </label>
-        <label className={labelCls}>
-          Category
-          <select className={inputCls} name="categoryId" defaultValue={d.categoryId ?? categories[0]?.id} required>
-            <CategoryOptions categories={categories} />
-          </select>
-          <span className="text-xs">Not listed? <Link className="text-accent underline" href="/categories">Add your own category</Link></span>
-        </label>
+        <CategoryPicker categories={categories} name="categoryId" defaultId={d.categoryId} />
+        <span className="text-xs text-muted sm:col-span-2">Not listed? <Link className="text-accent underline" href="/categories">Add your own item or category</Link></span>
         <label className={labelCls}>
           Brand
           <input className={inputCls} name="brand" maxLength={80} list="brand-list" defaultValue={d.brand ?? ''} />

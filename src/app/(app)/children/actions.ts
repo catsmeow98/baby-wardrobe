@@ -7,13 +7,13 @@ import { createClient } from '@/lib/supabase/server';
 import { childSchema } from '@/lib/validation/children';
 import { safeNext } from '@/lib/auth/redirect';
 
-const back = (error?: string): never => redirect(error ? `/children?error=${encodeURIComponent(error)}` : '/children');
-const refresh = () => ['/children', '/dashboard', '/closet', '/goals', '/shopping', '/forecast', '/survey'].forEach((p) => revalidatePath(p));
+const back = (error?: string): never => redirect(error ? `/account?error=${encodeURIComponent(error)}#children` : '/account#children');
+const refresh = () => ['/account', '/dashboard', '/closet', '/goals', '/shopping', '/forecast', '/survey'].forEach((p) => revalidatePath(p));
 
 export async function createChild(formData: FormData) {
   // Where to go afterward, for example back to survey suggestions. Only same-site paths are accepted.
   const dest = formData.get('next') ? safeNext(String(formData.get('next'))) : null;
-  const fail = (m: string): never => redirect(`/children?error=${encodeURIComponent(m)}${dest ? `&next=${encodeURIComponent(dest)}` : ''}`);
+  const fail = (m: string): never => redirect(`/account?error=${encodeURIComponent(m)}${dest ? `&next=${encodeURIComponent(dest)}` : ''}#children`);
   const parsed = childSchema.safeParse({
     name: formData.get('name'),
     birthDate: formData.get('birthDate'),

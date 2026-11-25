@@ -72,7 +72,7 @@ export default async function SurveyPage({ searchParams }: { searchParams: Promi
         ) : (
           <div className="flex flex-col gap-2 rounded-lg bg-accent-soft p-4">
             <p>Add your child to save these as goals. You will come straight back here.</p>
-            <div><Link className={btnCls} href={`/children?next=${encodeURIComponent(`/survey?${qs}`)}`}>Add a child</Link></div>
+            <div><Link className={btnCls} href={`/account?next=${encodeURIComponent(`/survey?${qs}`)}`}>Add a child</Link></div>
           </div>
         )}
       </section>

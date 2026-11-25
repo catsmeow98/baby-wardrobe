@@ -5,6 +5,7 @@ import { FormMessage } from '@/components/form-message';
 import { NoChild } from '@/components/no-child';
 import { ProgressBar } from '@/components/progress-bar';
 import { btnCls, inputCls } from '@/components/ui';
+import { groupCategories } from '@/lib/categories';
 import { sizeName } from '@/lib/db';
 import type { GoalRow, ItemRow, ShoppingRow } from '@/lib/db';
 import { goalProgress, incomingFor, ownedFor, sizeProgress } from '@/lib/domain';
@@ -35,9 +36,12 @@ export default async function GoalsPage({ searchParams }: { searchParams: Promis
 
   return (
     <>
-      <div>
-        <h1 className="font-display text-2xl font-bold">{child.name}&apos;s goals</h1>
-        <p className="text-muted">Set how many pieces {child.name} should have in each category for a size.</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="font-display text-2xl font-bold">{child.name}&apos;s goals</h1>
+          <p className="text-muted">Set how many pieces {child.name} should have in each category for a size.</p>
+        </div>
+        <Link className={btnCls} href="/survey">{goals.length > 0 ? 'Retake survey' : 'Take survey'}</Link>
       </div>
       <FormMessage error={sp.error} message={sp.saved ? 'Goals saved.' : undefined} />
 
@@ -61,27 +65,34 @@ export default async function GoalsPage({ searchParams }: { searchParams: Promis
           <span className="text-sm text-muted">{completion.percent === null ? 'No goals set yet' : `${completion.percent}% of target pieces owned`}</span>
         </div>
         <ul>
-          {ctx.categories.map((c) => {
-            const g = goals.find((x) => x.categoryId === c.id && x.size === sizeOrder);
+          {groupCategories(ctx.categories).map((g) => (
+            <li key={g.label} className="border-t border-line first:border-t-0">
+              <h3 className="pt-3 text-xs font-medium uppercase tracking-wide text-muted">{g.label}</h3>
+              <ul>
+            {g.items.map((c) => {
+            const goal = goals.find((x) => x.categoryId === c.id && x.size === sizeOrder);
             const owned = ownedFor(items, child.id, c.id, sizeOrder);
             const incoming = incomingFor(shopping, child.id, c.id, sizeOrder);
-            const remaining = g ? Math.max(0, g.target - owned - incoming) : null;
+            const remaining = goal ? Math.max(0, goal.target - owned - incoming) : null;
             return (
               <li key={c.id} className="grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-2 border-t border-line py-3 first:border-t-0 sm:grid-cols-[minmax(150px,1.2fr)_90px_minmax(180px,1fr)_minmax(90px,1fr)]">
                 <span className="font-bold">{c.name}</span>
                 <input className={`${inputCls} w-20`} type="number" min={0} max={99} inputMode="numeric" name={`goal_${c.id}`}
-                  defaultValue={g?.target ?? ''} placeholder="Not set" aria-label={`Goal for ${c.name}`} />
+                  defaultValue={goal?.target ?? ''} placeholder="Not set" aria-label={`Goal for ${c.name}`} />
                 <span className="col-span-2 flex gap-4 text-sm text-muted tabular-nums sm:col-span-1">
                   <span><b className="block text-base text-ink">{owned}</b>owned</span>
                   <span><b className="block text-base text-ink">{incoming}</b>incoming</span>
                   <span><b className="block text-base text-ink">{remaining ?? '–'}</b>to buy</span>
                 </span>
                 <span className="col-span-2 sm:col-span-1">
-                  {g && g.target > 0 ? <ProgressBar owned={owned} incoming={incoming} goal={g.target} /> : <span className="text-sm text-muted">Not tracked</span>}
+                  {goal && goal.target > 0 ? <ProgressBar owned={owned} incoming={incoming} goal={goal.target} /> : <span className="text-sm text-muted">Not tracked</span>}
                 </span>
               </li>
             );
-          })}
+            })}
+              </ul>
+            </li>
+          ))}
         </ul>
         <p className="my-3 text-sm text-muted">
           An item counts toward every size in its fit range, so a 6-9M to 9-12M piece counts for both. Stored items count. Outgrown, donated,
