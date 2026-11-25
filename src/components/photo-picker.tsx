@@ -49,7 +49,7 @@ export function PhotoPicker({ userId, childId, name, label = 'Add photos', max =
         setError('That image could not be read. Try a JPEG or PNG photo.');
         continue;
       }
-      if (done.failed) setError('The background could not be removed, so the original photo was used.');
+      if (done.failed) setError(`The background could not be removed, so the original photo was used.${done.reason ? ` (${done.reason.slice(0, 160)})` : ''}`);
       const path = `${userId}/${childId}/${crypto.randomUUID()}.${extOf(done.blob)}`;
       const { error: upErr } = await supabase.storage.from(PHOTO_BUCKET).upload(path, done.blob, { contentType: done.blob.type });
       if (upErr) {

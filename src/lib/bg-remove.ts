@@ -21,15 +21,26 @@ type Engine = {
 
 let loading: Promise<Engine> | null = null;
 
+async function build(device: 'webgpu' | 'wasm'): Promise<Engine> {
+  const tf = await import('@huggingface/transformers');
+  // fp16 weights need WebGPU; the plain browser engine uses the 8-bit file, which is smaller and a little rougher.
+  const model = await tf.AutoModel.from_pretrained(MODEL, { device, dtype: device === 'webgpu' ? 'fp16' : 'q8' });
+  const processor = await tf.AutoProcessor.from_pretrained(MODEL, {});
+  const m = model as unknown as { sessions?: { model?: { inputNames?: string[] } }; session?: { inputNames?: string[] } };
+  const names = m.sessions?.model?.inputNames ?? m.session?.inputNames ?? [];
+  return { model, processor, RawImage: tf.RawImage, inputName: names[0] ?? 'input_image' } as unknown as Engine;
+}
+
 function load(): Promise<Engine> {
   loading ??= (async () => {
-    const tf = await import('@huggingface/transformers');
     const gpu = typeof navigator !== 'undefined' && 'gpu' in navigator;
-    // fp16 weights need WebGPU; the plain browser engine uses the 8-bit file, which is smaller and a little rougher.
-    const model = await tf.AutoModel.from_pretrained(MODEL, { device: gpu ? 'webgpu' : 'wasm', dtype: gpu ? 'fp16' : 'q8' });
-    const processor = await tf.AutoProcessor.from_pretrained(MODEL, {});
-    const names: string[] = (model as unknown as { sessions?: { model?: { inputNames?: string[] } } }).sessions?.model?.inputNames ?? [];
-    return { model, processor, RawImage: tf.RawImage, inputName: names[0] ?? 'input_image' } as unknown as Engine;
+    if (!gpu) return build('wasm');
+    try {
+      return await build('webgpu');
+    } catch (e) {
+      console.warn('WebGPU engine failed, trying the plain browser engine', e);
+      return build('wasm');
+    }
   })().catch((e) => {
     loading = null; // allow a retry after a failed download
     throw e;

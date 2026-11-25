@@ -26,7 +26,7 @@ export function PhotoUploader({ itemId, userId, childId, remaining, removeBg = f
       try {
         const done = await processPhoto(file, removeBg);
         blob = done.blob;
-        if (done.failed) setError('The background could not be removed, so the original photo was used.');
+        if (done.failed) setError(`The background could not be removed, so the original photo was used.${done.reason ? ` (${done.reason.slice(0, 160)})` : ''}`);
       } catch {
         setError('That image could not be read. Try a JPEG or PNG photo.');
         continue;

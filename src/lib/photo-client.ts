@@ -31,6 +31,8 @@ export interface ProcessedPhoto {
   cutout: boolean;
   /** Background removal was wanted but did not work (offline, model blocked, low memory), so the original is used. */
   failed: boolean;
+  /** Why the background step failed, for the message shown to the person. */
+  reason?: string;
 }
 
 /** Shrinks a photo and, when asked, removes its background. Never throws for a removal problem: it falls back to the original. */
@@ -41,8 +43,9 @@ export async function processPhoto(file: File, removeBackground: boolean): Promi
     const small = await shrinkImage(original, CUTOUT_SIDE);
     const { removeBackgroundFrom } = await import('@/lib/bg-remove');
     return { blob: await removeBackgroundFrom(small), original, cutout: true, failed: false };
-  } catch {
-    return { blob: original, original, cutout: false, failed: true };
+  } catch (e) {
+    console.error('Background removal failed', e);
+    return { blob: original, original, cutout: false, failed: true, reason: e instanceof Error ? e.message : String(e) };
   }
 }
 
