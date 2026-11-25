@@ -6,15 +6,28 @@ import { safeNext } from '@/lib/auth/redirect';
 import { btnCls, btnGhostCls, inputCls, labelCls } from '@/components/ui';
 import { sizeName } from '@/lib/db';
 import { createChild, deleteChild, updateChild } from '../children/actions';
-import { cleanupPhotos, deleteAccount, markOutgrown } from './actions';
+import { searchPlaces, type Place } from '@/lib/weather';
+import { clearLocation, cleanupPhotos, deleteAccount, markOutgrown, saveLocation, savePhotoSettings } from './actions';
 
 export const metadata: Metadata = { title: 'Account' };
 
-export default async function AccountPage({ searchParams }: { searchParams: Promise<{ error?: string; ok?: string; next?: string; outgrown?: string }> }) {
-  const { error, ok, next, outgrown } = await searchParams;
+export default async function AccountPage({ searchParams }: { searchParams: Promise<{ error?: string; ok?: string; next?: string; outgrown?: string; place?: string }> }) {
+  const { error, ok, next, outgrown, place } = await searchParams;
   const dest = safeNext(next, '');
   const ctx = await getContext();
   const bySize = new Map(ctx.sizes.map((s) => [s.id, s]));
+
+  let matches: Place[] = [];
+  let searchError = '';
+  if (place?.trim()) {
+    try {
+      matches = await searchPlaces(place);
+      if (matches.length === 0) searchError = 'No places matched. Try a city name, like Boston or Boston, MA. Only cities of about 15,000 people or more are listed, so try a larger nearby town.';
+    } catch {
+      searchError = 'The place search is not available right now. Try again in a minute.';
+    }
+  }
+  const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
   // After a size increase: active items whose fit range ends below the new current size.
   const grown = outgrown && z.string().uuid().safeParse(outgrown).success ? ctx.children.find((c) => c.id === outgrown) : undefined;
@@ -141,6 +154,59 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
           </div>
           <div><button className={btnCls} type="submit">Add child</button></div>
         </form>
+      </section>
+
+      <section id="photos" className="flex scroll-mt-4 flex-col gap-3 rounded-xl border border-line bg-surface p-4">
+        <h2 className="font-display text-lg font-bold">Photos</h2>
+        <form action={savePhotoSettings} className="flex flex-col gap-2">
+          <label className="flex items-start gap-2 text-sm">
+            <input type="checkbox" name="removeBackground" defaultChecked={ctx.settings.removeBackground} className="mt-1" />
+            <span>
+              Remove the background from new photos
+              <span className="block text-muted">Done on your device when you add a photo, so the item stands out. The first photo downloads about 40 MB of tools, once. You can still go back to the original while editing a photo.</span>
+            </span>
+          </label>
+          <div><button className={btnGhostCls} type="submit">Save</button></div>
+        </form>
+      </section>
+
+      <section id="location" className="flex scroll-mt-4 flex-col gap-3 rounded-xl border border-line bg-surface p-4">
+        <h2 className="font-display text-lg font-bold">Location</h2>
+        <p className="text-sm text-muted">Used to tell cold, cool, mild and warm months apart when the survey plans outerwear and seasonal clothing. Only the place name, a rounded location and twelve labels are saved. One location for the whole account.</p>
+        {ctx.settings.placeName && ctx.settings.monthClasses ? (
+          <div className="flex flex-col gap-2">
+            <p className="font-bold">{ctx.settings.placeName}</p>
+            <ul className="flex flex-wrap gap-1.5" aria-label="How each month feels">
+              {ctx.settings.monthClasses.map((c, i) => <li key={MONTH_SHORT[i]} className="rounded-md bg-line px-2 py-0.5 text-xs">{MONTH_SHORT[i]} · {c}</li>)}
+            </ul>
+            <form action={clearLocation}><button className={btnGhostCls} type="submit">Remove location</button></form>
+          </div>
+        ) : (
+          <p className="text-sm">No location set. The survey asks about hot summers and cold winters instead.</p>
+        )}
+        <form method="get" action="/account#location" className="flex flex-wrap items-end gap-2">
+          <label className={labelCls}>City
+            <input className={inputCls} type="search" name="place" defaultValue={place ?? ''} maxLength={80} placeholder="Boston, or Boston, MA" />
+          </label>
+          <button className={btnGhostCls} type="submit">Search</button>
+        </form>
+        {searchError && <p role="status" className="text-sm text-muted">{searchError}</p>}
+        {matches.length > 0 && (
+          <ul className="flex flex-col gap-2">
+            {matches.map((m) => (
+              <li key={`${m.latitude},${m.longitude}`} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line p-2">
+                <span className="text-sm">{m.label}</span>
+                <form action={saveLocation}>
+                  <input type="hidden" name="label" value={m.label} />
+                  <input type="hidden" name="latitude" value={m.latitude} />
+                  <input type="hidden" name="longitude" value={m.longitude} />
+                  <button className={btnCls} type="submit">Use this place</button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="text-xs text-muted">Places from <a className="underline" href="https://www.geonames.org/" rel="noreferrer">GeoNames</a> (CC BY 4.0). Past weather from <a className="underline" href="https://power.larc.nasa.gov/" rel="noreferrer">NASA POWER</a> (CC BY 4.0). Neither endorses this app.</p>
       </section>
 
       <section className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-4">

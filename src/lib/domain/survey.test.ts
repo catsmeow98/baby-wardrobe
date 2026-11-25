@@ -305,3 +305,20 @@ test('defaults are independent copies, so editing one does not change the next',
 test('typical routines use built-in names only', () => {
   for (const st of Object.values(defaultStages())) for (const x of [...st.sleep, ...st.day, ...st.dressy]) for (const k of x.cats) assert.ok(k in CATEGORY_NAMES, k);
 });
+
+test('a location\'s own month labels replace the fixed calendar', () => {
+  // A mild place: nothing is ever cold, and December is only cool.
+  const table = ['cool', 'cool', 'cool', 'mild', 'mild', 'warm', 'warm', 'warm', 'warm', 'mild', 'cool', 'cool'] as const;
+  assert.equal(monthClass(11, false, false, table), 'cool');
+  assert.equal(monthClass(11), 'cold'); // the fixed calendar says cold
+  const a = base();
+  a.months = table;
+  const win = { ...sizeWindow(0, 6), monthIdx: [10, 11, 0], months: 'November to January', short: 'Nov-Jan' };
+  a.stages[6].gear = ['snowsuit', 'coat'];
+  const r = suggest(a, 6, 'winter', win);
+  const q = (k: string) => r.rows.find((x) => x.key === k)!.qty;
+  assert.equal(q('snowsuit'), 1); // no cold months here, so just the one that was chosen
+  assert.equal(q('coat'), 2); // three cool months
+  assert.equal(r.temp, 'cool');
+  assert.ok(!suggestGear([10, 11, 0], 6, false, false, table).includes('snowsuit'));
+});

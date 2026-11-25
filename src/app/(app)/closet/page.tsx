@@ -4,8 +4,9 @@ import { getContext, toInventory } from '@/lib/context';
 import { NoChild } from '@/components/no-child';
 import { Pill } from '@/components/pill';
 import { btnCls, btnGhostCls, inputCls } from '@/components/ui';
-import { CONDITIONS, FIT_FEEDBACK, FIT_LABELS, GENDERS, SEASONS, STATUSES, sizeName } from '@/lib/db';
+import { COLORS, CONDITIONS, FIT_FEEDBACK, FIT_LABELS, GENDERS, SEASONS, STATUSES, sizeName } from '@/lib/db';
 import type { ItemRow, SizeLabelRow } from '@/lib/db';
+import { ColorDot } from '@/components/color-dot';
 import { TypeFilters } from '@/components/type-filters';
 import { matchesCategory } from '@/lib/categories';
 import { signedUrls } from '@/lib/photos';
@@ -13,7 +14,7 @@ import { filterItems, fitStateFor, type FitState } from '@/lib/domain';
 
 export const metadata: Metadata = { title: 'Closet' };
 
-type SP = { q?: string; fit?: string; cat?: string; group?: string; gender?: string; sort?: string; size?: string; status?: string; season?: string; added?: string; photos?: string };
+type SP = { q?: string; fit?: string; cat?: string; group?: string; gender?: string; color?: string; sort?: string; size?: string; status?: string; season?: string; added?: string; photos?: string };
 
 export default async function ClosetPage({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
@@ -42,6 +43,7 @@ export default async function ClosetPage({ searchParams }: { searchParams: Promi
   const items = toInventory(rows, ctx, tagGroupOf).map((i, n) => ({ ...i, brand: brandById.get(rows[n].brand_id ?? '') ?? null }));
 
   const genderOf = new Map(rows.map((r) => [r.id, r.gender]));
+  const colorOf = new Map(rows.map((r) => [r.id, r.color]));
   const status = sp.status ?? 'active';
   const shown = filterItems(
     items,
@@ -57,6 +59,7 @@ export default async function ClosetPage({ searchParams }: { searchParams: Promi
   );
   const filtered = shown
     .filter((i) => matchesCategory(ctx.catById.get(i.categoryId), { group: sp.group }))
+    .filter((i) => !sp.color || (sp.color === 'none' ? !colorOf.get(i.id) : colorOf.get(i.id) === sp.color))
     .filter((i) => !sp.gender || (sp.gender === 'none' ? !genderOf.get(i.id) : genderOf.get(i.id) === sp.gender));
   const sort = sp.sort ?? 'new';
   const typeName = (id: string) => ctx.catById.get(id)?.name ?? '';
@@ -112,6 +115,11 @@ export default async function ClosetPage({ searchParams }: { searchParams: Promi
           <option value="">Any season</option>
           {SEASONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
         </select>
+ <select className={`${inputCls} w-auto`} name="color" defaultValue={sp.color ?? ''} aria-label="Color">
+          <option value="">Any color</option>
+          {COLORS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          <option value="none">Not set</option>
+        </select>
         <select className={`${inputCls} w-auto`} name="sort" defaultValue={sort} aria-label="Sort by">
           <option value="new">Newest first</option>
           <option value="name">Name</option>
@@ -144,14 +152,14 @@ export default async function ClosetPage({ searchParams }: { searchParams: Promi
                 <Link href={`/closet/${i.id}`} className="flex h-full flex-col gap-1.5 rounded-xl border border-line bg-surface p-3 hover:border-accent">
                   {coverPath.has(i.id) && coverUrls.get(coverPath.get(i.id)!) && (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={coverUrls.get(coverPath.get(i.id)!)} alt="" loading="lazy" className="mb-1 aspect-[4/3] w-full rounded-lg object-cover" />
+                    <img src={coverUrls.get(coverPath.get(i.id)!)} alt="" loading="lazy" className={`mb-1 aspect-[4/3] w-full rounded-lg ${coverPath.get(i.id)!.endsWith('.png') ? 'bg-line object-contain' : 'object-cover'}`} />
                   )}
                   <div className="flex items-start justify-between gap-2">
                     <span className="font-bold [overflow-wrap:anywhere]">{i.name}</span>
                     {i.quantity > 1 && <span className="rounded-full bg-line px-2 text-xs">×{i.quantity}</span>}
                   </div>
                   <span className="text-sm text-muted">
-                    {ctx.catById.get(i.categoryId)?.name}{i.brand ? ` · ${i.brand}` : ''}{raw.gender ? ` · ${GENDERS.find(([v]) => v === raw.gender)?.[1]}` : ''}
+                    <ColorDot color={raw.color} className="mr-1.5" />{ctx.catById.get(i.categoryId)?.name}{i.brand ? ` · ${i.brand}` : ''}{raw.gender ? ` · ${GENDERS.find(([v]) => v === raw.gender)?.[1]}` : ''}
                   </span>
                   <span className="text-sm text-muted">Tag {tag ?? 'not set'} · Fits {rangeText(i.fitFrom, i.fitTo)}</span>
                   <span className="mt-auto flex flex-wrap gap-1.5 pt-1">

@@ -7,6 +7,7 @@ import { withCurrent } from '@/lib/categories';
 import { FormMessage } from '@/components/form-message';
 import type { ItemRow, SizeLabelRow } from '@/lib/db';
 import { PhotoUploader } from '@/components/photo-uploader';
+import { PhotoEditButton } from '@/components/photo-edit-button';
 import { MAX_PHOTOS_PER_ITEM, signedUrls } from '@/lib/photos';
 import { ItemForm } from '../item-form';
 import { deletePhoto } from '../photo-actions';
@@ -41,6 +42,8 @@ export default async function EditItemPage({
     .from('inventory_photos').select('id, storage_path').eq('inventory_item_id', item.id).order('sort_order');
   const photos = (photoRows ?? []) as { id: string; storage_path: string }[];
   const urls = await signedUrls(ctx.supabase, photos.map((p) => p.storage_path));
+  const { data: inOutfits } = await ctx.supabase.from('outfit_items').select('outfits(id, name)').eq('item_id', item.id);
+  const outfitLinks = ((inOutfits ?? []) as unknown as { outfits: { id: string; name: string } | null }[]).flatMap((r) => (r.outfits ? [r.outfits] : []));
   const brandName = brandList.find((b) => b.id === item.brand_id)?.name ?? '';
   return (
     <>
@@ -54,19 +57,22 @@ export default async function EditItemPage({
               <li key={p.id} className="flex flex-col gap-1.5">
                 {urls.get(p.storage_path) ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={urls.get(p.storage_path)} alt={`${item.name}`} className="aspect-square w-full rounded-lg object-cover" />
+                  <img src={urls.get(p.storage_path)} alt={`${item.name}`} className={`aspect-square w-full rounded-lg ${p.storage_path.endsWith('.png') ? 'bg-line object-contain' : 'object-cover'}`} />
                 ) : (
                   <div className="flex aspect-square items-center justify-center rounded-lg bg-line text-sm text-muted">Unavailable</div>
                 )}
-                <form action={deletePhoto}>
-                  <input type="hidden" name="photoId" value={p.id} />
-                  <button type="submit" className="text-sm text-bad underline">Delete photo</button>
-                </form>
+                <div className="flex flex-wrap items-center gap-3">
+                  {urls.get(p.storage_path) && <PhotoEditButton photoId={p.id} url={urls.get(p.storage_path)!} userId={ctx.user.id} childId={item.child_id} />}
+                  <form action={deletePhoto}>
+                    <input type="hidden" name="photoId" value={p.id} />
+                    <button type="submit" className="text-sm text-bad underline">Delete photo</button>
+                  </form>
+                </div>
               </li>
             ))}
           </ul>
         )}
-        <PhotoUploader itemId={item.id} userId={ctx.user.id} childId={item.child_id} remaining={MAX_PHOTOS_PER_ITEM - photos.length} />
+        <PhotoUploader itemId={item.id} userId={ctx.user.id} childId={item.child_id} remaining={MAX_PHOTOS_PER_ITEM - photos.length} removeBg={ctx.settings.removeBackground} />
       </section>
       <ItemForm
         action={saveItem}
@@ -77,11 +83,16 @@ export default async function EditItemPage({
         submitLabel="Save changes"
         defaults={{
           id: item.id, name: item.name, categoryId: item.category_id, brand: brandName, quantity: item.quantity,
-          tagId: item.label_id, customTag: item.custom_tag, fitFromId: item.fit_from_size_id, fitToId: item.fit_to_size_id, condition: item.condition, gender: item.gender,
+          tagId: item.label_id, customTag: item.custom_tag, fitFromId: item.fit_from_size_id, fitToId: item.fit_to_size_id, condition: item.condition, gender: item.gender, color: item.color,
           season: item.season, status: item.status, fitOverride: item.fit_override, fitFeedback: item.fit_feedback, notes: item.notes,
         }}
       />
       <p className="text-sm"><Link className="text-accent underline" href={`/closet/new?from=${item.id}`}>Add another like this</Link></p>
+      {outfitLinks.length > 0 && (
+        <p className="text-sm text-muted">
+          In outfits: {outfitLinks.map((o, i) => <span key={o.id}>{i > 0 ? ', ' : ''}<Link className="text-accent underline" href={`/outfits/${o.id}`}>{o.name}</Link></span>)}
+        </p>
+      )}
       <details className="text-sm">
         <summary className="cursor-pointer text-muted">Delete this item</summary>
         <form action={deleteItem} className="mt-2 flex flex-col gap-2">

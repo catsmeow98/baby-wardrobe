@@ -54,7 +54,8 @@ export async function surveyAll(ctx: Ctx, answers: Answers) {
   return {
     options,
     gearOptions,
-    results: suggestAll(answers, answers.sizes, seasonOf, (s) => windows[s], labels),
+    // The person's own weather (when they set a location) decides how each month is labelled for outerwear and seasonal clothing.
+    results: suggestAll({ ...answers, months: ctx.settings.monthClasses }, answers.sizes, seasonOf, (s) => windows[s], labels),
     usedForecast: Boolean(f),
     windows,
     missing,

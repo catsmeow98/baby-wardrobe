@@ -4,7 +4,7 @@ import { CategoryPicker } from '@/components/category-picker';
 import { PhotoPicker } from '@/components/photo-picker';
 import { btnCls, inputCls, labelCls } from '@/components/ui';
 import { FitFields } from '@/components/fit-fields';
-import { CONDITIONS, FIT_LABELS, GENDERS, SEASONS, STATUSES } from '@/lib/db';
+import { COLORS, CONDITIONS, FIT_LABELS, GENDERS, SEASONS, STATUSES } from '@/lib/db';
 import type { CategoryRow, SizeLabelRow, SizeRow } from '@/lib/db';
 
 export interface ItemDefaults {
@@ -19,6 +19,7 @@ export interface ItemDefaults {
   fitToId?: string | null;
   condition?: string;
   gender?: string | null;
+  color?: string | null;
   season?: string;
   status?: string;
   fitOverride?: string | null;
@@ -35,7 +36,7 @@ interface Props {
   defaults?: ItemDefaults;
   submitLabel: string;
   /** Shows a photo field. Only for a new item, since existing items add photos from their own Photos section. */
-  photos?: { userId: string; childId: string };
+  photos?: { userId: string; childId: string; removeBg?: boolean };
 }
 
 export function ItemForm({ action, categories, sizes, labels, brands, defaults: d = {}, submitLabel, photos }: Props) {
@@ -83,6 +84,13 @@ export function ItemForm({ action, categories, sizes, labels, brands, defaults: 
           </select>
         </label>
         <label className={labelCls}>
+          Color (optional)
+          <select className={inputCls} name="color" defaultValue={d.color ?? ''}>
+            <option value="">Not set</option>
+            {COLORS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
+        </label>
+        <label className={labelCls}>
           Season
           <select className={inputCls} name="season" defaultValue={d.season ?? 'year_round'}>
             {SEASONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
@@ -108,7 +116,7 @@ export function ItemForm({ action, categories, sizes, labels, brands, defaults: 
         {photos && (
           <div className={`${labelCls} sm:col-span-2`}>
             Photos (optional)
-            <PhotoPicker userId={photos.userId} childId={photos.childId} name="photoPath" />
+            <PhotoPicker userId={photos.userId} childId={photos.childId} name="photoPath" removeBg={photos.removeBg} />
           </div>
         )}
       </div>

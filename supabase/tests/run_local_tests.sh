@@ -14,3 +14,4 @@ psql -v ON_ERROR_STOP=1 -q -d "$DB" -f tests/30_categories.test.sql
 psql -v ON_ERROR_STOP=1 -q -d "$DB" -f tests/40_item_form.test.sql
 psql -v ON_ERROR_STOP=1 -q -d "$DB" -f tests/50_category_groups.test.sql
 psql -v ON_ERROR_STOP=1 -q -d "$DB" -f tests/60_prefs_gender.test.sql
+psql -v ON_ERROR_STOP=1 -q -d "$DB" -f tests/70_settings_color_outfits.test.sql

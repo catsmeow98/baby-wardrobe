@@ -9,7 +9,7 @@ import { MAX_PHOTOS_PER_ITEM, PHOTO_BUCKET } from '@/lib/photos';
 export async function attachPhotos(supabase: SupabaseClient, userId: string, childId: string, itemId: string, paths: string[]): Promise<number> {
   const prefix = `${userId}/${childId}/`;
   const unique = [...new Set(paths)].filter((p) => p.startsWith(prefix));
-  const ok = unique.filter((p) => !p.includes('..') && p.length <= 200 && p.endsWith('.jpg'));
+  const ok = unique.filter((p) => !p.includes('..') && p.length <= 200 && /\.(jpg|png)$/.test(p));
   const keep = ok.slice(0, MAX_PHOTOS_PER_ITEM);
   const discard = unique.filter((p) => !keep.includes(p));
   if (discard.length) await supabase.storage.from(PHOTO_BUCKET).remove(discard);

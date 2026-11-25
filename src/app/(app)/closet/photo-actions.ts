@@ -47,3 +47,23 @@ export async function deletePhoto(formData: FormData): Promise<void> {
   await ctx.supabase.from('inventory_photos').delete().eq('id', id.data);
   refresh(photo.inventory_item_id as string);
 }
+
+/** Swaps a saved photo for an edited file the browser already uploaded, then deletes the old file. */
+export async function replacePhoto(photoId: string, path: string): Promise<Result> {
+  const id = z.string().uuid().safeParse(photoId);
+  if (!id.success) return { ok: false, error: 'That photo could not be found.' };
+  const ctx = await getContext();
+  const { data: photo } = await ctx.supabase.from('inventory_photos').select('id, inventory_item_id, storage_path').eq('id', id.data).maybeSingle();
+  if (!photo) return { ok: false, error: 'That photo could not be found.' };
+  const { data: item } = await ctx.supabase.from('inventory_items').select('child_id').eq('id', photo.inventory_item_id as string).maybeSingle();
+  const prefix = `${ctx.user.id}/${item?.child_id}/`;
+  if (!item || !path.startsWith(prefix) || path.includes('..') || path.length > 200 || !/\.(jpg|png)$/.test(path)) return { ok: false, error: 'That upload was not accepted.' };
+  const { error } = await ctx.supabase.from('inventory_photos').update({ storage_path: path }).eq('id', id.data);
+  if (error) {
+    await ctx.supabase.storage.from(PHOTO_BUCKET).remove([path]);
+    return { ok: false, error: 'We could not save that photo. Try again.' };
+  }
+  await ctx.supabase.storage.from(PHOTO_BUCKET).remove([photo.storage_path as string]);
+  refresh(photo.inventory_item_id as string);
+  return { ok: true };
+}

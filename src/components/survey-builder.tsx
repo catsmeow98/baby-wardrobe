@@ -5,7 +5,7 @@ import { useMemo, useState } from 'react';
 import {
   CATEGORY_NAMES, FREQ, FREQ_KEYS, MONTH_NAMES, OCCASIONS, PJ_CHANGE, SURVEY_SIZES, cloneStage, comboText, comboToString, defaultGearOptions, defaultOptions,
   displaySize, gearKey, monthClass, pjKey, sizeWindow, stageKey, suggestGear,
-  type CatKey, type Combo, type Freq, type Occasion, type PickOption, type PjKey, type SizeWindow, type StageAnswers,
+  type CatKey, type Combo, type Freq, type MonthClass, type Occasion, type PickOption, type PjKey, type SizeWindow, type StageAnswers,
 } from '@/lib/domain';
 import { btnGhostCls, inputCls, labelCls } from '@/components/ui';
 
@@ -94,7 +94,7 @@ function ItemPicker({ options, selected, onToggle, flat = false, label }: {
  * pajama change, and outerwear and seasonal clothing. Every tab stays in the page, so everything is submitted together as
  * form fields (the "size" checkboxes, "birth", and hidden fields per answer) and the form can be a plain GET or POST.
  */
-export function SurveyBuilder({ initial, initialSizes, birthMonth, currentSize, windows, options = defaultOptions(), gearOptions = defaultGearOptions(), hot = false, cold = false }: {
+export function SurveyBuilder({ initial, initialSizes, birthMonth, currentSize, windows, options = defaultOptions(), gearOptions = defaultGearOptions(), hot = false, cold = false, monthClasses = null }: {
   initial: Stages;
   initialSizes: number[];
   birthMonth: number;
@@ -108,6 +108,8 @@ export function SurveyBuilder({ initial, initialSizes, birthMonth, currentSize, 
   gearOptions?: PickOption[];
   hot?: boolean;
   cold?: boolean;
+  /** How each calendar month feels at the person's location, January first. Replaces the fixed calendar when set. */
+  monthClasses?: readonly MonthClass[] | null;
 }) {
   const [stages, setStages] = useState<Stages>(initial);
   const [sizes, setSizes] = useState<number[]>(initialSizes);
@@ -241,7 +243,7 @@ export function SurveyBuilder({ initial, initialSizes, birthMonth, currentSize, 
                 <h3 className="text-sm text-muted">What outerwear and seasonal clothing will baby wear in {displaySize(size)}?</h3>
                 <div className="flex flex-wrap gap-1.5" aria-label={`Months ${w.months}`}>
                   {w.monthIdx.map((m, k) => (
-                    <span key={`${m}-${k}`} className="rounded-md bg-line px-2 py-0.5 text-xs">{MONTH_SHORT[m]} · {monthClass(m, hot, cold)}</span>
+                    <span key={`${m}-${k}`} className="rounded-md bg-line px-2 py-0.5 text-xs">{MONTH_SHORT[m]} · {monthClass(m, hot, cold, monthClasses)}</span>
                   ))}
                 </div>
                 <p className="text-sm text-muted">
@@ -251,7 +253,7 @@ export function SurveyBuilder({ initial, initialSizes, birthMonth, currentSize, 
                 <ItemPicker label="Outerwear and seasonal clothing" options={gearOptions} selected={st.gear} onToggle={(k) => toggleGear(size, k)} flat />
                 <div>
                   <button type="button" className={btnGhostCls}
-                    onClick={() => patch(size, (x) => ({ ...x, gear: [...new Set([...x.gear, ...suggestGear(w.monthIdx, size, hot, cold).filter((k) => gearOptions.some((o) => o.key === k))])].slice(0, MAX_GEAR) }))}>
+                    onClick={() => patch(size, (x) => ({ ...x, gear: [...new Set([...x.gear, ...suggestGear(w.monthIdx, size, hot, cold, monthClasses).filter((k) => gearOptions.some((o) => o.key === k))])].slice(0, MAX_GEAR) }))}>
                     Add suggestions for {w.short}
                   </button>
                 </div>

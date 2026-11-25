@@ -11,6 +11,8 @@
  * The multipliers, caps and weights below are my own starting guesses, not research. Treat them as a first draft to
  * tune with real parents.
  */
+import { dominantClass } from './climate';
+
 export type Season = 'spring' | 'summer' | 'fall' | 'winter';
 export type Temp = 'hot' | 'warm' | 'mild' | 'cool' | 'cold';
 
@@ -161,6 +163,8 @@ export interface Answers {
   cold: boolean; // cold winters
   birthMonth: number; // 0 to 11, birth or due month. Decides which months and season each size falls in.
   sizes: number[]; // size orders to plan for, ascending
+  /** How each calendar month feels at the person's location, January first. Set by the server from their settings, never from the link. */
+  months?: readonly MonthClass[] | null;
   stages: Record<number, StageAnswers>; // answers for every size order, 0 to 7
 }
 
@@ -270,7 +274,8 @@ const MAX_GOAL = 99;
 
 /** How a calendar month feels, for sizing outerwear and seasonal clothing. A hot summer widens warm, a cold winter widens cold. */
 export type MonthClass = 'cold' | 'cool' | 'mild' | 'warm';
-export function monthClass(month: number, hot = false, cold = false): MonthClass {
+export function monthClass(month: number, hot = false, cold = false, table?: readonly MonthClass[] | null): MonthClass {
+  if (table && table.length === 12) return table[((month % 12) + 12) % 12]; // the person's own weather, when they gave a location
   if (month === 11 || month < 2) return 'cold'; // December to February
   if (month >= 5 && month <= 7) return 'warm'; // June to August
   if (month === 2 || month === 3 || month === 9 || month === 10) return cold && (month === 2 || month === 10) ? 'cold' : 'cool'; // March, April, October, November
@@ -300,9 +305,9 @@ export function gearQty(monthsInSeason: number): number {
 }
 
 /** The built-in outerwear and seasonal pieces worth suggesting for a window: those in season for at least 2 of its months. */
-export function suggestGear(monthIdx: readonly number[], size: number, hot = false, cold = false): CatKey[] {
+export function suggestGear(monthIdx: readonly number[], size: number, hot = false, cold = false, table?: readonly MonthClass[] | null): CatKey[] {
   const young = size <= 3;
-  const classes = monthIdx.map((m) => monthClass(m, hot, cold));
+  const classes = monthIdx.map((m) => monthClass(m, hot, cold, table));
   return GEAR_KEYS.filter((k) => {
     if (k === 'rash') return false;
     if (k === 'bunting' && !young) return false;
@@ -341,7 +346,11 @@ export function suggest(a: Answers, size: number, season: Season, window?: SizeW
   const L = a.laundry;
   const changes = CHANGES[a.changes].n;
   const spare = SPARE[a.spare].n;
-  const temp: Temp = season === 'summer' ? (a.hot ? 'hot' : 'warm') : season === 'winter' ? (a.cold ? 'cold' : 'cool') : 'mild';
+  const classes = win.monthIdx.map((m) => monthClass(m, a.hot, a.cold, a.months));
+  // With a location the weather label is the one most of the size's months share. Without, it follows the season and the climate answers.
+  const temp: Temp = a.months
+    ? dominantClass(classes)
+    : season === 'summer' ? (a.hot ? 'hot' : 'warm') : season === 'winter' ? (a.cold ? 'cold' : 'cool') : 'mild';
   const nameOf = (k: string) => labels[k] ?? (k in CATEGORY_NAMES ? CATEGORY_NAMES[k as CatKey] : 'Item');
 
   const qty: Record<string, number> = {};
@@ -395,7 +404,6 @@ export function suggest(a: Answers, size: number, season: Season, window?: SizeW
   }
 
   // Outerwear and seasonal clothing: sized from how many months of this size's window the piece is in season. A chosen piece is at least 1.
-  const classes = win.monthIdx.map((m) => monthClass(m, a.hot, a.cold));
   const ensure = (cat: string, n: number, w: string) => {
     if (n > (qty[cat] ?? 0)) {
       qty[cat] = n;

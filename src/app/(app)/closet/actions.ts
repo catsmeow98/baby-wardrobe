@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { getContext, type Ctx } from '@/lib/context';
 import type { CategoryRow } from '@/lib/db';
-import { itemSchema, CONDITION_VALUES, GENDER_VALUES, SEASON_VALUES, STATUS_VALUES } from '@/lib/validation/items';
+import { itemSchema, COLOR_VALUES, CONDITION_VALUES, GENDER_VALUES, SEASON_VALUES, STATUS_VALUES } from '@/lib/validation/items';
 import { autoName, parseTagRange, resolveFitRange } from '@/lib/domain';
 import { attachPhotos, discardPhotos } from '@/lib/photo-attach';
 
@@ -115,6 +115,7 @@ export async function saveItem(formData: FormData) {
     condition: v.condition,
     season: v.season,
     gender: v.gender ?? null,
+    color: v.color ?? null,
     status: v.status,
     fit_override: v.fitOverride ?? null,
     fit_feedback: v.fitFeedback ?? null,
@@ -210,6 +211,7 @@ export async function bulkCreate(formData: FormData) {
       condition: shared.data.condition,
       season: shared.data.season,
       gender: shared.data.gender,
+      color: z.enum(COLOR_VALUES).safeParse(text('color')).data ?? null,
       status: shared.data.status,
     });
   }

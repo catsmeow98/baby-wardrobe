@@ -56,6 +56,7 @@ export default async function BulkPage({ searchParams }: { searchParams: Promise
           sizes={ctx.sizes}
           brands={(brands ?? []).map((b: { name: string }) => b.name)}
           defaultTagId={defaultTag ?? ''}
+          removeBg={ctx.settings.removeBackground}
         />
       </form>
     </>

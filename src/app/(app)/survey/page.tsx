@@ -44,9 +44,12 @@ export default async function SurveyPage({ searchParams }: { searchParams: Promi
 
       <form method="get" className="grid gap-4 rounded-xl border border-line bg-surface p-4 sm:grid-cols-2">
         <input type="hidden" name="touched" value="1" />
-        <LifestyleFields answers={answers} />
+        <LifestyleFields answers={answers} hideClimate={Boolean(ctx.settings.monthClasses)} />
+        {ctx.settings.monthClasses && (
+          <p className="col-span-full text-sm text-muted">Using the weather for {ctx.settings.placeName} to tell cold, cool, mild and warm months apart. <Link className="text-accent underline" href="/account#location">Change location</Link></p>
+        )}
         <SurveyBuilder initial={answers.stages} initialSizes={answers.sizes} birthMonth={answers.birthMonth} currentSize={ctx.currentSize} windows={windows}
-          options={options} gearOptions={gearOptions} hot={answers.hot} cold={answers.cold} />
+          options={options} gearOptions={gearOptions} hot={answers.hot} cold={answers.cold} monthClasses={ctx.settings.monthClasses} />
         <div className="col-span-full"><button className={btnCls} type="submit">Update suggestions</button></div>
       </form>
 

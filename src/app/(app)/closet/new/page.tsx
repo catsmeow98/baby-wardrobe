@@ -42,10 +42,10 @@ export default async function NewItemPage({ searchParams }: { searchParams: Prom
         brands={(brands ?? []).map((b: { name: string }) => b.name)} submitLabel="Add item"
         defaults={src ? {
           name: src.name, categoryId: src.category_id, brand: srcBrand, quantity: 1, tagId: src.label_id, customTag: src.custom_tag,
-          fitFromId: src.fit_from_size_id, fitToId: src.fit_to_size_id, condition: src.condition, gender: src.gender,
+          fitFromId: src.fit_from_size_id, fitToId: src.fit_to_size_id, condition: src.condition, gender: src.gender, color: src.color,
           season: src.season, status: 'active',
         } : undefined}
-        photos={{ userId: ctx.user.id, childId: ctx.active.id }} />
+        photos={{ userId: ctx.user.id, childId: ctx.active.id, removeBg: ctx.settings.removeBackground }} />
     </>
   );
 }

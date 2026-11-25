@@ -7,6 +7,7 @@ import { usePathname } from 'next/navigation';
 const links: readonly (readonly [string, string, readonly string[]])[] = [
   ['/dashboard', 'Dashboard', []],
   ['/closet', 'Closet', []],
+  ['/outfits', 'Outfits', []],
   ['/goals', 'Goals', ['/survey']],
   ['/forecast', 'Forecast', ['/brands']],
   ['/shopping', 'Shopping', []],

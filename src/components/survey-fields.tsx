@@ -13,7 +13,7 @@ const entries = (o: Record<string, { label: string }>): [string, string][] => Ob
 const yesNo: [string, string][] = [['no', 'No'], ['yes', 'Yes']];
 
 /** The questions that apply to every size. Rendered inside a form that submits these field names. */
-export function LifestyleFields({ answers }: { answers: Answers }) {
+export function LifestyleFields({ answers, hideClimate = false }: { answers: Answers; hideClimate?: boolean }) {
   return (
     <>
       <label className={labelCls}>How many days between laundry loads?
@@ -21,8 +21,8 @@ export function LifestyleFields({ answers }: { answers: Answers }) {
       </label>
       <SurveySelect name="changes" label="Outfit changes on a typical day (scales daytime and dressy clothes)" value={answers.changes} options={entries(CHANGES)} />
       <SurveySelect name="spare" label="Spare outfits needed (extra changes, daycare, etc.)" value={answers.spare} options={entries(SPARE)} />
-      <SurveySelect name="hot" label="Hot summers where you live?" value={answers.hot ? 'yes' : 'no'} options={yesNo} />
-      <SurveySelect name="cold" label="Cold winters where you live?" value={answers.cold ? 'yes' : 'no'} options={yesNo} />
+      {!hideClimate && <SurveySelect name="hot" label="Hot summers where you live?" value={answers.hot ? 'yes' : 'no'} options={yesNo} />}
+      {!hideClimate && <SurveySelect name="cold" label="Cold winters where you live?" value={answers.cold ? 'yes' : 'no'} options={yesNo} />}
     </>
   );
 }
