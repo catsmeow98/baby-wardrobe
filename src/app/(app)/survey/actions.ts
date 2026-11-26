@@ -2,8 +2,9 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { CATEGORY_NAMES, defaultSizes, parseAnswers } from '@/lib/domain';
+import { CATEGORY_NAMES, defaultSizes, parseAnswers, type CatKey } from '@/lib/domain';
 import { getContext } from '@/lib/context';
+import { safeBack, withParams } from '@/lib/back';
 import { defaultBirthMonth, surveyAll } from './compute';
 
 /**
@@ -12,7 +13,9 @@ import { defaultBirthMonth, surveyAll } from './compute';
  */
 export async function applySurvey(formData: FormData) {
   const q = String(formData.get('q') ?? '');
-  const stop = (m: string): never => redirect(`/survey?${q}${q ? '&' : ''}error=${encodeURIComponent(m)}`);
+  const back = safeBack(formData.get('back'), '/goals');
+  const backQs = back !== '/goals' ? `&back=${encodeURIComponent(back)}` : '';
+  const stop = (m: string): never => redirect(`/survey?${q}${q ? '&' : ''}error=${encodeURIComponent(m)}${backQs}`);
   const ctx = await getContext();
   if (!ctx.active) return stop('Add a child first.');
   const child = ctx.active;
@@ -31,8 +34,11 @@ export async function applySurvey(formData: FormData) {
       return r.rows
         .filter((x) => x.qty > 0)
         .flatMap((x) => {
-          // Matched on the built-in name, so a person's own rename of it does not matter. An item type they deleted is skipped.
-          const cat = ctx.categories.find((c) => c.is_default && c.base_name === CATEGORY_NAMES[x.key]);
+          // A built-in is matched on its built-in name, so a person's own rename of it does not matter. Their own types are matched
+          // by id. An item type they deleted is skipped.
+          const cat = x.key in CATEGORY_NAMES
+            ? ctx.categories.find((c) => c.is_default && c.base_name === CATEGORY_NAMES[x.key as CatKey])
+            : ctx.categories.find((c) => c.id === x.key);
           return cat ? [{ child_id: child.id, category_id: cat.id, size_id: size.id, target_quantity: x.qty }] : [];
         });
     });
@@ -40,5 +46,5 @@ export async function applySurvey(formData: FormData) {
   const { error } = await ctx.supabase.from('wardrobe_goals').upsert(goals, { onConflict: 'child_id,category_id,size_id' });
   if (error) return stop('We could not save those goals. Try again.');
   ['/goals', '/shopping', '/dashboard', '/survey'].forEach((path) => revalidatePath(path));
-  return redirect(`/goals?size=${chosen[0]}&saved=1`);
+  return redirect(withParams(back, { size: String(chosen[0]), saved: '1' }));
 }

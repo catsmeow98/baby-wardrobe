@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { removeAllPhotos, removeOrphanPhotos } from '@/lib/photos';
+import { fetchMonthClasses } from '@/lib/weather';
 
 const stop = (m: string): never => redirect(`/account?error=${encodeURIComponent(m)}`);
 
@@ -53,4 +54,61 @@ export async function markOutgrown(formData: FormData) {
   }
   for (const p of ['/closet', '/goals', '/dashboard', '/shopping']) revalidatePath(p);
   return redirect(`/account?ok=${encodeURIComponent(mode.data === 'outgrown' ? 'Marked as outgrown.' : 'Moved to stored.')}#children`);
+}
+
+const done = (m: string, hash = ''): never => redirect(`/account?ok=${encodeURIComponent(m)}${hash}`);
+
+/** Whether photo backgrounds are removed as photos are added. */
+export async function savePhotoSettings(formData: FormData) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return redirect('/login');
+  const on = formData.get('removeBackground') === 'on';
+  const { error } = await supabase.from('user_settings').upsert({ owner_id: user.id, remove_background: on, updated_at: new Date().toISOString() }, { onConflict: 'owner_id' });
+  if (error) return stop('We could not save that setting. Try again.');
+  revalidatePath('/closet');
+  return done(on ? 'Backgrounds will be removed from new photos.' : 'Backgrounds will be kept on new photos.', '#photos');
+}
+
+const place = z.object({
+  label: z.string().trim().min(1).max(120),
+  latitude: z.coerce.number().min(-90).max(90),
+  longitude: z.coerce.number().min(-180).max(180),
+});
+
+/** Saves a place and works out how each month feels there. Only the place name, a rounded location and twelve labels are kept. */
+export async function saveLocation(formData: FormData) {
+  const p = place.safeParse({ label: formData.get('label'), latitude: formData.get('latitude'), longitude: formData.get('longitude') });
+  if (!p.success) return stop('That place could not be used. Search again.');
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return redirect('/login');
+  let months;
+  try {
+    months = await fetchMonthClasses(p.data.latitude, p.data.longitude);
+  } catch {
+    return stop('We could not look up the weather just now. Try again in a minute.');
+  }
+  if (!months) return stop('There is not enough weather history for that place. Try a larger nearby town.');
+  const round = (n: number) => Math.round(n * 100) / 100;
+  const { error } = await supabase.from('user_settings').upsert(
+    { owner_id: user.id, place_name: p.data.label, latitude: round(p.data.latitude), longitude: round(p.data.longitude), month_classes: months, updated_at: new Date().toISOString() },
+    { onConflict: 'owner_id' },
+  );
+  if (error) return stop('We could not save that place. Try again.');
+  for (const path of ['/survey', '/account']) revalidatePath(path);
+  return done(`Location set to ${p.data.label}.`, '#location');
+}
+
+export async function clearLocation() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return redirect('/login');
+  const { error } = await supabase.from('user_settings').upsert(
+    { owner_id: user.id, place_name: null, latitude: null, longitude: null, month_classes: null, updated_at: new Date().toISOString() },
+    { onConflict: 'owner_id' },
+  );
+  if (error) return stop('We could not remove the location. Try again.');
+  for (const path of ['/survey', '/account']) revalidatePath(path);
+  return done('Location removed.', '#location');
 }

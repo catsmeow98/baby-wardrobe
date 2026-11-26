@@ -18,7 +18,7 @@ export interface ItemRow {
   id: string; child_id: string; tracking_type: 'individual' | 'grouped'; name: string; brand_id: string | null;
   category_id: string; label_id: string | null; fit_from_size_id: string | null; fit_to_size_id: string | null;
   quantity: number; condition: string; season: string; status: string; fit_override: string | null;
-  fit_feedback: number | null; notes: string | null; custom_tag: string | null; gender: string | null;
+  fit_feedback: number | null; notes: string | null; custom_tag: string | null; gender: string | null; color: string | null;
 }
 export interface GoalRow { id: string; child_id: string; category_id: string; size_id: string; target_quantity: number }
 export interface ShoppingRow {
@@ -28,6 +28,13 @@ export interface ShoppingRow {
 
 export const CONDITIONS: [string, string][] = [['new', 'New'], ['like_new', 'Like new'], ['good', 'Good'], ['worn', 'Worn'], ['unusable', 'Unusable']];
 export const SEASONS: [string, string][] = [['year_round', 'Year-round'], ['spring', 'Spring'], ['summer', 'Summer'], ['fall', 'Fall'], ['winter', 'Winter']];
+/** Item colors: stored value, label, and swatch. Multicolor has no single swatch (it is drawn as a color wheel). */
+export const COLORS: readonly (readonly [string, string, string])[] = [
+  ['white', 'White', '#ffffff'], ['black', 'Black', '#1f1f1f'], ['gray', 'Gray', '#9ca3af'], ['cream', 'Cream or beige', '#f3e9d2'],
+  ['brown', 'Brown', '#8b5a2b'], ['red', 'Red', '#dc2626'], ['pink', 'Pink', '#f9a8d4'], ['orange', 'Orange', '#f97316'],
+  ['yellow', 'Yellow', '#facc15'], ['green', 'Green', '#22c55e'], ['blue', 'Blue', '#3b82f6'], ['navy', 'Navy', '#1e3a8a'],
+  ['purple', 'Purple', '#8b5cf6'], ['multicolor', 'Multicolor or pattern', '#cccccc'],
+];
 export const GENDERS = [['boy', 'Boy'], ['girl', 'Girl'], ['neutral', 'Neutral']] as const;
 export const STATUSES: [string, string][] = [['active', 'Active'], ['stored', 'Stored'], ['daycare', 'Spare at daycare'], ['outgrown', 'Outgrown'], ['donated', 'Donated'], ['sold', 'Sold']];
 export const FIT_LABELS: Record<string, string> = { fits: 'Fits now', small: 'Getting small', notyet: 'Not yet', outgrown: 'Outgrown', unknown: 'Fit unknown' };

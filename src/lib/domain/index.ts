@@ -8,3 +8,4 @@ export * from './forecast';
 export * from './survey';
 export * from './tagrange';
 export * from './windows';
+export * from './climate';

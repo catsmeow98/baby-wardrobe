@@ -13,6 +13,7 @@ import { btnCls, btnGhostCls, inputCls, labelCls } from '@/components/ui';
 import { SHOPPING_STATUS, sizeName } from '@/lib/db';
 import type { GoalRow, ItemRow, ShoppingRow } from '@/lib/db';
 import { goalProgress } from '@/lib/domain';
+import { currentUrl } from '@/lib/back';
 import { addShoppingItem, cancelItem, markOrdered, orderFromGap, receiveDelivery } from './actions';
 
 export const metadata: Metadata = { title: 'Shopping' };
@@ -21,6 +22,7 @@ export default async function ShoppingPage({ searchParams }: { searchParams: Pro
   const sp = await searchParams;
   const ctx = await getContext();
   if (!ctx.active) return <NoChild />;
+  const here = currentUrl('/shopping', sp);
   const child = ctx.active;
 
   const [{ data: itemRows }, { data: goalRows }, { data: shopRows }] = await Promise.all([
@@ -68,6 +70,7 @@ export default async function ShoppingPage({ searchParams }: { searchParams: Pro
           <div className="flex flex-wrap items-center gap-2">
             {s.status === 'needed' && (
               <form action={markOrdered} className="flex items-center gap-1.5">
+<input type="hidden" name="back" value={here} />
                 <input type="hidden" name="id" value={s.id} />
                 <input className={`${inputCls} w-16`} type="number" name="quantity" min={1} defaultValue={s.quantity_needed} aria-label="Quantity ordered" />
                 <button className={btnCls} type="submit">Mark ordered</button>
@@ -75,12 +78,14 @@ export default async function ShoppingPage({ searchParams }: { searchParams: Pro
             )}
             {(s.status === 'ordered' || s.status === 'partially_received') && (
               <form action={receiveDelivery} className="flex items-center gap-1.5">
+<input type="hidden" name="back" value={here} />
                 <input type="hidden" name="id" value={s.id} />
                 <input className={`${inputCls} w-16`} type="number" name="quantity" min={1} max={out} defaultValue={out} aria-label="Quantity received" />
                 <button className={btnCls} type="submit">Receive</button>
               </form>
             )}
             <form action={cancelItem}>
+<input type="hidden" name="back" value={here} />
               <input type="hidden" name="id" value={s.id} />
               <button className={btnGhostCls} type="submit">Cancel</button>
             </form>
@@ -123,6 +128,7 @@ export default async function ShoppingPage({ searchParams }: { searchParams: Pro
                   <Pill tone="warn">Need {g.remaining}</Pill>
                   <ProgressBar owned={g.owned} incoming={g.incoming} goal={g.target} />
                   <form action={orderFromGap} className="flex items-center gap-1.5">
+<input type="hidden" name="back" value={here} />
                     <input type="hidden" name="categoryId" value={g.categoryId} />
                     <input type="hidden" name="sizeId" value={size.id} />
                     <input className={`${inputCls} w-16`} type="number" name="quantity" min={1} defaultValue={g.remaining} aria-label="Quantity to order" />
@@ -138,6 +144,7 @@ export default async function ShoppingPage({ searchParams }: { searchParams: Pro
       <section className="rounded-xl border border-line bg-surface p-4">
         <h2 className="font-display text-lg font-bold">Your list</h2>
         <form action={addShoppingItem} className="my-3 flex flex-wrap items-end gap-2">
+<input type="hidden" name="back" value={here} />
           <CategoryPicker categories={ctx.categories} name="categoryId" />
           <label className={labelCls}>Size
             <select className={inputCls} name="sizeId" defaultValue={nextSize?.id}>{ctx.sizes.map((s) => <option key={s.id} value={s.id}>{sizeName(s)}</option>)}</select>

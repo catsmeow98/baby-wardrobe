@@ -1,10 +1,14 @@
-import { CAT_KEYS, CATEGORY_NAMES, displaySize, type SizeSuggestion } from '@/lib/domain';
+import { displaySize, type SizeSuggestion } from '@/lib/domain';
 
 const SEASON_LABEL = { spring: 'spring', summer: 'summer', fall: 'fall', winter: 'winter' } as const;
 
 /** Suggested quantities for every size: a grid of categories by size, then the reasoning for each size. */
 export function SurveyResults({ results }: { results: SizeSuggestion[] }) {
-  const used = CAT_KEYS.filter((k) => results.some((r) => r.rows.find((x) => x.key === k)!.qty > 0));
+  // Every item type that any size asks for, in the order first seen (built-ins first, then the person's own).
+  const names = new Map<string, string>();
+  for (const r of results) for (const x of r.rows) if (!names.has(x.key)) names.set(x.key, x.name);
+  const qtyOf = (r: SizeSuggestion, k: string) => r.rows.find((x) => x.key === k)?.qty ?? 0;
+  const used = [...names.keys()].filter((k) => results.some((r) => qtyOf(r, k) > 0));
   const total = (r: SizeSuggestion) => r.rows.reduce((t, x) => t + x.qty, 0);
   return (
     <div className="flex flex-col gap-4">
@@ -24,9 +28,9 @@ export function SurveyResults({ results }: { results: SizeSuggestion[] }) {
           <tbody>
             {used.map((k) => (
               <tr key={k} className="border-t border-line">
-                <th className="sticky left-0 bg-surface py-1.5 pr-3 font-medium">{CATEGORY_NAMES[k]}</th>
+                <th className="sticky left-0 bg-surface py-1.5 pr-3 font-medium">{names.get(k)}</th>
                 {results.map((r) => {
-                  const n = r.rows.find((x) => x.key === k)!.qty;
+                  const n = qtyOf(r, k);
                   return <td key={r.size} className={`px-2 text-right tabular-nums ${n ? 'font-bold' : 'text-muted'}`}>{n || '–'}</td>;
                 })}
               </tr>

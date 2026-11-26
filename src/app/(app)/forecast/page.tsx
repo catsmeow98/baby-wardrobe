@@ -7,7 +7,6 @@ import { Pill } from '@/components/pill';
 import { btnCls, btnGhostCls, inputCls, labelCls } from '@/components/ui';
 import { sizeName } from '@/lib/db';
 import { fitWord, sizeFor, transition, MAX_AGE_MONTHS } from '@/lib/domain';
-import { BrandsSection } from '@/components/brands-section';
 import { forecastFor, loadBrands, loadMeasurements, todayIso } from '@/lib/forecast-data';
 import { addMeasurement, clearRatings, deleteMeasurement, saveBrandOffset } from './actions';
 
@@ -182,7 +181,6 @@ export default async function ForecastPage({ searchParams }: { searchParams: Pro
         )}
       </section>
 
-      <BrandsSection ctx={ctx} error={sp.brandError} ok={sp.brandOk} />
     </>
   );
 }

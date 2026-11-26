@@ -7,11 +7,13 @@ import { inputCls, labelCls } from '@/components/ui';
 import { CONDITIONS, GENDERS, SEASONS, STATUSES } from '@/lib/db';
 import type { SizeLabelRow } from '@/lib/db';
 import { bulkCreate } from '../actions';
+import { safeBack } from '@/lib/back';
 
 export const metadata: Metadata = { title: 'Bulk add' };
 
-export default async function BulkPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
-  const { error } = await searchParams;
+export default async function BulkPage({ searchParams }: { searchParams: Promise<{ error?: string; back?: string }> }) {
+  const { error, back: rawBack } = await searchParams;
+  const back = safeBack(rawBack, '/closet');
   const ctx = await getContext();
   if (!ctx.active) return <NoChild />;
   const [{ data: labelData }, { data: brands }] = await Promise.all([
@@ -34,6 +36,7 @@ export default async function BulkPage({ searchParams }: { searchParams: Promise
       </div>
       <FormMessage error={error} />
       <form action={bulkCreate} className="flex flex-col gap-4">
+        <input type="hidden" name="back" value={back} />
         <div className="grid gap-3 rounded-xl border border-line bg-surface p-4 sm:grid-cols-2">
           <label className={labelCls}>Condition
             <select className={inputCls} name="condition" defaultValue="good">{CONDITIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
@@ -56,6 +59,7 @@ export default async function BulkPage({ searchParams }: { searchParams: Promise
           sizes={ctx.sizes}
           brands={(brands ?? []).map((b: { name: string }) => b.name)}
           defaultTagId={defaultTag ?? ''}
+          removeBg={ctx.settings.removeBackground}
         />
       </form>
     </>
