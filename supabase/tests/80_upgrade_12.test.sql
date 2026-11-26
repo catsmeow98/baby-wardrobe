@@ -89,3 +89,32 @@ begin
   perform pg_temp.chk(exists (select 1 from information_schema.columns where table_name = 'user_settings' and column_name = 'setup_dismissed_at'), 'setup_dismissed_at exists');
   raise notice 'ALL UPGRADE CHECKS PASSED';
 end $$;
+
+-- Migration 13: booties. A custom "Booties" type with an item, a goal and a shopping entry is merged into the new built-in.
+do $$
+declare f record; own uuid; grp uuid;
+begin
+  select * into f from fx;
+  select id into grp from public.category_groups where owner_id is null and name = 'Footwear';
+  insert into public.categories (owner_id, name, group_id) values (f.a, 'Booties', grp) returning id into own;
+  insert into public.inventory_items (child_id, name, category_id) values (f.chA, 'Wool booties', own);
+  insert into public.wardrobe_goals (child_id, category_id, size_id, target_quantity) values (f.chA, own, f.sz, 3);
+  insert into public.shopping_items (child_id, category_id, size_id) values (f.chA, own, f.sz2);
+end $$;
+
+\i migrations/20260101000013_booties.sql
+\i migrations/20260101000013_booties.sql
+
+do $$
+declare f record;
+begin
+  select * into f from fx;
+  if (select count(*) from public.categories where owner_id is null) <> 38 then raise exception 'FAILED: 38 built-in types'; end if;
+  if (select count(distinct sort_order) from public.categories where owner_id is null) <> 38 then raise exception 'FAILED: order unique'; end if;
+  if (select string_agg(c.name, ',' order by c.sort_order) from public.categories c join public.category_groups g on g.id = c.group_id where c.owner_id is null and g.name = 'Footwear') <> 'Shoes,Booties,Boots' then raise exception 'FAILED: footwear order'; end if;
+  if not exists (select 1 from public.inventory_items i join public.categories c on c.id = i.category_id where i.name = 'Wool booties' and c.owner_id is null and c.name = 'Booties') then raise exception 'FAILED: item merged into Booties'; end if;
+  if (select target_quantity from public.wardrobe_goals g join public.categories c on c.id = g.category_id where g.child_id = f.chA and c.name = 'Booties') <> 3 then raise exception 'FAILED: goal merged'; end if;
+  if not exists (select 1 from public.shopping_items s join public.categories c on c.id = s.category_id where c.owner_id is null and c.name = 'Booties') then raise exception 'FAILED: shopping merged'; end if;
+  if exists (select 1 from public.categories where owner_id is not null and name = 'Booties') then raise exception 'FAILED: custom Booties removed'; end if;
+  raise notice 'BOOTIES CHECKS PASSED (migration 13 also ran twice)';
+end $$;

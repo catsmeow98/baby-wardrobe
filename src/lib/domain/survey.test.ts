@@ -323,11 +323,11 @@ test('a location\'s own month labels replace the fixed calendar', () => {
   assert.ok(!suggestGear([10, 11, 0], 6, false, false, table).includes('snowsuit'));
 });
 
-test('the 37 built-in item types each sit in exactly one chip group and have an icon', async () => {
+test('the 38 built-in item types each sit in exactly one chip group and have an icon', async () => {
   const { CHIP_GROUPS } = await import('./survey');
   const { ITEM_ICONS } = await import('../item-icons');
   const listed = CHIP_GROUPS.flatMap((g) => g.keys);
-  assert.equal(CAT_KEYS.length, 37);
+  assert.equal(CAT_KEYS.length, 38);
   assert.deepEqual([...listed].sort(), [...CAT_KEYS].sort());
   for (const k of CAT_KEYS) assert.ok(ITEM_ICONS[k]?.length > 0, `icon for ${k}`);
   assert.equal(CATEGORY_NAMES.top, 'Short-sleeve top');

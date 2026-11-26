@@ -5,9 +5,9 @@ do $$
 declare cF uuid; custom uuid; ch uuid;
 begin
   reset role;
-  perform t.ok((select count(*) from public.categories where owner_id is null) = 37, '37 built-in categories');
+  perform t.ok((select count(*) from public.categories where owner_id is null) = 38, '38 built-in categories');
   perform t.ok((select count(*) from public.categories where owner_id is null and group_id is null) = 0, 'every built-in item has a category');
-  perform t.ok((select count(distinct sort_order) from public.categories where owner_id is null) = 37, 'built-in order is unique');
+  perform t.ok((select count(distinct sort_order) from public.categories where owner_id is null) = 38, 'built-in order is unique');
   perform t.ok(exists (select 1 from public.categories where owner_id is null and name in ('Sleep sack', 'Footy sleeper', 'Dress shirt', 'Bunting', 'Snowsuit', 'Socks', 'Hat', 'Coat')), 'individual items exist');
   perform t.ok(not exists (select 1 from public.categories where owner_id is null and name in ('Outfits', 'Outerwear', 'Accessories', 'Swaddles', 'Sleep sacks')), 'grouped and plural names are gone');
   perform t.ok((select count(*) from public.categories where owner_id is null and name like 'Other %') = 0, 'the catch-all Other types are retired');

@@ -52,6 +52,7 @@ export const CATEGORY_NAMES = {
   mittens: 'Mittens',
   bib: 'Bib',
   shoes: 'Shoes',
+  booties: 'Booties',
   boots: 'Boots',
   swim: 'Swimsuit',
   rash: 'Rash guard',
@@ -70,7 +71,7 @@ export const CHIP_GROUPS: readonly { label: string; keys: readonly CatKey[] }[] 
   { label: 'Outfits', keys: ['romper', 'dress', 'ldress', 'lovr', 'sovr', 'set'] },
   { label: 'Outerwear', keys: ['sweater', 'cardigan', 'pullover', 'coat', 'jacket', 'bunting', 'snowsuit'] },
   { label: 'Accessories', keys: ['socks', 'hat', 'mittens', 'bib'] },
-  { label: 'Footwear', keys: ['shoes', 'boots'] },
+  { label: 'Footwear', keys: ['shoes', 'booties', 'boots'] },
   { label: 'Swim', keys: ['swim', 'rash'] },
 ];
 

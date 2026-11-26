@@ -42,7 +42,7 @@ do $$ begin
                                             ('bbbbbbbb-0000-4000-8000-000000000002', 'b@example.com');
   insert into t.fx values ('A', 'aaaaaaaa-0000-4000-8000-000000000001'), ('B', 'bbbbbbbb-0000-4000-8000-000000000002');
   perform t.ok((select count(*) from public.profiles) = 2, 'profile rows are created for new users');
-  perform t.ok((select count(*) from public.categories) = 37, '37 default categories');
+  perform t.ok((select count(*) from public.categories) = 38, '38 default categories');
   perform t.ok((select count(*) from public.sizes) = 10, '10 size groups');
   perform t.ok((select count(*) from public.size_labels) = 16, '16 tag labels (10 groups, 6 aliases)');
   perform t.ok((select count(*) from public.size_labels l join public.sizes s on s.id = l.size_id
