@@ -11,6 +11,7 @@ import { sizeName } from '@/lib/db';
 import type { GoalRow, ItemRow, ShoppingRow } from '@/lib/db';
 import { goalProgress, incomingFor, ownedFor, sizeProgress } from '@/lib/domain';
 import { copyGoals, saveGoals } from './actions';
+import { currentUrl } from '@/lib/back';
 
 export const metadata: Metadata = { title: 'Goals' };
 
@@ -39,6 +40,7 @@ export default async function GoalsPage({ searchParams }: { searchParams: Promis
   const filtering = Boolean(sp.group || sp.cat);
   // Items with a goal come first within each item category. Items with no goal or a goal of zero follow, greyed out.
   const targetOf = (id: string) => goals.find((x) => x.categoryId === id && x.size === sizeOrder)?.target ?? 0;
+  const here = currentUrl('/goals', { size: String(sizeOrder), group: sp.group, cat: sp.cat });
   const keepQs = `${sp.group ? `&group=${sp.group}` : ''}${sp.cat ? `&cat=${sp.cat}` : ''}`;
   // Sizes other than this one that already have goals: the choices for "copy goals from".
   const copyFrom = ctx.sizes.filter((s) => s.sort_order !== sizeOrder && goals.some((g) => g.size === s.sort_order && g.target > 0));
@@ -50,7 +52,7 @@ export default async function GoalsPage({ searchParams }: { searchParams: Promis
           <h1 className="font-display text-2xl font-bold">{child.name}&apos;s goals</h1>
           <p className="text-muted">Set how many pieces {child.name} should have in each item type for a size.</p>
         </div>
-        <Link className={btnCls} href="/survey">{goals.length > 0 ? 'Retake survey' : 'Take survey'}</Link>
+        <Link className={btnCls} href={`/survey?back=${encodeURIComponent(here)}`}>{goals.length > 0 ? 'Retake survey' : 'Take survey'}</Link>
       </div>
       <FormMessage error={sp.error} message={sp.saved ? 'Goals saved.' : undefined} />
 
@@ -77,6 +79,7 @@ export default async function GoalsPage({ searchParams }: { searchParams: Promis
       {copyFrom.length > 0 && (
         <form action={copyGoals} className="flex flex-wrap items-end gap-2">
           <input type="hidden" name="sizeId" value={size.id} />
+          <input type="hidden" name="back" value={here} />
           <label className={labelCls}>Copy goals from
             <select className={inputCls} name="fromSizeId" defaultValue={copyFrom[0].id}>{copyFrom.map((s) => <option key={s.id} value={s.id}>{sizeName(s)}</option>)}</select>
           </label>

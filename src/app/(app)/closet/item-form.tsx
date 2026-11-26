@@ -35,14 +35,17 @@ interface Props {
   brands: string[];
   defaults?: ItemDefaults;
   submitLabel: string;
+  /** The closet address (filters included) to return to after saving. */
+  back?: string;
   /** Shows a photo field. Only for a new item, since existing items add photos from their own Photos section. */
   photos?: { userId: string; childId: string; removeBg?: boolean };
 }
 
-export function ItemForm({ action, categories, sizes, labels, brands, defaults: d = {}, submitLabel, photos }: Props) {
+export function ItemForm({ action, categories, sizes, labels, brands, defaults: d = {}, submitLabel, photos, back }: Props) {
   return (
     <form action={action} className="flex flex-col gap-4 rounded-xl border border-line bg-surface p-4">
       {d.id && <input type="hidden" name="id" value={d.id} />}
+      {back && <input type="hidden" name="back" value={back} />}
       <div className="grid gap-4 sm:grid-cols-2">
         <label className={`${labelCls} sm:col-span-2`}>
           Name (optional)
@@ -120,7 +123,10 @@ export function ItemForm({ action, categories, sizes, labels, brands, defaults: 
           </div>
         )}
       </div>
-      <div><button className={btnCls} type="submit">{submitLabel}</button></div>
+      <div className="sticky bottom-[4.5rem] z-10 -mx-4 -mb-4 flex items-center gap-3 rounded-b-xl border-t border-line bg-surface/95 px-4 py-3 backdrop-blur md:static md:m-0 md:border-0 md:bg-transparent md:p-0">
+        <button className={btnCls} type="submit">{submitLabel}</button>
+        {back && <Link className="text-sm text-accent underline" href={back}>Cancel</Link>}
+      </div>
     </form>
   );
 }

@@ -8,11 +8,13 @@ import { withCurrent } from '@/lib/categories';
 import type { ItemRow, SizeLabelRow } from '@/lib/db';
 import { ItemForm } from '../item-form';
 import { saveItem } from '../actions';
+import { safeBack } from '@/lib/back';
 
 export const metadata: Metadata = { title: 'Add item' };
 
-export default async function NewItemPage({ searchParams }: { searchParams: Promise<{ error?: string; from?: string }> }) {
-  const { error, from } = await searchParams;
+export default async function NewItemPage({ searchParams }: { searchParams: Promise<{ error?: string; from?: string; back?: string }> }) {
+  const { error, from, back: rawBack } = await searchParams;
+  const back = safeBack(rawBack, '/closet');
   const ctx = await getContext();
   if (!ctx.active) return <NoChild />;
   const [{ data: labels }, { data: brands }] = await Promise.all([
@@ -35,11 +37,11 @@ export default async function NewItemPage({ searchParams }: { searchParams: Prom
     <>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h1 className="font-display text-2xl font-bold">Add an item for {ctx.active.name}</h1>
-        <Link className="text-sm text-accent underline" href="/closet/bulk">Add many at once</Link>
+        <Link className="text-sm text-accent underline" href={`/closet/bulk?back=${encodeURIComponent(back)}`}>Add many at once</Link>
       </div>
       <FormMessage error={error} />
       <ItemForm action={saveItem} categories={withCurrent(ctx.categories, ctx.catById, src?.category_id)} sizes={ctx.sizes} labels={sorted}
-        brands={(brands ?? []).map((b: { name: string }) => b.name)} submitLabel="Add item"
+        brands={(brands ?? []).map((b: { name: string }) => b.name)} submitLabel="Add item" back={back}
         defaults={src ? {
           name: src.name, categoryId: src.category_id, brand: srcBrand, quantity: 1, tagId: src.label_id, customTag: src.custom_tag,
           fitFromId: src.fit_from_size_id, fitToId: src.fit_to_size_id, condition: src.condition, gender: src.gender, color: src.color,

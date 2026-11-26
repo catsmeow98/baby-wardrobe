@@ -8,6 +8,7 @@ import { SurveyResults } from '@/components/survey-results';
 import { btnCls } from '@/components/ui';
 import { answersToParams, defaultSizes, displaySize, parseAnswers, sizeWindow } from '@/lib/domain';
 import { applySurvey } from './actions';
+import { safeBack } from '@/lib/back';
 import { defaultBirthMonth, surveyAll } from './compute';
 
 export const metadata: Metadata = { title: 'Goal survey' };
@@ -25,10 +26,12 @@ export default async function SurveyPage({ searchParams }: { searchParams: Promi
   }, defaultBirthMonth(child?.birth_date), defaultSizes(ctx.currentSize));
   const { results, usedForecast, windows, missing, options, gearOptions } = await surveyAll(ctx, answers);
   const qs = answersToParams(answers).toString();
+  const back = safeBack(first(sp.back), '/goals');
 
   return (
     <>
       <div>
+        <p className="mb-1 text-sm"><Link className="text-accent underline" href={back}>← Back to goals</Link></p>
         <h1 className="font-display text-2xl font-bold">Goal survey</h1>
         <p className="text-muted">
           Answer a few questions and get suggested goals{child ? ` for ${child.name}` : ''} for the sizes you pick (they start at the current size). You can change any number afterward on the Goals page.
@@ -44,6 +47,7 @@ export default async function SurveyPage({ searchParams }: { searchParams: Promi
 
       <form method="get" className="grid gap-4 rounded-xl border border-line bg-surface p-4 sm:grid-cols-2">
         <input type="hidden" name="touched" value="1" />
+        <input type="hidden" name="back" value={back} />
         <LifestyleFields answers={answers} hideClimate={Boolean(ctx.settings.monthClasses)} />
         {ctx.settings.monthClasses && (
           <p className="col-span-full text-sm text-muted">Using the weather for {ctx.settings.placeName} to tell cold, cool, mild and warm months apart. <Link className="text-accent underline" href="/account#location">Change location</Link></p>
@@ -63,6 +67,7 @@ export default async function SurveyPage({ searchParams }: { searchParams: Promi
         {child ? (
           <form action={applySurvey} className="flex flex-col gap-3 border-t border-line pt-3">
             <input type="hidden" name="q" value={qs} />
+            <input type="hidden" name="back" value={back} />
             <fieldset className="flex flex-wrap gap-2">
               <legend className="mb-1.5 text-sm text-muted">Save goals for these sizes</legend>
               {answers.sizes.map((s) => (

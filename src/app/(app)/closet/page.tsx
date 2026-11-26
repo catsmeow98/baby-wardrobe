@@ -10,6 +10,8 @@ import { ColorDot } from '@/components/color-dot';
 import { TypeFilters } from '@/components/type-filters';
 import { matchesCategory } from '@/lib/categories';
 import { signedUrls } from '@/lib/photos';
+import { FilterPanel } from '@/components/filter-panel';
+import { currentUrl } from '@/lib/back';
 import { filterItems, fitStateFor, type FitState } from '@/lib/domain';
 
 export const metadata: Metadata = { title: 'Closet' };
@@ -20,6 +22,9 @@ export default async function ClosetPage({ searchParams }: { searchParams: Promi
   const sp = await searchParams;
   const ctx = await getContext();
   if (!ctx.active) return <NoChild />;
+  // Opening an item or the add pages carries this address along, so finishing there comes back to the same filters.
+  const here = currentUrl('/closet', sp);
+  const bk = encodeURIComponent(here);
 
   const [{ data: itemRows }, { data: labelData }, { data: brandData }] = await Promise.all([
     ctx.supabase.from('inventory_items').select('*').eq('child_id', ctx.active.id).order('created_at', { ascending: false }),
@@ -75,6 +80,7 @@ export default async function ClosetPage({ searchParams }: { searchParams: Promi
     if (!a || !b) return 'Unknown';
     return from === to ? sizeName(a) : `${sizeName(a)} to ${sizeName(b)}`;
   };
+  const activeFilters = [sp.fit, sp.group, sp.cat, sp.size, sp.gender, sp.season, sp.color, status !== 'active' ? status : '', sort !== 'new' ? sort : ''].filter(Boolean).length;
   const rowOf = new Map(rows.map((r) => [r.id, r]));
   const fbLabel = (v: number | null | undefined) => FIT_FEEDBACK.find(([k]) => Number(k) === v)?.[1];
 
@@ -90,13 +96,14 @@ export default async function ClosetPage({ searchParams }: { searchParams: Promi
           {sp.photos === 'partial' && <p role="status" className="text-sm text-warn">Items were added, but some photos could not be attached. Open an item to add them again.</p>}
         </div>
         <div className="flex gap-2">
-          <Link className={btnGhostCls} href="/closet/bulk">Bulk add</Link>
-          <Link className={btnCls} href="/closet/new">Add item</Link>
+          <Link className={btnGhostCls} href={`/closet/bulk?back=${bk}`}>Bulk add</Link>
+          <Link className={btnCls} href={`/closet/new?back=${bk}`}>Add item</Link>
         </div>
       </div>
 
-      <form className="flex flex-wrap gap-2" method="get" role="search">
+      <form className="flex flex-wrap items-start gap-2" method="get" role="search">
         <input className={`${inputCls} min-w-48 flex-1`} type="search" name="q" defaultValue={sp.q ?? ''} placeholder="Search name, brand, or notes" aria-label="Search" />
+        <FilterPanel count={activeFilters}>
         <select className={`${inputCls} w-auto`} name="fit" defaultValue={sp.fit ?? ''} aria-label="Fit">
           <option value="">Any fit</option>
           {Object.entries(FIT_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
@@ -126,6 +133,7 @@ export default async function ClosetPage({ searchParams }: { searchParams: Promi
           <option value="type">Item type</option>
           <option value="size">Size</option>
         </select>
+        </FilterPanel>
         <button className={btnGhostCls} type="submit">Filter</button>
         <Link className={btnGhostCls} href="/closet">Clear</Link>
       </form>
@@ -141,7 +149,7 @@ export default async function ClosetPage({ searchParams }: { searchParams: Promi
           {items.length === 0 ? 'Nothing here yet. Add your first item or use bulk add.' : 'Nothing matches these filters.'}
         </div>
       ) : (
-        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <ul className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-3">
           {ordered.map((i) => {
             const state = fitStateFor(i, ctx.currentSize);
             const raw = rowOf.get(i.id)!;
@@ -149,7 +157,7 @@ export default async function ClosetPage({ searchParams }: { searchParams: Promi
             const fb = fbLabel(feedbackById.get(i.id));
             return (
               <li key={i.id}>
-                <Link href={`/closet/${i.id}`} className="flex h-full flex-col gap-1.5 rounded-xl border border-line bg-surface p-3 hover:border-accent">
+                <Link href={`/closet/${i.id}?back=${bk}`} className="flex h-full flex-col gap-1.5 rounded-xl border border-line bg-surface p-2.5 hover:border-accent sm:p-3">
                   {coverPath.has(i.id) && coverUrls.get(coverPath.get(i.id)!) && (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={coverUrls.get(coverPath.get(i.id)!)} alt="" loading="lazy" className={`mb-1 aspect-[4/3] w-full rounded-lg ${coverPath.get(i.id)!.endsWith('.png') ? 'bg-line object-contain' : 'object-cover'}`} />

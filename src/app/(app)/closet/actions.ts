@@ -4,12 +4,17 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { getContext, type Ctx } from '@/lib/context';
+import { safeBack, withParams } from '@/lib/back';
 import type { CategoryRow } from '@/lib/db';
 import { itemSchema, COLOR_VALUES, CONDITION_VALUES, GENDER_VALUES, SEASON_VALUES, STATUS_VALUES } from '@/lib/validation/items';
 import { autoName, parseTagRange, resolveFitRange } from '@/lib/domain';
 import { attachPhotos, discardPhotos } from '@/lib/photo-attach';
 
-const fail = (path: string, message: string): never => redirect(`${path}?error=${encodeURIComponent(message)}`);
+const failWith = (path: string, message: string, back = '/closet'): never =>
+  redirect(`${path}?error=${encodeURIComponent(message)}${back !== '/closet' ? `&back=${encodeURIComponent(back)}` : ''}`);
+const fail = (path: string, message: string): never => failWith(path, message);
+/** Where to return to after a save: the closet with the filters the person had. */
+const backOf = (formData: FormData) => safeBack(formData.get('back'), '/closet');
 
 /** Finds the person's brand by name, ignoring case, or creates it. Returns its id. */
 async function brandId(ctx: Ctx, name: string): Promise<string | null> {
@@ -76,6 +81,8 @@ async function tagOrder(ctx: Ctx, tagId: string | undefined): Promise<number | n
 }
 
 export async function saveItem(formData: FormData) {
+  const backTo = backOf(formData);
+  const fail = (p: string, m: string): never => failWith(p, m, backTo);
   const id = z.string().uuid().safeParse(formData.get('id') || undefined);
   const path = id.success ? `/closet/${id.data}` : '/closet/new';
   const ctx = await getContext();
@@ -126,7 +133,7 @@ export async function saveItem(formData: FormData) {
     const { error } = await ctx.supabase.from('inventory_items').update(row).eq('id', id.data);
     if (error) return fail(path, 'We could not save that item. Check the sizes and try again.');
     revalidatePath('/closet');
-    return redirect('/closet');
+    return redirect(backTo);
   }
   const { data: made, error } = await ctx.supabase.from('inventory_items').insert({ ...row, child_id: ctx.active.id }).select('id').single();
   if (error || !made) return fail(path, 'We could not save that item. Check the sizes and try again.');
@@ -135,24 +142,28 @@ export async function saveItem(formData: FormData) {
   const attached = wanted.length ? await attachPhotos(ctx.supabase, ctx.user.id, ctx.active.id, made.id as string, wanted) : 0;
   revalidatePath('/closet');
   if (attached < wanted.length) {
-    return redirect(`/closet/${made.id}?error=${encodeURIComponent('The item was saved, but some photos could not be added. You can add them below.')}`);
+    return redirect(`/closet/${made.id}?error=${encodeURIComponent('The item was saved, but some photos could not be added. You can add them below.')}${backTo !== '/closet' ? `&back=${encodeURIComponent(backTo)}` : ''}`);
   }
-  return redirect('/closet');
+  return redirect(backTo);
 }
 
 export async function deleteItem(formData: FormData) {
+  const backTo = backOf(formData);
+  const fail = (p: string, m: string): never => failWith(p, m, backTo);
   const id = z.string().uuid().safeParse(formData.get('id'));
   if (!id.success) return fail('/closet', 'That item could not be found.');
   const ctx = await getContext();
   const { error } = await ctx.supabase.from('inventory_items').delete().eq('id', id.data);
   if (error) return fail('/closet', 'We could not delete that item. Try again.');
   revalidatePath('/closet');
-  return redirect('/closet');
+  return redirect(backTo);
 }
 
 const MAX_BULK_ROWS = 50;
 
 export async function bulkCreate(formData: FormData) {
+  const backTo = backOf(formData);
+  const fail = (p: string, m: string): never => failWith(p, m, backTo);
   const path = '/closet/bulk';
   const shared = z
     .object({ condition: z.enum(CONDITION_VALUES), season: z.enum(SEASON_VALUES), status: z.enum(STATUS_VALUES), gender: z.enum(GENDER_VALUES).nullable() })
@@ -234,5 +245,5 @@ export async function bulkCreate(formData: FormData) {
     }
   } else if ([...formData.keys()].some((key) => key.startsWith('photo_'))) photoProblem = true;
   revalidatePath('/closet');
-  return redirect(`/closet?added=${rows.length}${photoProblem ? '&photos=partial' : ''}`);
+  return redirect(withParams(backTo, { added: String(rows.length), photos: photoProblem ? 'partial' : undefined }));
 }

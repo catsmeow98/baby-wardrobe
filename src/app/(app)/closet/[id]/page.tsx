@@ -12,6 +12,7 @@ import { MAX_PHOTOS_PER_ITEM, signedUrls } from '@/lib/photos';
 import { ItemForm } from '../item-form';
 import { deletePhoto } from '../photo-actions';
 import { deleteItem, saveItem } from '../actions';
+import { safeBack } from '@/lib/back';
 
 export const metadata: Metadata = { title: 'Edit item' };
 
@@ -20,10 +21,12 @@ export default async function EditItemPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; back?: string }>;
 }) {
   const { id } = await params;
-  const { error } = await searchParams;
+  const { error, back: rawBack } = await searchParams;
+  const back = safeBack(rawBack, '/closet');
+  const bk = encodeURIComponent(back);
   if (!z.string().uuid().safeParse(id).success) notFound();
   const ctx = await getContext();
   // Row-level security means another account's item comes back empty, exactly like a missing one.
@@ -47,6 +50,7 @@ export default async function EditItemPage({
   const brandName = brandList.find((b) => b.id === item.brand_id)?.name ?? '';
   return (
     <>
+      <p className="text-sm"><Link className="text-accent underline" href={back}>← Back to closet</Link></p>
       <h1 className="font-display text-2xl font-bold">Edit item</h1>
       <FormMessage error={error} />
       <section className="rounded-xl border border-line bg-surface p-4">
@@ -81,13 +85,14 @@ export default async function EditItemPage({
         labels={sorted}
         brands={brandList.map((b) => b.name)}
         submitLabel="Save changes"
+        back={back}
         defaults={{
           id: item.id, name: item.name, categoryId: item.category_id, brand: brandName, quantity: item.quantity,
           tagId: item.label_id, customTag: item.custom_tag, fitFromId: item.fit_from_size_id, fitToId: item.fit_to_size_id, condition: item.condition, gender: item.gender, color: item.color,
           season: item.season, status: item.status, fitOverride: item.fit_override, fitFeedback: item.fit_feedback, notes: item.notes,
         }}
       />
-      <p className="text-sm"><Link className="text-accent underline" href={`/closet/new?from=${item.id}`}>Add another like this</Link></p>
+      <p className="text-sm"><Link className="text-accent underline" href={`/closet/new?from=${item.id}&back=${bk}`}>Add another like this</Link></p>
       {outfitLinks.length > 0 && (
         <p className="text-sm text-muted">
           In outfits: {outfitLinks.map((o, i) => <span key={o.id}>{i > 0 ? ', ' : ''}<Link className="text-accent underline" href={`/outfits/${o.id}`}>{o.name}</Link></span>)}
@@ -97,6 +102,7 @@ export default async function EditItemPage({
         <summary className="cursor-pointer text-muted">Delete this item</summary>
         <form action={deleteItem} className="mt-2 flex flex-col gap-2">
           <input type="hidden" name="id" value={item.id} />
+          <input type="hidden" name="back" value={back} />
           <p className="text-muted">This cannot be undone. To keep a record, set the status to Donated or Sold instead.</p>
           <div><button className="rounded-lg bg-bad-soft px-3 py-1.5 font-bold text-bad" type="submit">Delete item</button></div>
         </form>

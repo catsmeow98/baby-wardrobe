@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { CATEGORY_NAMES, defaultSizes, parseAnswers, type CatKey } from '@/lib/domain';
 import { getContext } from '@/lib/context';
+import { safeBack, withParams } from '@/lib/back';
 import { defaultBirthMonth, surveyAll } from './compute';
 
 /**
@@ -12,7 +13,9 @@ import { defaultBirthMonth, surveyAll } from './compute';
  */
 export async function applySurvey(formData: FormData) {
   const q = String(formData.get('q') ?? '');
-  const stop = (m: string): never => redirect(`/survey?${q}${q ? '&' : ''}error=${encodeURIComponent(m)}`);
+  const back = safeBack(formData.get('back'), '/goals');
+  const backQs = back !== '/goals' ? `&back=${encodeURIComponent(back)}` : '';
+  const stop = (m: string): never => redirect(`/survey?${q}${q ? '&' : ''}error=${encodeURIComponent(m)}${backQs}`);
   const ctx = await getContext();
   if (!ctx.active) return stop('Add a child first.');
   const child = ctx.active;
@@ -43,5 +46,5 @@ export async function applySurvey(formData: FormData) {
   const { error } = await ctx.supabase.from('wardrobe_goals').upsert(goals, { onConflict: 'child_id,category_id,size_id' });
   if (error) return stop('We could not save those goals. Try again.');
   ['/goals', '/shopping', '/dashboard', '/survey'].forEach((path) => revalidatePath(path));
-  return redirect(`/goals?size=${chosen[0]}&saved=1`);
+  return redirect(withParams(back, { size: String(chosen[0]), saved: '1' }));
 }
