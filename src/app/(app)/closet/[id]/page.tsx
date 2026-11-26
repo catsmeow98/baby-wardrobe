@@ -42,8 +42,8 @@ export default async function EditItemPage({
   );
   const brandList = (brands ?? []) as { id: string; name: string }[];
   const { data: photoRows } = await ctx.supabase
-    .from('inventory_photos').select('id, storage_path').eq('inventory_item_id', item.id).order('sort_order');
-  const photos = (photoRows ?? []) as { id: string; storage_path: string }[];
+    .from('inventory_photos').select('id, storage_path, original_path').eq('inventory_item_id', item.id).order('sort_order');
+  const photos = (photoRows ?? []) as { id: string; storage_path: string; original_path: string | null }[];
   const urls = await signedUrls(ctx.supabase, photos.map((p) => p.storage_path));
   const { data: inOutfits } = await ctx.supabase.from('outfit_items').select('outfits(id, name)').eq('item_id', item.id);
   const outfitLinks = ((inOutfits ?? []) as unknown as { outfits: { id: string; name: string } | null }[]).flatMap((r) => (r.outfits ? [r.outfits] : []));
@@ -66,7 +66,7 @@ export default async function EditItemPage({
                   <div className="flex aspect-square items-center justify-center rounded-lg bg-line text-sm text-muted">Unavailable</div>
                 )}
                 <div className="flex flex-wrap items-center gap-3">
-                  {urls.get(p.storage_path) && <PhotoEditButton photoId={p.id} url={urls.get(p.storage_path)!} userId={ctx.user.id} childId={item.child_id} />}
+                  {urls.get(p.storage_path) && <PhotoEditButton photoId={p.id} url={urls.get(p.storage_path)!} originalPath={p.original_path ?? undefined} userId={ctx.user.id} childId={item.child_id} />}
                   <form action={deletePhoto}>
                     <input type="hidden" name="photoId" value={p.id} />
                     <button type="submit" className="text-sm text-bad underline">Delete photo</button>

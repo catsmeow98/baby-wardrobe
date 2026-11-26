@@ -144,7 +144,7 @@ export function PhotoTouchUp({ blob, original, onDone, onCancel }: {
             <input type="range" min={8} max={80} value={size} onChange={(e) => setSize(Number(e.target.value))} aria-label="Brush size" />
           </label>
         </div>
-        {!canRestore && <p className="text-sm text-muted">Restore is only available right after you add a photo, while the original is still held. This one can be erased.</p>}
+        {!canRestore && <p className="text-sm text-muted">This photo has no stored original (it was added before originals were kept, or without background removal), so it can only be erased.</p>}
         {error && <p role="alert" className="text-sm text-bad">{error}</p>}
         <div className="flex gap-2">
           <button type="button" className={btnCls} disabled={!ready} onClick={done}>Done</button>

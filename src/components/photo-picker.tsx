@@ -2,13 +2,17 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { extOf, processPhoto } from '@/lib/photo-client';
+import { processPhoto } from '@/lib/photo-client';
+import { uploadPhoto } from '@/lib/photo-upload';
+import { joinPhotoField, pathsOf } from '@/lib/photo-paths';
 import { MAX_PHOTOS_PER_ITEM, PHOTO_BUCKET } from '@/lib/photos';
 import { btnGhostCls } from '@/components/ui';
 import { PhotoEditor } from '@/components/photo-editor';
 
 interface Picked {
   path: string;
+  /** Where the original (with its background) is stored, when it was kept. */
+  originalPath?: string;
   preview: string;
   blob: Blob;
   /** The photo with its background, when blob is a cutout. */
@@ -50,13 +54,13 @@ export function PhotoPicker({ userId, childId, name, label = 'Add photos', max =
         continue;
       }
       if (done.failed) setError(`The background could not be removed, so the original photo was used.${done.reason ? ` (${done.reason.slice(0, 160)})` : ''}`);
-      const path = `${userId}/${childId}/${crypto.randomUUID()}.${extOf(done.blob)}`;
-      const { error: upErr } = await supabase.storage.from(PHOTO_BUCKET).upload(path, done.blob, { contentType: done.blob.type });
-      if (upErr) {
+      const original = done.cutout ? done.original : undefined;
+      const ref = await uploadPhoto(supabase, userId, childId, done.blob, original);
+      if (!ref) {
         setError('The upload failed. Check your connection and try again.');
         continue;
       }
-      added.push({ path, preview: URL.createObjectURL(done.blob), blob: done.blob, original: done.cutout ? done.original : undefined });
+      added.push({ ...ref, preview: URL.createObjectURL(done.blob), blob: done.blob, original });
     }
     setPicked((p) => [...p, ...added]);
     setBusy(false);
@@ -65,24 +69,23 @@ export function PhotoPicker({ userId, childId, name, label = 'Add photos', max =
   async function remove(p: Picked) {
     setPicked((list) => list.filter((x) => x.path !== p.path));
     URL.revokeObjectURL(p.preview);
-    await createClient().storage.from(PHOTO_BUCKET).remove([p.path]);
+    await createClient().storage.from(PHOTO_BUCKET).remove(pathsOf(p));
   }
 
-  /** Uploads the edited photo, swaps it in, and deletes the file it replaces. */
-  async function saveEdit(old: Picked, result: Blob) {
-    const path = `${userId}/${childId}/${crypto.randomUUID()}.${extOf(result)}`;
+  /** Uploads the edited photo (and its matching original), swaps it in, and deletes the files it replaces. */
+  async function saveEdit(old: Picked, result: Blob, original?: Blob) {
     const supabase = createClient();
-    const { error: upErr } = await supabase.storage.from(PHOTO_BUCKET).upload(path, result, { contentType: result.type });
-    if (upErr) throw new Error('upload');
+    const ref = await uploadPhoto(supabase, userId, childId, result, original);
+    if (!ref) throw new Error('upload');
     URL.revokeObjectURL(old.preview);
-    setPicked((list) => list.map((x) => (x.path === old.path ? { path, preview: URL.createObjectURL(result), blob: result, original: old.original } : x)));
+    setPicked((list) => list.map((x) => (x.path === old.path ? { ...ref, preview: URL.createObjectURL(result), blob: result, original } : x)));
     setEditing(null);
-    await supabase.storage.from(PHOTO_BUCKET).remove([old.path]);
+    await supabase.storage.from(PHOTO_BUCKET).remove(pathsOf(old));
   }
 
   return (
     <div className="flex flex-col gap-2">
-      {picked.map((p) => <input key={p.path} type="hidden" name={name} value={p.path} />)}
+      {picked.map((p) => <input key={p.path} type="hidden" name={name} value={joinPhotoField(p.path, p.originalPath)} />)}
       {/* Blocks submit while uploading. Not read-only, because read-only fields skip validation. */}
       <input ref={guard} className="sr-only" tabIndex={-1} aria-hidden="true" value="ok" onChange={() => undefined} required />
       {picked.length > 0 && (
@@ -107,7 +110,7 @@ export function PhotoPicker({ userId, childId, name, label = 'Add photos', max =
         </div>
       )}
       {error && <p role="alert" className="text-sm text-bad">{error}</p>}
-      {editing && <PhotoEditor blob={editing.blob} original={editing.original} onSave={(r) => saveEdit(editing, r)} onCancel={() => setEditing(null)} />}
+      {editing && <PhotoEditor blob={editing.blob} original={editing.original} onSave={(r, o) => saveEdit(editing, r, o)} onCancel={() => setEditing(null)} />}
     </div>
   );
 }

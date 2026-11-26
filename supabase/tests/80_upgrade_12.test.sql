@@ -134,3 +134,12 @@ begin
   if not failed then raise exception 'FAILED: over-long answers must be rejected'; end if;
   raise notice 'SURVEY ANSWERS CHECKS PASSED (migration 14 ran twice)';
 end $$;
+
+-- Migration 15: photos can keep an original; running it twice is harmless.
+\i migrations/20260101000015_photo_originals.sql
+\i migrations/20260101000015_photo_originals.sql
+do $$
+begin
+  if not exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'inventory_photos' and column_name = 'original_path') then raise exception 'FAILED: original_path column'; end if;
+  raise notice 'PHOTO ORIGINAL CHECKS PASSED (migration 15 ran twice)';
+end $$;

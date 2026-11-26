@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Cropper, { type Area } from 'react-easy-crop';
-import { cropBlob, rotateBlob } from '@/lib/photo-client';
+import { alignOriginal, cropBlob, rotateBlob } from '@/lib/photo-client';
 import { PhotoTouchUp } from '@/components/photo-touchup';
 import { btnCls, btnGhostCls } from '@/components/ui';
 
@@ -14,7 +14,8 @@ export function PhotoEditor({ blob, original, onSave, onCancel }: {
   blob: Blob;
   /** The photo with its background, when blob is a cutout. */
   original?: Blob;
-  onSave: (result: Blob) => Promise<void>;
+  /** The finished picture, and its original turned and cropped to match (when there is one), to be stored with it. */
+  onSave: (result: Blob, original?: Blob) => Promise<void>;
   onCancel: () => void;
 }) {
   const [cur, setCur] = useState<Blob>(blob);
@@ -29,6 +30,8 @@ export function PhotoEditor({ blob, original, onSave, onCancel }: {
   /** Quarter turns applied to the current picture, so the original can be turned to match before restoring. */
   const [turns, setTurns] = useState(0);
   const [matched, setMatched] = useState<Blob | undefined>(original);
+  /** True while the picture on screen is the original with its background (even after turning it). */
+  const [showingOriginal, setShowingOriginal] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -71,7 +74,17 @@ export function PhotoEditor({ blob, original, onSave, onCancel }: {
     setBusy(true);
     setError(null);
     try {
-      await onSave(area ? await cropBlob(cur, area) : cur);
+      const result = area ? await cropBlob(cur, area) : cur;
+      let aligned: Blob | undefined;
+      if (original) {
+        if (showingOriginal) aligned = result; // the saved picture is the original itself
+        else {
+          const size = await createImageBitmap(cur);
+          aligned = await alignOriginal(original, turns, area, { width: size.width, height: size.height });
+          size.close();
+        }
+      }
+      await onSave(result, aligned);
     } catch {
       setError('We could not save that photo. Try again.');
       setBusy(false);
@@ -79,7 +92,6 @@ export function PhotoEditor({ blob, original, onSave, onCancel }: {
   };
 
   const options: [string, 'whole' | number][] = [['Whole photo', 'whole'], ['Square', 1], ['4:3', 4 / 3], ['3:4', 3 / 4]];
-  const showingOriginal = original !== undefined && cur === original;
 
   return (
     <div role="dialog" aria-modal="true" aria-label="Edit photo" className="fixed inset-0 z-50 flex flex-col bg-black/80 p-3">
@@ -102,7 +114,7 @@ export function PhotoEditor({ blob, original, onSave, onCancel }: {
           <button type="button" className={btnGhostCls} disabled={busy} onClick={() => turn(3)}>Rotate left</button>
           <button type="button" className={btnGhostCls} disabled={busy} onClick={() => turn(1)}>Rotate right</button>
           {original && (
-            <button type="button" className={btnGhostCls} disabled={busy} onClick={() => { setTurns(0); setCur(showingOriginal ? blob : original); }}>
+            <button type="button" className={btnGhostCls} disabled={busy} onClick={() => { setTurns(0); setCur(showingOriginal ? blob : original); setShowingOriginal(!showingOriginal); }}>
               {showingOriginal ? 'Use cutout' : 'Use original (with background)'}
             </button>
           )}

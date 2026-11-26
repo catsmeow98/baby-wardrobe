@@ -43,9 +43,9 @@ export async function removeAllPhotos(supabase: SupabaseClient, userId: string):
  * kept, because an upload in progress has a file before its database row. Returns how many were removed, or null on failure.
  */
 export async function removeOrphanPhotos(supabase: SupabaseClient, userId: string): Promise<number | null> {
-  const { data: rows, error: rowsError } = await supabase.from('inventory_photos').select('storage_path');
+  const { data: rows, error: rowsError } = await supabase.from('inventory_photos').select('storage_path, original_path');
   if (rowsError) return null;
-  const used = new Set((rows ?? []).map((r: { storage_path: string }) => r.storage_path));
+  const used = new Set((rows ?? []).flatMap((r: { storage_path: string; original_path: string | null }) => (r.original_path ? [r.storage_path, r.original_path] : [r.storage_path])));
   const old: string[] = [];
   const queue = [userId];
   const cutoff = Date.now() - 3_600_000;

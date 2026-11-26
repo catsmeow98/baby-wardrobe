@@ -7,7 +7,9 @@ import { PhotoPicker } from '@/components/photo-picker';
 import { PhotoEditor } from '@/components/photo-editor';
 import { TagSizeField, type TagValue } from '@/components/tag-size-field';
 import { createClient } from '@/lib/supabase/client';
-import { extOf, processPhoto } from '@/lib/photo-client';
+import { processPhoto } from '@/lib/photo-client';
+import { downloadOriginal, uploadPhoto } from '@/lib/photo-upload';
+import { joinPhotoField, pathsOf } from '@/lib/photo-paths';
 import { PHOTO_BUCKET } from '@/lib/photos';
 import { btnCls, btnGhostCls, inputCls, labelCls } from '@/components/ui';
 import { COLORS, sizeName } from '@/lib/db';
@@ -15,12 +17,10 @@ import type { CategoryRow, SizeLabelRow, SizeRow } from '@/lib/db';
 
 const MAX_ROWS = 50;
 const START_ROWS = 5;
-/** Originals (with background) are held in memory for Restore. Past this many, later photos can be erased but not restored. */
-const MAX_HELD_ORIGINALS = 12;
 
 interface Row {
   id: number;
-  photo: { path: string; preview: string; blob: Blob; original?: Blob } | null;
+  photo: { path: string; originalPath?: string; preview: string; blob: Blob } | null;
 }
 
 /**
@@ -43,7 +43,6 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const rowCount = useRef(START_ROWS);
-  const heldOriginals = useRef(0);
   rowCount.current = rows.length;
   const file = useRef<HTMLInputElement>(null);
   const guard = useRef<HTMLInputElement>(null);
@@ -73,21 +72,18 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
       try {
         const done = await processPhoto(files[k], removeBg);
         blob = done.blob;
-        if (done.cutout && heldOriginals.current < MAX_HELD_ORIGINALS) {
-          original = done.original;
-          heldOriginals.current++;
-        }
+        if (done.cutout) original = done.original;
       } catch {
         skipped++;
         continue;
       }
-      const path = `${userId}/${childId}/${crypto.randomUUID()}.${extOf(blob)}`;
-      const { error: upErr } = await supabase.storage.from(PHOTO_BUCKET).upload(path, blob, { contentType: blob.type });
-      if (upErr) {
+      // The original is stored with the cutout, so Restore works later. It is not kept in memory.
+      const ref = await uploadPhoto(supabase, userId, childId, blob, original);
+      if (!ref) {
         skipped++;
         continue;
       }
-      const photo = { path, preview: URL.createObjectURL(blob), blob, original };
+      const photo = { ...ref, preview: URL.createObjectURL(blob), blob };
       added++;
       setRows((list) => {
         // New photo rows go after the last row that already has a photo, ahead of the blank rows.
@@ -102,23 +98,21 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
   async function removeRow(row: Row) {
     setRows((list) => list.filter((r) => r.id !== row.id));
     if (row.photo) {
-      if (row.photo.original) heldOriginals.current--;
       URL.revokeObjectURL(row.photo.preview);
-      await createClient().storage.from(PHOTO_BUCKET).remove([row.photo.path]);
+      await createClient().storage.from(PHOTO_BUCKET).remove(pathsOf(row.photo));
     }
   }
 
-  /** Uploads the edited photo for a row, swaps it in, and deletes the file it replaces. */
-  async function savePhoto(row: Row, result: Blob) {
+  /** Uploads the edited photo for a row (and its matching original), swaps it in, and deletes the files it replaces. */
+  async function savePhoto(row: Row, result: Blob, original?: Blob) {
     if (!row.photo) return;
-    const path = `${userId}/${childId}/${crypto.randomUUID()}.${extOf(result)}`;
     const supabase = createClient();
-    const { error: upErr } = await supabase.storage.from(PHOTO_BUCKET).upload(path, result, { contentType: result.type });
-    if (upErr) throw new Error('upload');
+    const ref = await uploadPhoto(supabase, userId, childId, result, original);
+    if (!ref) throw new Error('upload');
     const old = row.photo;
     URL.revokeObjectURL(old.preview);
-    setRows((list) => list.map((r) => (r.id === row.id ? { ...r, photo: { path, preview: URL.createObjectURL(result), blob: result, original: old.original } } : r)));
-    await supabase.storage.from(PHOTO_BUCKET).remove([old.path]);
+    setRows((list) => list.map((r) => (r.id === row.id ? { ...r, photo: { ...ref, preview: URL.createObjectURL(result), blob: result } } : r)));
+    await supabase.storage.from(PHOTO_BUCKET).remove(pathsOf(old));
   }
 
   const addBlank = () => setRows((list) => (list.length >= MAX_ROWS ? list : [...list, { id: nextId.current++, photo: null }]));
@@ -142,7 +136,7 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
       </section>
 
       {rows.map((row, pos) => (
-        <BulkRow key={row.id} row={row} pos={pos} onRemove={() => removeRow(row)} onSavePhoto={(r) => savePhoto(row, r)} userId={userId} childId={childId}
+        <BulkRow key={row.id} row={row} pos={pos} onRemove={() => removeRow(row)} onSavePhoto={(r, o) => savePhoto(row, r, o)} userId={userId} childId={childId}
           categories={categories} labels={labels} sizes={sizes} defaultTagId={defaultTagId} brands={brands} removeBg={removeBg} />
       ))}
 
@@ -159,7 +153,7 @@ function BulkRow({ row, pos, onRemove, onSavePhoto, userId, childId, categories,
   row: Row;
   pos: number;
   onRemove: () => void;
-  onSavePhoto: (result: Blob) => Promise<void>;
+  onSavePhoto: (result: Blob, original?: Blob) => Promise<void>;
   userId: string;
   childId: string;
   categories: CategoryRow[];
@@ -171,16 +165,36 @@ function BulkRow({ row, pos, onRemove, onSavePhoto, userId, childId, categories,
 }) {
   const [tag, setTag] = useState<TagValue>({ tagId: defaultTagId, custom: false, text: '' });
   const [editing, setEditing] = useState(false);
+  const [original, setOriginal] = useState<Blob | undefined>();
+  const [opening, setOpening] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+
+  /** Opens the editor. The stored original (if there is one) is fetched first, so Restore works. */
+  async function openEditor() {
+    if (!row.photo) return;
+    setEditError(null);
+    setOpening(true);
+    let found: Blob | null = null;
+    if (row.photo.originalPath) found = await downloadOriginal(createClient(), row.photo.originalPath);
+    setOpening(false);
+    if (row.photo.originalPath && !found) {
+      setEditError('The original photo could not be loaded. Check your connection and try again.');
+      return;
+    }
+    setOriginal(found ?? undefined);
+    setEditing(true);
+  }
   return (
     <fieldset className="grid gap-3 rounded-xl border border-line bg-surface p-4 sm:grid-cols-6">
       <legend className="px-1 text-xs text-muted">Row {pos + 1}</legend>
       {row.photo && (
         <div className="relative sm:col-span-6">
-          <input type="hidden" name={`photo_${pos}`} value={row.photo.path} />
+          <input type="hidden" name={`photo_${pos}`} value={joinPhotoField(row.photo.path, row.photo.originalPath)} />
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={row.photo.preview} alt={`Photo for row ${pos + 1}`} className="size-24 rounded-lg object-cover" />
-          <button type="button" className="mt-1 text-sm text-accent underline" onClick={() => setEditing(true)}>Edit photo</button>
-          {editing && <PhotoEditor blob={row.photo.blob} original={row.photo.original} onSave={async (r) => { await onSavePhoto(r); setEditing(false); }} onCancel={() => setEditing(false)} />}
+          <button type="button" className="mt-1 text-sm text-accent underline" disabled={opening} onClick={openEditor}>{opening ? 'Opening…' : 'Edit photo'}</button>
+          {editError && <p role="alert" className="text-sm text-bad">{editError}</p>}
+          {editing && <PhotoEditor blob={row.photo.blob} original={original} onSave={async (r, o) => { await onSavePhoto(r, o); setEditing(false); }} onCancel={() => setEditing(false)} />}
         </div>
       )}
       <CategoryPicker categories={categories} name={`cat_${pos}`} className={`${labelCls} sm:col-span-2`} allowNew />

@@ -97,3 +97,16 @@ export async function cropBlob(blob: Blob, area: CropArea): Promise<Blob> {
   bmp.close();
   return encode(canvas, blob.type === 'image/png' ? 'image/png' : 'image/jpeg', 0.85);
 }
+
+/**
+ * The original, turned and cropped the same way as the edited picture, so Restore keeps lining up after the picture is saved.
+ * area is in the edited picture's own pixels, and is scaled to the original's size (they can differ: the original is larger).
+ */
+export async function alignOriginal(original: Blob, turns: number, area: CropArea | null, edited: { width: number; height: number }): Promise<Blob> {
+  const turned = ((turns % 4) + 4) % 4 === 0 ? original : await rotateBlob(original, turns);
+  if (!area) return turned;
+  const bmp = await createImageBitmap(turned);
+  const scaled = scaleBox(area, bmp.width / edited.width, bmp.height / edited.height);
+  bmp.close();
+  return cropBlob(turned, scaled);
+}

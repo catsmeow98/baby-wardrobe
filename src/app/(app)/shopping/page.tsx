@@ -14,6 +14,7 @@ import { SHOPPING_STATUS, sizeName } from '@/lib/db';
 import type { GoalRow, ItemRow, ShoppingRow } from '@/lib/db';
 import { goalProgress } from '@/lib/domain';
 import { currentUrl } from '@/lib/back';
+import { buildNeedsTable } from '@/lib/needs-table';
 import { addShoppingItem, cancelItem, markOrdered, orderFromGap, receiveDelivery } from './actions';
 
 export const metadata: Metadata = { title: 'Shopping' };
@@ -50,6 +51,7 @@ export default async function ShoppingPage({ searchParams }: { searchParams: Pro
     ...open.filter((s) => s.status === 'needed').map((s) => ({ n: s.quantity_needed, type: ctx.catById.get(s.category_id)?.name ?? 'Item', size: ctx.sizeById.get(s.size_id) })),
   ];
   const listText = wanted.map((w) => `${w.n}× ${w.type}, size ${w.size ? sizeName(w.size) : '?'}`).join('\n');
+  const needs = buildNeedsTable(gaps, ctx.categories.map((c) => c.id));
   const nextSize = ctx.sizeByOrder.get(Math.min((ctx.currentSize ?? 0) + 1, ctx.sizes.length - 1));
 
   const row = (s: ShoppingRow, finished: boolean) => {
@@ -109,6 +111,48 @@ export default async function ShoppingPage({ searchParams }: { searchParams: Pro
         {filtering && <Link className={btnGhostCls} href="/shopping">Clear</Link>}
         <CopyButton text={listText} label="Copy list" />
       </form>
+
+      <section className="rounded-xl border border-line bg-surface p-4">
+        <h2 className="font-display text-lg font-bold">Needs by item and size</h2>
+        <p className="text-sm text-muted">What is still to buy: each goal minus what you own and what is already on order. Sizes start at {child.name}&apos;s current size.</p>
+        {needs.rows.length === 0 ? (
+          <p className="py-4 text-center text-muted">{filtering ? 'Nothing is needed for these filters.' : 'Nothing is needed right now.'}</p>
+        ) : (
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full min-w-max border-collapse text-sm">
+              <thead>
+                <tr>
+                  <th scope="col" className="sticky left-0 bg-surface py-2 pr-3 text-left font-medium text-muted">Item</th>
+                  {needs.sizes.map((n) => {
+                    const size = ctx.sizeByOrder.get(n);
+                    return <th key={n} scope="col" className="px-3 py-2 text-center font-medium text-muted">{size ? sizeName(size) : '?'}</th>;
+                  })}
+                  <th scope="col" className="px-3 py-2 text-center font-semibold">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {needs.rows.map((r) => (
+                  <tr key={r.categoryId} className="border-t border-line">
+                    <th scope="row" className="sticky left-0 bg-surface py-2 pr-3 text-left font-medium">{ctx.catById.get(r.categoryId)?.name ?? 'Item'}</th>
+                    {needs.sizes.map((n) => {
+                      const v = r.cells.get(n);
+                      return <td key={n} className={`px-3 py-2 text-center tabular-nums ${v ? 'font-semibold' : 'text-muted'}`}>{v ?? '–'}</td>;
+                    })}
+                    <td className="px-3 py-2 text-center font-semibold tabular-nums">{r.total}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-line">
+                  <th scope="row" className="sticky left-0 bg-surface py-2 pr-3 text-left font-semibold">Total</th>
+                  {needs.sizes.map((n) => <td key={n} className="px-3 py-2 text-center font-semibold tabular-nums">{needs.columnTotals.get(n) ?? 0}</td>)}
+                  <td className="px-3 py-2 text-center font-bold tabular-nums">{needs.grandTotal}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </section>
 
       <section className="rounded-xl border border-line bg-surface p-4">
         <h2 className="font-display text-lg font-bold">Gaps from your goals</h2>

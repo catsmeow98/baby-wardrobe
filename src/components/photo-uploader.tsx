@@ -3,8 +3,8 @@
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { PHOTO_BUCKET } from '@/lib/photos';
-import { extOf, processPhoto } from '@/lib/photo-client';
+import { processPhoto } from '@/lib/photo-client';
+import { uploadPhoto } from '@/lib/photo-upload';
 import { btnGhostCls } from '@/components/ui';
 import { addPhoto } from '@/app/(app)/closet/photo-actions';
 
@@ -23,21 +23,22 @@ export function PhotoUploader({ itemId, userId, childId, remaining, removeBg = f
     const supabase = createClient();
     for (const file of files) {
       let blob: Blob;
+      let original: Blob | undefined;
       try {
         const done = await processPhoto(file, removeBg);
         blob = done.blob;
+        if (done.cutout) original = done.original;
         if (done.failed) setError(`The background could not be removed, so the original photo was used.${done.reason ? ` (${done.reason.slice(0, 160)})` : ''}`);
       } catch {
         setError('That image could not be read. Try a JPEG or PNG photo.');
         continue;
       }
-      const path = `${userId}/${childId}/${crypto.randomUUID()}.${extOf(blob)}`;
-      const { error: upErr } = await supabase.storage.from(PHOTO_BUCKET).upload(path, blob, { contentType: blob.type });
-      if (upErr) {
+      const ref = await uploadPhoto(supabase, userId, childId, blob, original);
+      if (!ref) {
         setError('The upload failed. Check your connection and try again.');
         continue;
       }
-      const res = await addPhoto(itemId, path);
+      const res = await addPhoto(itemId, ref.path, ref.originalPath);
       if (!res.ok) setError(res.error);
     }
     setBusy(false);

@@ -159,6 +159,9 @@ begin
   insert into public.inventory_photos (inventory_item_id, storage_path) values (it, t.fxv('A')::text || '/child/photo.jpg');
   perform t.fails(format($q$insert into public.inventory_photos (inventory_item_id, storage_path) values (%L, 'someone-else/photo.jpg')$q$, it),
                   'photo path must start with the user id', '42501');
+  insert into public.inventory_photos (inventory_item_id, storage_path, original_path) values (it, t.fxv('A')::text || '/child/p2.png', t.fxv('A')::text || '/child/p2-o.jpg');
+  perform t.fails(format($q$insert into public.inventory_photos (inventory_item_id, storage_path, original_path) values (%L, %L, 'someone-else/o.jpg')$q$, it, t.fxv('A')::text || '/child/p3.png'),
+                  'original path must start with the user id', '42501');
   insert into t.fx values ('itemA', it);
 end $$;
 
