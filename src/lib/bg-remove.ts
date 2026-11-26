@@ -1,4 +1,4 @@
-import { alphaBounds, refineMask, worthCropping, type Box } from '@/lib/mask-clean';
+import { refineMask } from '@/lib/mask-clean';
 
 /**
  * The one place that knows how backgrounds are removed. Runs in the browser, loaded only when a photo is picked with the
@@ -55,13 +55,8 @@ const canvasOf = (w: number, h: number) => {
   return { c, ctx };
 };
 
-/** The cutout, and the rectangle (in the input photo's pixels) it was cropped to, or null when it was not cropped. */
-export interface Cutout {
-  blob: Blob;
-  box: Box | null;
-}
-
-export async function removeBackgroundFrom(image: Blob): Promise<Cutout> {
+/** The cutout keeps the photo's full frame (transparent where the background was), so it always lines up with the original. */
+export async function removeBackgroundFrom(image: Blob): Promise<Blob> {
   const { ort, session } = await load();
   const bmp = await createImageBitmap(image);
   const w = bmp.width;
@@ -122,22 +117,7 @@ export async function removeBackgroundFrom(image: Blob): Promise<Cutout> {
   const result = canvasOf(w, h);
   result.ctx.drawImage(bmp, 0, 0, w, h);
   const px = result.ctx.getImageData(0, 0, w, h);
-  const alpha = new Uint8Array(w * h);
-  for (let i = 0; i < w * h; i++) {
-    alpha[i] = mask[i * 4];
-    px.data[i * 4 + 3] = alpha[i];
-  }
+  for (let i = 0; i < w * h; i++) px.data[i * 4 + 3] = mask[i * 4];
   result.ctx.putImageData(px, 0, 0);
-
-  // Crop tight to the item (with a margin) when it leaves real room around it.
-  const found = alphaBounds(alpha, w, h);
-  const box = found && worthCropping(found, w, h) ? found : null;
-  let source = result.c;
-  if (box) {
-    const cropped = canvasOf(box.width, box.height);
-    cropped.ctx.drawImage(result.c, box.x, box.y, box.width, box.height, 0, 0, box.width, box.height);
-    source = cropped.c;
-  }
-  const blob = await new Promise<Blob>((resolve, reject) => source.toBlob((b) => (b ? resolve(b) : reject(new Error('encode failed'))), 'image/png'));
-  return { blob, box };
+  return new Promise((resolve, reject) => result.c.toBlob((b) => (b ? resolve(b) : reject(new Error('encode failed'))), 'image/png'));
 }
