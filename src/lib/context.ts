@@ -21,7 +21,7 @@ export async function getContext() {
     supabase.from('category_groups').select('id, name, sort_order, owner_id'),
     supabase.from('user_category_prefs').select('category_id, name, group_id, hidden'),
     supabase.from('user_group_prefs').select('group_id, name, hidden'),
-    supabase.from('user_settings').select('remove_background, place_name, month_classes').maybeSingle(),
+    supabase.from('user_settings').select('remove_background, place_name, month_classes, setup_dismissed_at').maybeSingle(),
   ]);
   const children = (kids ?? []) as ChildRow[];
   const sizes = (sizeData ?? []) as SizeRow[];
@@ -56,11 +56,12 @@ export async function getContext() {
   const currentSize = active?.current_size_id ? (orderOf.get(active.current_size_id) ?? null) : null;
 
   // Account settings. Without a row (or before migration 11 is run) the defaults apply: remove backgrounds, no location.
-  const s = settingsRow as { remove_background: boolean; place_name: string | null; month_classes: string[] | null } | null;
+  const s = settingsRow as { remove_background: boolean; place_name: string | null; month_classes: string[] | null; setup_dismissed_at: string | null } | null;
   const settings: Settings = {
     removeBackground: s?.remove_background ?? true,
     placeName: s?.place_name ?? null,
     monthClasses: s?.month_classes && s.month_classes.length === 12 ? (s.month_classes as MonthClass[]) : null,
+    setupDismissedAt: s?.setup_dismissed_at ?? null,
   };
 
   return { supabase, user, settings, children, active, sizes, categories, allCategories, groups, allGroups, orderOf, sizeById, sizeByOrder, catById, currentSize };
@@ -72,6 +73,8 @@ export interface Settings {
   placeName: string | null;
   /** How each calendar month feels there, January first. Null when no location is set. */
   monthClasses: MonthClass[] | null;
+  /** When the person dismissed the setup guide. Null when they have not. */
+  setupDismissedAt: string | null;
 }
 export type Ctx = Awaited<ReturnType<typeof getContext>>;
 

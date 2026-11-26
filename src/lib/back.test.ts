@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { currentUrl, safeBack, withParams } from './back';
+import { safeBackAny, currentUrl, safeBack, withParams } from './back';
 
 test('currentUrl keeps filters and drops one-time messages', () => {
   assert.equal(currentUrl('/closet', { group: 'g1', q: 'bib', error: 'x', added: '3' }), '/closet?group=g1&q=bib');
@@ -25,4 +25,13 @@ test('withParams sets and replaces values', () => {
   assert.equal(withParams('/goals?size=2&group=g', { size: '4', saved: '1' }), '/goals?size=4&group=g&saved=1');
   assert.equal(withParams('/shopping', { ok: 'Done.' }), '/shopping?ok=Done.');
   assert.equal(withParams('/shopping?ok=a', { ok: undefined }), '/shopping');
+});
+
+test('safeBackAny accepts an address under any listed section and nothing else', () => {
+  const B = ['/goals', '/welcome'];
+  assert.equal(safeBackAny('/welcome?step=goals', B, '/goals'), '/welcome?step=goals');
+  assert.equal(safeBackAny('/welcome?step=goals&saved=1&size=3', B, '/goals'), '/welcome?step=goals&size=3');
+  assert.equal(safeBackAny('/goals?size=2', B, '/goals'), '/goals?size=2');
+  assert.equal(safeBackAny('/welcome?x=\\y', B, '/goals'), '/welcome'); // malformed, but still inside the section: the section's own page
+  for (const bad of ['/welcomeevil', '//evil.example', 'https://evil.example', '/closet', undefined, 5]) assert.equal(safeBackAny(bad, B, '/goals'), '/goals', String(bad));
 });

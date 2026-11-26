@@ -37,3 +37,10 @@ export function withParams(url: string, params: Record<string, string | undefine
   const s = q.toString();
   return s ? `${path}?${s}` : path;
 }
+
+/** Like safeBack, for a page that can be reached from more than one section. The first base the address belongs under wins. */
+export function safeBackAny(raw: unknown, bases: readonly string[], fallback: string): string {
+  if (typeof raw !== 'string') return fallback;
+  const base = bases.find((b) => raw === b || raw.startsWith(`${b}?`));
+  return base ? safeBack(raw, base) : fallback;
+}

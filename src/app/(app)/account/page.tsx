@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { z } from 'zod';
 import { getContext } from '@/lib/context';
 import { FormMessage } from '@/components/form-message';
@@ -46,6 +47,14 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
         <p className="text-muted">Signed in as {ctx.user.email}.</p>
       </div>
       <FormMessage error={error} message={ok} />
+
+      <section id="setup" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-surface p-4">
+        <div>
+          <h2 className="font-display text-lg font-bold">Setup guide</h2>
+          <p className="text-sm text-muted">Location, children, a first measurement, goals and your closet, one question at a time. Run it again any time to change your answers.</p>
+        </div>
+        <Link className={btnGhostCls} href="/welcome">Open the setup guide</Link>
+      </section>
 
       {grown && grownSize && tooSmall > 0 && (
         <section role="status" className="flex flex-col gap-3 rounded-xl border border-accent bg-accent-soft p-4">

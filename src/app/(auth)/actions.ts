@@ -32,7 +32,8 @@ export async function signIn(formData: FormData) {
 }
 
 export async function signUp(formData: FormData) {
-  const next = safeNext(String(formData.get('next') ?? ''));
+  // A new account starts in the setup guide unless the sign-up link says where to go.
+  const next = safeNext(String(formData.get('next') ?? ''), '/welcome');
   const parsed = z.object({ email, password }).safeParse({
     email: formData.get('email'),
     password: formData.get('password'),

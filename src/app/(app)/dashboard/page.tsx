@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { getContext, toGoals, toInventory, toShopping } from '@/lib/context';
 import { NoChild } from '@/components/no-child';
+import { SetupBanner } from '@/components/setup-banner';
 import { Pill } from '@/components/pill';
 import { ProgressBar } from '@/components/progress-bar';
 import { btnCls, btnGhostCls } from '@/components/ui';
@@ -27,7 +28,7 @@ const FIT_ORDER: FitState[] = ['fits', 'small', 'notyet', 'outgrown', 'unknown']
 
 export default async function DashboardPage() {
   const ctx = await getContext();
-  if (!ctx.active) return <NoChild />;
+  if (!ctx.active) return <><SetupBanner ctx={ctx} /><NoChild /></>;
   const child = ctx.active;
   const [{ data: itemRows }, { data: goalRows }, { data: shopRows }] = await Promise.all([
     ctx.supabase.from('inventory_items').select('*').eq('child_id', child.id),
@@ -72,6 +73,7 @@ export default async function DashboardPage() {
 
   return (
     <>
+      <SetupBanner ctx={ctx} />
       <div>
         <h1 className="font-display text-2xl font-bold">{child.name}&apos;s wardrobe</h1>
         <p className="text-muted">

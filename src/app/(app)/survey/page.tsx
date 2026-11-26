@@ -8,7 +8,7 @@ import { SurveyResults } from '@/components/survey-results';
 import { btnCls } from '@/components/ui';
 import { answersToParams, defaultSizes, displaySize, parseAnswers, sizeWindow } from '@/lib/domain';
 import { applySurvey } from './actions';
-import { safeBack } from '@/lib/back';
+import { safeBackAny } from '@/lib/back';
 import { defaultBirthMonth, surveyAll } from './compute';
 
 export const metadata: Metadata = { title: 'Goal survey' };
@@ -26,12 +26,12 @@ export default async function SurveyPage({ searchParams }: { searchParams: Promi
   }, defaultBirthMonth(child?.birth_date), defaultSizes(ctx.currentSize));
   const { results, usedForecast, windows, missing, options, gearOptions } = await surveyAll(ctx, answers);
   const qs = answersToParams(answers).toString();
-  const back = safeBack(first(sp.back), '/goals');
+  const back = safeBackAny(first(sp.back), ['/goals', '/welcome'], '/goals');
 
   return (
     <>
       <div>
-        <p className="mb-1 text-sm"><Link className="text-accent underline" href={back}>← Back to goals</Link></p>
+        <p className="mb-1 text-sm"><Link className="text-accent underline" href={back}>{back.startsWith('/welcome') ? '← Back to setup' : '← Back to goals'}</Link></p>
         <h1 className="font-display text-2xl font-bold">Goal survey</h1>
         <p className="text-muted">
           Answer a few questions and get suggested goals{child ? ` for ${child.name}` : ''} for the sizes you pick (they start at the current size). You can change any number afterward on the Goals page.

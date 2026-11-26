@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { CATEGORY_NAMES, defaultSizes, parseAnswers, type CatKey } from '@/lib/domain';
 import { getContext } from '@/lib/context';
-import { safeBack, withParams } from '@/lib/back';
+import { safeBackAny, withParams } from '@/lib/back';
 import { defaultBirthMonth, surveyAll } from './compute';
 
 /**
@@ -13,7 +13,7 @@ import { defaultBirthMonth, surveyAll } from './compute';
  */
 export async function applySurvey(formData: FormData) {
   const q = String(formData.get('q') ?? '');
-  const back = safeBack(formData.get('back'), '/goals');
+  const back = safeBackAny(formData.get('back'), ['/goals', '/welcome'], '/goals');
   const backQs = back !== '/goals' ? `&back=${encodeURIComponent(back)}` : '';
   const stop = (m: string): never => redirect(`/survey?${q}${q ? '&' : ''}error=${encodeURIComponent(m)}${backQs}`);
   const ctx = await getContext();
