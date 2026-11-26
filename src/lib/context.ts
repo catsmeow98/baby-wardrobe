@@ -15,7 +15,7 @@ export async function getContext() {
   if (!user) redirect('/login');
 
   const [{ data: kids }, { data: sizeData }, { data: catData }, { data: groupData }, { data: catPrefData }, { data: groupPrefData }, { data: settingsRow }] = await Promise.all([
-    supabase.from('children').select('id, name, birth_date, current_size_id, growth_reference').order('created_at'),
+    supabase.from('children').select('id, name, birth_date, current_size_id, growth_reference, survey_answers').order('created_at'),
     supabase.from('sizes').select('id, label, alias, sort_order').order('sort_order'),
     supabase.from('categories').select('id, name, sort_order, owner_id, group_id'),
     supabase.from('category_groups').select('id, name, sort_order, owner_id'),

@@ -350,3 +350,23 @@ test('overalls and long-sleeve dress work as pieces in a combination', () => {
   assert.ok(qOf(a, 4, 'ldress') >= 1 && qOf(a, 4, 'lovr') >= 1);
   assert.equal(qOf(only(base(), 4, 'day', [combo('7', 'sovr')]), 4, 'sovr') > 0, true);
 });
+
+test('answers saved as a query string read back the same, and typical answers stay far under the storage limit', () => {
+  const a = defaultAnswers(4);
+  a.laundry = 6;
+  a.stages[3].gear = ['coat', 'hat', CUSTOM];
+  const saved = answersToParams(a).toString();
+  assert.ok(saved.length < 2500, `typical answers are ${saved.length} characters`);
+  const p = new URLSearchParams(saved);
+  const b = parseAnswers((k) => p.get(k), (k) => p.getAll(k), 0);
+  assert.equal(b.laundry, 6);
+  assert.equal(b.birthMonth, 4);
+  assert.deepEqual(b.sizes, a.sizes);
+  assert.deepEqual(b.stages[3].gear, ['coat', 'hat', CUSTOM]);
+  assert.deepEqual(b.stages[5].day, a.stages[5].day);
+  // junk in a stored value is dropped, never trusted
+  const q = new URLSearchParams(`${saved}&z3_gear=notakey&z3_day=zzz~7&laundry=999`);
+  const c = parseAnswers((k) => q.get(k), (k) => q.getAll(k), 0);
+  assert.equal(c.laundry, 6);
+  assert.ok(!c.stages[3].gear.includes('notakey'));
+});

@@ -11,7 +11,7 @@ export interface GroupRow { id: string; name: string; sort_order: number; owner_
  * The table is still called categories. name is the person's name for it, base_name the built-in one (the survey matches on that).
  */
 export interface CategoryRow { id: string; name: string; sort_order: number; group_id: string; grp: string; group_order: number; owner_id: string | null; base_name: string; hidden: boolean; is_default: boolean }
-export interface ChildRow { id: string; name: string; birth_date: string | null; current_size_id: string | null; growth_reference: 'girls' | 'boys' | null }
+export interface ChildRow { id: string; name: string; birth_date: string | null; current_size_id: string | null; growth_reference: 'girls' | 'boys' | null; survey_answers?: string | null }
 export interface MeasurementRow { id: string; child_id: string; measured_on: string; length_in: number | string }
 export interface BrandRow { id: string; name: string; owner_id: string | null; size_offset: number | string }
 export interface ItemRow {

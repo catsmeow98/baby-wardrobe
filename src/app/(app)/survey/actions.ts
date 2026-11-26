@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { CATEGORY_NAMES, defaultSizes, parseAnswers, type CatKey } from '@/lib/domain';
+import { CATEGORY_NAMES, answersToParams, defaultSizes, parseAnswers, type CatKey } from '@/lib/domain';
 import { getContext } from '@/lib/context';
 import { safeBackAny, withParams } from '@/lib/back';
 import { defaultBirthMonth, surveyAll } from './compute';
@@ -15,7 +15,7 @@ export async function applySurvey(formData: FormData) {
   const q = String(formData.get('q') ?? '');
   const back = safeBackAny(formData.get('back'), ['/goals', '/welcome'], '/goals');
   const backQs = back !== '/goals' ? `&back=${encodeURIComponent(back)}` : '';
-  const stop = (m: string): never => redirect(`/survey?${q}${q ? '&' : ''}error=${encodeURIComponent(m)}${backQs}`);
+  const stop = (m: string): never => redirect(`/survey?${q}${q ? '&' : ''}view=results&error=${encodeURIComponent(m)}${backQs}`);
   const ctx = await getContext();
   if (!ctx.active) return stop('Add a child first.');
   const child = ctx.active;
@@ -43,6 +43,9 @@ export async function applySurvey(formData: FormData) {
         });
     });
   if (goals.length === 0) return stop('There were no suggestions to save.');
+  // Remember the answers for this child, so the next retake opens pre-filled. A failure here never blocks saving goals.
+  const remembered = answersToParams(answers).toString();
+  if (remembered.length <= 8000) await ctx.supabase.from('children').update({ survey_answers: remembered }).eq('id', child.id);
   const { error } = await ctx.supabase.from('wardrobe_goals').upsert(goals, { onConflict: 'child_id,category_id,size_id' });
   if (error) return stop('We could not save those goals. Try again.');
   ['/goals', '/shopping', '/dashboard', '/survey'].forEach((path) => revalidatePath(path));

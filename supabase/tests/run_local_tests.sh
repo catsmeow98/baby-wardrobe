@@ -21,5 +21,5 @@ DB2="bw_upgrade_$$"
 psql -v ON_ERROR_STOP=1 -q -d postgres -c "create database $DB2"
 trap 'psql -q -d postgres -c "drop database if exists $DB" >/dev/null; psql -q -d postgres -c "drop database if exists $DB2" >/dev/null' EXIT
 psql -v ON_ERROR_STOP=1 -q -d "$DB2" -f tests/00_supabase_stub.sql
-for f in migrations/*.sql; do case "$f" in *000012*|*000013*) ;; *) psql -v ON_ERROR_STOP=1 -q -d "$DB2" -f "$f" ;; esac; done
+for f in migrations/*.sql; do case "$f" in *000012*|*000013*|*000014*) ;; *) psql -v ON_ERROR_STOP=1 -q -d "$DB2" -f "$f" ;; esac; done
 psql -v ON_ERROR_STOP=1 -q -d "$DB2" -f tests/80_upgrade_12.test.sql

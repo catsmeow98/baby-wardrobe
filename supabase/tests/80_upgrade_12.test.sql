@@ -118,3 +118,19 @@ begin
   if exists (select 1 from public.categories where owner_id is not null and name = 'Booties') then raise exception 'FAILED: custom Booties removed'; end if;
   raise notice 'BOOTIES CHECKS PASSED (migration 13 also ran twice)';
 end $$;
+
+-- Migration 14: the survey remembers answers per child, up to 8000 characters.
+\i migrations/20260101000014_survey_answers.sql
+\i migrations/20260101000014_survey_answers.sql
+do $$
+declare f record; failed boolean := false;
+begin
+  select * into f from fx;
+  update public.children set survey_answers = 'touched=1&laundry=3' where id = f.chA;
+  if (select survey_answers from public.children where id = f.chA) <> 'touched=1&laundry=3' then raise exception 'FAILED: answers saved'; end if;
+  begin
+    update public.children set survey_answers = repeat('x', 8001) where id = f.chA;
+  exception when check_violation then failed := true; end;
+  if not failed then raise exception 'FAILED: over-long answers must be rejected'; end if;
+  raise notice 'SURVEY ANSWERS CHECKS PASSED (migration 14 ran twice)';
+end $$;
