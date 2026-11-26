@@ -57,7 +57,7 @@ begin
     ('White bodysuits, 3-pack',   'Short-sleeve bodysuit', 'Sample True',  '6-9M', '6-9M',  '6-9M',  3, 'good',     'active',   0,    'year_round'),
     ('Floral bodysuit',           'Short-sleeve bodysuit', 'Sample Small', '6M',   '3-6M',  '6-9M',  1, 'good',     'active',   -1,   'summer'),
     ('Long-sleeve bodysuit',     'Long-sleeve bodysuit',  'Sample True',  '9M',   '6-9M',  '6-9M',  2, 'new',      'active',   0,    'year_round'),
-    ('Fleece pullover',           'Top',                   'Sample Big',   '12M',  '9-12M', '12-18M',1, 'new',      'active',   1,    'winter'),
+    ('Fleece pullover',           'Short-sleeve top',                   'Sample Big',   '12M',  '9-12M', '12-18M',1, 'new',      'active',   1,    'winter'),
     ('Leggings, 4-pack',          'Pants',                'Sample True',  '6-9M', '6-9M',  '6-9M',  4, 'good',     'active',   0,    'year_round'),
     ('Jeans',                     'Pants',                'Sample Big',   '12M',  '9-12M', '9-12M', 1, 'new',      'active',   1,    'year_round'),
     ('Cotton footie pajamas',     'Footy sleeper',         'Sample Small', '3-6M', '3-6M',  '3-6M',  2, 'worn',     'active',   -1,   'year_round'),
@@ -79,7 +79,7 @@ begin
   select v_child, (select id from public.categories c where c.owner_id is null and c.name = g.cat),
          (select id from public.sizes where label = g.sz), g.target
   from (values
-    ('6-9M',  'Short-sleeve bodysuit', 8), ('6-9M', 'Long-sleeve bodysuit', 4), ('6-9M', 'Top', 4),
+    ('6-9M',  'Short-sleeve bodysuit', 8), ('6-9M', 'Long-sleeve bodysuit', 4), ('6-9M', 'Short-sleeve top', 4),
     ('6-9M',  'Pants', 8), ('6-9M', 'Footy sleeper', 6), ('6-9M', 'Sleep sack', 2), ('6-9M', 'Romper', 4),
     ('6-9M',  'Socks', 8),
     ('9-12M', 'Short-sleeve bodysuit', 8), ('9-12M', 'Pants', 6), ('9-12M', 'Footy sleeper', 6),
@@ -92,7 +92,7 @@ begin
   select v_child, (select id from public.categories c where c.owner_id is null and c.name = s.cat),
          (select id from public.sizes where label = s.sz), s.needed, s.ordered, s.status, s.prio, s.price, s.note
   from (values
-    ('Top',           '9-12M', 3, 0, 'needed',  'high',   12.50, 'Sample entry'),
+    ('Short-sleeve top',           '9-12M', 3, 0, 'needed',  'high',   12.50, 'Sample entry'),
     ('Footy sleeper', '9-12M', 4, 4, 'ordered', 'medium', 14.00, 'Sample entry'),
     ('Pants',        '9-12M', 4, 4, 'ordered', 'low',     9.00, 'Sample entry')
   ) as s(cat, sz, needed, ordered, status, prio, price, note);

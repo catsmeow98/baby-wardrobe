@@ -1,15 +1,14 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { BrandSelect } from '@/components/brand-select';
 import { CategoryPicker } from '@/components/category-picker';
 import { PhotoPicker } from '@/components/photo-picker';
 import { TagSizeField, type TagValue } from '@/components/tag-size-field';
 import { createClient } from '@/lib/supabase/client';
-import { extOf, processPhoto } from '@/lib/photo-client';
+import { shrinkImage } from '@/lib/photo-client';
 import { PHOTO_BUCKET } from '@/lib/photos';
 import { btnCls, btnGhostCls, inputCls, labelCls } from '@/components/ui';
-import { COLORS, sizeName } from '@/lib/db';
+import { sizeName } from '@/lib/db';
 import type { CategoryRow, SizeLabelRow, SizeRow } from '@/lib/db';
 
 const MAX_ROWS = 50;
@@ -25,7 +24,7 @@ interface Row {
  * Or add blank rows and type them in, each with an optional photo of its own. Photos upload as soon as they are chosen.
  * Field names carry the row's position (cat_0, name_1 and so on), which is what the server action reads.
  */
-export function BulkBuilder({ userId, childId, categories, labels, sizes, brands, defaultTagId, removeBg = false }: {
+export function BulkBuilder({ userId, childId, categories, labels, sizes, brands, defaultTagId }: {
   userId: string;
   childId: string;
   categories: CategoryRow[];
@@ -33,7 +32,6 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
   sizes: SizeRow[];
   brands: string[];
   defaultTagId: string;
-  removeBg?: boolean;
 }) {
   const nextId = useRef(START_ROWS);
   const [rows, setRows] = useState<Row[]>(() => Array.from({ length: START_ROWS }, (_, id) => ({ id, photo: null })));
@@ -63,16 +61,16 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
         skipped = 0;
         break;
       }
-      setBusy(`${removeBg ? 'Processing' : 'Uploading'} photo ${k + 1} of ${files.length}…`);
+      setBusy(`Uploading photo ${k + 1} of ${files.length}…`);
       let blob: Blob;
       try {
-        blob = (await processPhoto(files[k], removeBg)).blob;
+        blob = await shrinkImage(files[k]);
       } catch {
         skipped++;
         continue;
       }
-      const path = `${userId}/${childId}/${crypto.randomUUID()}.${extOf(blob)}`;
-      const { error: upErr } = await supabase.storage.from(PHOTO_BUCKET).upload(path, blob, { contentType: blob.type });
+      const path = `${userId}/${childId}/${crypto.randomUUID()}.jpg`;
+      const { error: upErr } = await supabase.storage.from(PHOTO_BUCKET).upload(path, blob, { contentType: 'image/jpeg' });
       if (upErr) {
         skipped++;
         continue;
@@ -102,6 +100,7 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
   return (
     <>
       <input type="hidden" name="rows" value={rows.length} />
+      <datalist id="brand-list">{brands.map((b) => <option key={b} value={b} />)}</datalist>
       {/* Blocks submit while photos upload. Not read-only, because read-only fields skip validation. */}
       <input ref={guard} className="sr-only" tabIndex={-1} aria-hidden="true" value="ok" onChange={() => undefined} required />
 
@@ -119,7 +118,7 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
 
       {rows.map((row, pos) => (
         <BulkRow key={row.id} row={row} pos={pos} onRemove={() => removeRow(row)} userId={userId} childId={childId}
-          categories={categories} labels={labels} sizes={sizes} defaultTagId={defaultTagId} brands={brands} removeBg={removeBg} />
+          categories={categories} labels={labels} sizes={sizes} defaultTagId={defaultTagId} />
       ))}
 
       <div className="flex flex-wrap items-center gap-4">
@@ -131,7 +130,7 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
   );
 }
 
-function BulkRow({ row, pos, onRemove, userId, childId, categories, labels, sizes, defaultTagId, brands, removeBg }: {
+function BulkRow({ row, pos, onRemove, userId, childId, categories, labels, sizes, defaultTagId }: {
   row: Row;
   pos: number;
   onRemove: () => void;
@@ -141,8 +140,6 @@ function BulkRow({ row, pos, onRemove, userId, childId, categories, labels, size
   labels: SizeLabelRow[];
   sizes: SizeRow[];
   defaultTagId: string;
-  brands: string[];
-  removeBg: boolean;
 }) {
   const [tag, setTag] = useState<TagValue>({ tagId: defaultTagId, custom: false, text: '' });
   return (
@@ -155,18 +152,12 @@ function BulkRow({ row, pos, onRemove, userId, childId, categories, labels, size
           <img src={row.photo.preview} alt={`Photo for row ${pos + 1}`} className="size-24 rounded-lg object-cover" />
         </div>
       )}
-      <CategoryPicker categories={categories} name={`cat_${pos}`} className={`${labelCls} sm:col-span-2`} allowNew />
+      <CategoryPicker categories={categories} name={`cat_${pos}`} className={`${labelCls} sm:col-span-2`} />
       <label className={`${labelCls} sm:col-span-2`}>Name (optional)
         <input className={inputCls} name={`name_${pos}`} maxLength={160} />
       </label>
       <label className={`${labelCls} sm:col-span-2`}>Brand
-        <BrandSelect brands={brands} name={`brand_${pos}`} />
-      </label>
-      <label className={`${labelCls} sm:col-span-2`}>Color
-        <select className={inputCls} name={`color_${pos}`} defaultValue="">
-          <option value="">Not set</option>
-          {COLORS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-        </select>
+        <input className={inputCls} name={`brand_${pos}`} maxLength={80} list="brand-list" />
       </label>
       <TagSizeField labels={labels} value={tag} onChange={setTag} tagName={`tag_${pos}`} customName={`ctag_${pos}`} className={`${labelCls} sm:col-span-2`} />
       <label className={`${labelCls} sm:col-span-2`}>Fits through
@@ -181,7 +172,7 @@ function BulkRow({ row, pos, onRemove, userId, childId, categories, labels, size
       {!row.photo && (
         <div className={`${labelCls} sm:col-span-6`}>
           Photo (optional)
-          <PhotoPicker userId={userId} childId={childId} name={`photo_${pos}`} max={1} label="Add a photo" removeBg={removeBg} />
+          <PhotoPicker userId={userId} childId={childId} name={`photo_${pos}`} max={1} label="Add a photo" />
         </div>
       )}
       <div className="sm:col-span-6">

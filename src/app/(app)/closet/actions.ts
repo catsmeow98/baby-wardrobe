@@ -4,17 +4,11 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { getContext, type Ctx } from '@/lib/context';
-import { safeBack, withParams } from '@/lib/back';
-import type { CategoryRow } from '@/lib/db';
-import { itemSchema, COLOR_VALUES, CONDITION_VALUES, GENDER_VALUES, SEASON_VALUES, STATUS_VALUES } from '@/lib/validation/items';
+import { itemSchema, CONDITION_VALUES, GENDER_VALUES, SEASON_VALUES, STATUS_VALUES } from '@/lib/validation/items';
 import { autoName, parseTagRange, resolveFitRange } from '@/lib/domain';
 import { attachPhotos, discardPhotos } from '@/lib/photo-attach';
 
-const failWith = (path: string, message: string, back = '/closet'): never =>
-  redirect(`${path}?error=${encodeURIComponent(message)}${back !== '/closet' ? `&back=${encodeURIComponent(back)}` : ''}`);
-const fail = (path: string, message: string): never => failWith(path, message);
-/** Where to return to after a save: the closet with the filters the person had. */
-const backOf = (formData: FormData) => safeBack(formData.get('back'), '/closet');
+const fail = (path: string, message: string): never => redirect(`${path}?error=${encodeURIComponent(message)}`);
 
 /** Finds the person's brand by name, ignoring case, or creates it. Returns its id. */
 async function brandId(ctx: Ctx, name: string): Promise<string | null> {
@@ -27,52 +21,6 @@ async function brandId(ctx: Ctx, name: string): Promise<string | null> {
   return error || !made ? null : (made.id as string);
 }
 
-const CUSTOM_ORDER = 1000; // custom item types and item categories sort after the built-in ones
-
-/**
- * The item type a form row asked for. Normally the posted id. When the picker's "+ New item type" was chosen (the field is
- * "__new"), this creates the item type, and the item category too if "+ New item category" was chosen, then returns the new id.
- * A name that matches an item type the person already has is reused instead of failing. Errors go back to the form.
- */
-async function typeFor(ctx: Ctx, formData: FormData, field: string, path: string, prefix = ''): Promise<string> {
-  const posted = String(formData.get(field) ?? '');
-  if (posted !== '__new') return posted;
-  const bad = (m: string): never => fail(path, `${prefix}${m}`);
-  const name = z.string().trim().min(1).max(60).safeParse(formData.get(`${field}_newType`));
-  if (!name.success) return bad('enter a name for the new item type (60 characters or fewer).');
-  const same = (a: string) => a.toLowerCase() === name.data.toLowerCase();
-  const hit = ctx.categories.find((c) => same(c.name));
-  if (hit) return hit.id;
-  if (ctx.allCategories.some((c) => same(c.name))) return bad('that name is already used by a hidden item type. Restore it on the Item types page, or pick another name.');
-
-  let groupId = String(formData.get(`${field}_group`) ?? '');
-  let groupName = ctx.groups.find((g) => g.id === groupId)?.name ?? '';
-  if (groupId === '__new') {
-    const gn = z.string().trim().min(1).max(60).safeParse(formData.get(`${field}_newGroup`));
-    if (!gn.success) return bad('enter a name for the new item category (60 characters or fewer).');
-    const existing = ctx.groups.find((g) => g.name.toLowerCase() === gn.data.toLowerCase());
-    if (existing) {
-      groupId = existing.id;
-      groupName = existing.name;
-    } else {
-      if (ctx.allGroups.some((g) => g.name.toLowerCase() === gn.data.toLowerCase())) return bad('that name is already used by a hidden item category.');
-      const { data: g, error } = await ctx.supabase.from('category_groups').insert({ name: gn.data, owner_id: ctx.user.id, sort_order: CUSTOM_ORDER }).select('id').single();
-      if (error || !g) return bad(error?.code === '22023' ? 'you can have up to 30 custom item categories.' : 'we could not add that item category.');
-      groupId = g.id as string;
-      groupName = gn.data;
-    }
-  }
-  if (!z.string().uuid().safeParse(groupId).success || !groupName) return bad('choose an item category for the new item type.');
-  const { data: made, error } = await ctx.supabase.from('categories').insert({ name: name.data, owner_id: ctx.user.id, group_id: groupId, sort_order: CUSTOM_ORDER }).select('id').single();
-  if (error || !made) return bad(error?.code === '22023' ? 'you can have up to 60 custom item types.' : error?.code === '23505' ? 'that name is already a built-in item type.' : 'we could not add that item type.');
-  // Make it visible to the rest of this request, including later rows of a bulk add.
-  const row: CategoryRow = { id: made.id as string, name: name.data, base_name: name.data, sort_order: CUSTOM_ORDER, group_id: groupId, grp: groupName, group_order: CUSTOM_ORDER, owner_id: ctx.user.id, is_default: false, hidden: false };
-  ctx.categories.push(row);
-  ctx.allCategories.push(row);
-  ctx.catById.set(row.id, row);
-  return row.id;
-}
-
 /** Looks up the size group (as a sort order) of a tag label id. */
 async function tagOrder(ctx: Ctx, tagId: string | undefined): Promise<number | null> {
   if (!tagId) return null;
@@ -81,17 +29,13 @@ async function tagOrder(ctx: Ctx, tagId: string | undefined): Promise<number | n
 }
 
 export async function saveItem(formData: FormData) {
-  const backTo = backOf(formData);
-  const fail = (p: string, m: string): never => failWith(p, m, backTo);
   const id = z.string().uuid().safeParse(formData.get('id') || undefined);
   const path = id.success ? `/closet/${id.data}` : '/closet/new';
-  const ctx = await getContext();
-  // A "+ New item type" choice becomes a real item type first, so the rest of the form is checked as usual.
-  formData.set('categoryId', await typeFor(ctx, formData, 'categoryId', path));
   const parsed = itemSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return fail(path, parsed.error.issues[0].message);
   const v = parsed.data;
 
+  const ctx = await getContext();
   if (!ctx.active) return fail('/closet', 'Add a child first.');
   const order = (sizeId?: string) => (sizeId ? (ctx.orderOf.get(sizeId) ?? null) : null);
   // A tag from the list wins. Otherwise a custom range such as "6-12" stands in for the tag.
@@ -122,7 +66,6 @@ export async function saveItem(formData: FormData) {
     condition: v.condition,
     season: v.season,
     gender: v.gender ?? null,
-    color: v.color ?? null,
     status: v.status,
     fit_override: v.fitOverride ?? null,
     fit_feedback: v.fitFeedback ?? null,
@@ -133,7 +76,7 @@ export async function saveItem(formData: FormData) {
     const { error } = await ctx.supabase.from('inventory_items').update(row).eq('id', id.data);
     if (error) return fail(path, 'We could not save that item. Check the sizes and try again.');
     revalidatePath('/closet');
-    return redirect(backTo);
+    return redirect('/closet');
   }
   const { data: made, error } = await ctx.supabase.from('inventory_items').insert({ ...row, child_id: ctx.active.id }).select('id').single();
   if (error || !made) return fail(path, 'We could not save that item. Check the sizes and try again.');
@@ -142,28 +85,24 @@ export async function saveItem(formData: FormData) {
   const attached = wanted.length ? await attachPhotos(ctx.supabase, ctx.user.id, ctx.active.id, made.id as string, wanted) : 0;
   revalidatePath('/closet');
   if (attached < wanted.length) {
-    return redirect(`/closet/${made.id}?error=${encodeURIComponent('The item was saved, but some photos could not be added. You can add them below.')}${backTo !== '/closet' ? `&back=${encodeURIComponent(backTo)}` : ''}`);
+    return redirect(`/closet/${made.id}?error=${encodeURIComponent('The item was saved, but some photos could not be added. You can add them below.')}`);
   }
-  return redirect(backTo);
+  return redirect('/closet');
 }
 
 export async function deleteItem(formData: FormData) {
-  const backTo = backOf(formData);
-  const fail = (p: string, m: string): never => failWith(p, m, backTo);
   const id = z.string().uuid().safeParse(formData.get('id'));
   if (!id.success) return fail('/closet', 'That item could not be found.');
   const ctx = await getContext();
   const { error } = await ctx.supabase.from('inventory_items').delete().eq('id', id.data);
   if (error) return fail('/closet', 'We could not delete that item. Try again.');
   revalidatePath('/closet');
-  return redirect(backTo);
+  return redirect('/closet');
 }
 
 const MAX_BULK_ROWS = 50;
 
 export async function bulkCreate(formData: FormData) {
-  const backTo = backOf(formData);
-  const fail = (p: string, m: string): never => failWith(p, m, backTo);
   const path = '/closet/bulk';
   const shared = z
     .object({ condition: z.enum(CONDITION_VALUES), season: z.enum(SEASON_VALUES), status: z.enum(STATUS_VALUES), gender: z.enum(GENDER_VALUES).nullable() })
@@ -186,7 +125,7 @@ export async function bulkCreate(formData: FormData) {
     const photo = formData.getAll(`photo_${i}`).map(String).filter(Boolean);
     if (!name && !brand && photo.length === 0) continue; // an untouched row. A row with a photo is kept, even with no name.
     const n = `Row ${i + 1}`;
-    const cat = z.string().uuid().safeParse(text('cat') === '__new' ? await typeFor(ctx, formData, `cat_${i}`, path, `${n}: `) : text('cat'));
+    const cat = z.string().uuid().safeParse(text('cat'));
     if (!cat.success) return fail(path, `${n}: choose an item type.`);
     const qty = z.coerce.number().int().min(1).max(999).safeParse(text('qty') || '1');
     if (!qty.success) return fail(path, `${n}: quantity must be a whole number from 1 to 999.`);
@@ -222,7 +161,6 @@ export async function bulkCreate(formData: FormData) {
       condition: shared.data.condition,
       season: shared.data.season,
       gender: shared.data.gender,
-      color: z.enum(COLOR_VALUES).safeParse(text('color')).data ?? null,
       status: shared.data.status,
     });
   }
@@ -245,5 +183,5 @@ export async function bulkCreate(formData: FormData) {
     }
   } else if ([...formData.keys()].some((key) => key.startsWith('photo_'))) photoProblem = true;
   revalidatePath('/closet');
-  return redirect(withParams(backTo, { added: String(rows.length), photos: photoProblem ? 'partial' : undefined }));
+  return redirect(`/closet?added=${rows.length}${photoProblem ? '&photos=partial' : ''}`);
 }

@@ -2,7 +2,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import type { CategoryRow, ChildRow, GroupRow, ItemRow, ShoppingRow, SizeRow, GoalRow } from '@/lib/db';
-import type { ClosetItem, Goal, InventoryItem, MonthClass, ShoppingItem } from '@/lib/domain';
+import type { ClosetItem, Goal, InventoryItem, ShoppingItem } from '@/lib/domain';
 
 export const CHILD_COOKIE = 'bw_child';
 
@@ -14,14 +14,13 @@ export async function getContext() {
   } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
-  const [{ data: kids }, { data: sizeData }, { data: catData }, { data: groupData }, { data: catPrefData }, { data: groupPrefData }, { data: settingsRow }] = await Promise.all([
+  const [{ data: kids }, { data: sizeData }, { data: catData }, { data: groupData }, { data: catPrefData }, { data: groupPrefData }] = await Promise.all([
     supabase.from('children').select('id, name, birth_date, current_size_id, growth_reference').order('created_at'),
     supabase.from('sizes').select('id, label, alias, sort_order').order('sort_order'),
     supabase.from('categories').select('id, name, sort_order, owner_id, group_id'),
     supabase.from('category_groups').select('id, name, sort_order, owner_id'),
     supabase.from('user_category_prefs').select('category_id, name, group_id, hidden'),
     supabase.from('user_group_prefs').select('group_id, name, hidden'),
-    supabase.from('user_settings').select('remove_background, place_name, month_classes').maybeSingle(),
   ]);
   const children = (kids ?? []) as ChildRow[];
   const sizes = (sizeData ?? []) as SizeRow[];
@@ -55,23 +54,7 @@ export async function getContext() {
   const catById = new Map(allCategories.map((c) => [c.id, c]));
   const currentSize = active?.current_size_id ? (orderOf.get(active.current_size_id) ?? null) : null;
 
-  // Account settings. Without a row (or before migration 11 is run) the defaults apply: remove backgrounds, no location.
-  const s = settingsRow as { remove_background: boolean; place_name: string | null; month_classes: string[] | null } | null;
-  const settings: Settings = {
-    removeBackground: s?.remove_background ?? true,
-    placeName: s?.place_name ?? null,
-    monthClasses: s?.month_classes && s.month_classes.length === 12 ? (s.month_classes as MonthClass[]) : null,
-  };
-
-  return { supabase, user, settings, children, active, sizes, categories, allCategories, groups, allGroups, orderOf, sizeById, sizeByOrder, catById, currentSize };
-}
-export interface Settings {
-  /** Remove the background from photos as they are added. */
-  removeBackground: boolean;
-  /** Where the person is, for local weather. Null when not set. */
-  placeName: string | null;
-  /** How each calendar month feels there, January first. Null when no location is set. */
-  monthClasses: MonthClass[] | null;
+  return { supabase, user, children, active, sizes, categories, allCategories, groups, allGroups, orderOf, sizeById, sizeByOrder, catById, currentSize };
 }
 export type Ctx = Awaited<ReturnType<typeof getContext>>;
 

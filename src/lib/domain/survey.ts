@@ -20,11 +20,14 @@ export type Temp = 'hot' | 'warm' | 'mild' | 'cool' | 'cold';
 export const CATEGORY_NAMES = {
   sbs: 'Short-sleeve bodysuit',
   lsb: 'Long-sleeve bodysuit',
-  top: 'Top',
-  sweater: 'Sweater',
+  top: 'Short-sleeve top',
+  lst: 'Long-sleeve top',
+  dshirt: 'Dress shirt',
   pants: 'Pants',
   shorts: 'Shorts',
   leggings: 'Leggings',
+  skirt: 'Skirt',
+  dpants: 'Dress pants',
   footy: 'Footy sleeper',
   footless: 'Footless sleeper',
   pjs: 'Pajama set',
@@ -33,9 +36,13 @@ export const CATEGORY_NAMES = {
   swaddle: 'Swaddle',
   romper: 'Romper',
   dress: 'Dress',
-  dshirt: 'Dress shirt',
-  dpants: 'Dress pants',
+  ldress: 'Long-sleeve dress',
+  lovr: 'Long overalls',
+  sovr: 'Short overalls',
   set: 'Matching set',
+  sweater: 'Sweater',
+  cardigan: 'Cardigan',
+  pullover: 'Pullover / hoodie',
   coat: 'Coat',
   jacket: 'Light jacket',
   bunting: 'Bunting',
@@ -57,13 +64,14 @@ export const CAT_LABELS: Record<CatKey, string> = CATEGORY_NAMES;
 
 /** How the chips are grouped in the combination builder. */
 export const CHIP_GROUPS: readonly { label: string; keys: readonly CatKey[] }[] = [
-  { label: 'Bodysuits and tops', keys: ['sbs', 'lsb', 'top', 'sweater'] },
-  { label: 'Bottoms', keys: ['pants', 'shorts', 'leggings'] },
+  { label: 'Bodysuits and tops', keys: ['sbs', 'lsb', 'top', 'lst', 'dshirt'] },
+  { label: 'Bottoms', keys: ['pants', 'shorts', 'leggings', 'skirt', 'dpants'] },
   { label: 'Sleep', keys: ['footy', 'footless', 'pjs', 'gown', 'sack', 'swaddle'] },
-  { label: 'Outfits and dressy', keys: ['romper', 'dress', 'dshirt', 'dpants', 'set'] },
-  { label: 'Outerwear', keys: ['coat', 'jacket', 'bunting', 'snowsuit'] },
+  { label: 'Outfits', keys: ['romper', 'dress', 'ldress', 'lovr', 'sovr', 'set'] },
+  { label: 'Outerwear', keys: ['sweater', 'cardigan', 'pullover', 'coat', 'jacket', 'bunting', 'snowsuit'] },
   { label: 'Accessories', keys: ['socks', 'hat', 'mittens', 'bib'] },
-  { label: 'Footwear and swim', keys: ['shoes', 'boots', 'swim', 'rash'] },
+  { label: 'Footwear', keys: ['shoes', 'boots'] },
+  { label: 'Swim', keys: ['swim', 'rash'] },
 ];
 
 /* ---- how often: days per week ---- */
@@ -98,7 +106,7 @@ export interface PickOption {
 }
 export const defaultOptions = (): PickOption[] => CHIP_GROUPS.flatMap((g) => g.keys.map((k) => ({ key: k, name: CATEGORY_NAMES[k], group: g.label })));
 /** Built-in pieces that depend on the weather, offered in the outerwear and seasonal question. */
-export const GEAR_KEYS: readonly CatKey[] = ['coat', 'jacket', 'bunting', 'snowsuit', 'mittens', 'hat', 'swim', 'rash'];
+export const GEAR_KEYS: readonly CatKey[] = ['coat', 'jacket', 'cardigan', 'pullover', 'bunting', 'snowsuit', 'mittens', 'hat', 'swim', 'rash'];
 export const defaultGearOptions = (): PickOption[] => defaultOptions().filter((o) => (GEAR_KEYS as readonly string[]).includes(o.key));
 
 export type Occasion = 'sleep' | 'day' | 'dressy';
@@ -286,6 +294,8 @@ export function monthClass(month: number, hot = false, cold = false, table?: rea
 const GEAR: Partial<Record<CatKey, readonly MonthClass[]>> = {
   coat: ['cold', 'cool'],
   jacket: ['cool', 'mild'],
+  cardigan: ['cool', 'cold'], // cool-weather layers
+  pullover: ['cool', 'cold'],
   bunting: ['cold'],
   snowsuit: ['cold'],
   mittens: ['cold'],
@@ -309,7 +319,7 @@ export function suggestGear(monthIdx: readonly number[], size: number, hot = fal
   const young = size <= 3;
   const classes = monthIdx.map((m) => monthClass(m, hot, cold, table));
   return GEAR_KEYS.filter((k) => {
-    if (k === 'rash') return false;
+    if (k === 'rash' || k === 'cardigan' || k === 'pullover') return false; // offered, but left for the person to choose
     if (k === 'bunting' && !young) return false;
     if (k === 'snowsuit' && young) return false;
     if (k === 'swim' && size < 2) return false;

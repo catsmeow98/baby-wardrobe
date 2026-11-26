@@ -4,7 +4,6 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { getContext } from '@/lib/context';
-import { safeBack, withParams } from '@/lib/back';
 
 export async function saveGoals(formData: FormData) {
   const sizeId = z.string().uuid().safeParse(formData.get('sizeId'));
@@ -48,8 +47,7 @@ export async function copyGoals(formData: FormData) {
   if (!to.success || !from.success) return redirect('/goals?error=' + encodeURIComponent('Choose a size to copy from.'));
   const ctx = await getContext();
   const order = ctx.orderOf.get(to.data) ?? 0;
-  const back = (error?: string): never =>
-    redirect(withParams(safeBack(formData.get('back'), '/goals'), { size: String(order), error, saved: error ? undefined : '1' }));
+  const back = (error?: string): never => redirect(`/goals?size=${order}${error ? `&error=${encodeURIComponent(error)}` : '&saved=1'}`);
   if (!ctx.active) return back('Add a child first.');
   const { data: src } = await ctx.supabase.from('wardrobe_goals').select('category_id, target_quantity').eq('child_id', ctx.active.id).eq('size_id', from.data);
   const { data: have } = await ctx.supabase.from('wardrobe_goals').select('category_id').eq('child_id', ctx.active.id).eq('size_id', to.data);

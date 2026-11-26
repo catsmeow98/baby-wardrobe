@@ -5,12 +5,12 @@ do $$
 declare cF uuid; custom uuid; ch uuid;
 begin
   reset role;
-  perform t.ok((select count(*) from public.categories where owner_id is null) = 34, '34 built-in categories');
+  perform t.ok((select count(*) from public.categories where owner_id is null) = 37, '37 built-in categories');
   perform t.ok((select count(*) from public.categories where owner_id is null and group_id is null) = 0, 'every built-in item has a category');
-  perform t.ok((select count(distinct sort_order) from public.categories where owner_id is null) = 34, 'built-in order is unique');
+  perform t.ok((select count(distinct sort_order) from public.categories where owner_id is null) = 37, 'built-in order is unique');
   perform t.ok(exists (select 1 from public.categories where owner_id is null and name in ('Sleep sack', 'Footy sleeper', 'Dress shirt', 'Bunting', 'Snowsuit', 'Socks', 'Hat', 'Coat')), 'individual items exist');
   perform t.ok(not exists (select 1 from public.categories where owner_id is null and name in ('Outfits', 'Outerwear', 'Accessories', 'Swaddles', 'Sleep sacks')), 'grouped and plural names are gone');
-  perform t.ok((select count(*) from public.categories where owner_id is null and name like 'Other %') = 4, 'four catch-all categories remain');
+  perform t.ok((select count(*) from public.categories where owner_id is null and name like 'Other %') = 0, 'the catch-all Other types are retired');
 
   insert into auth.users (id, email) values ('ffffffff-0000-4000-8000-000000000006', 'f@example.com');
   insert into t.fx values ('F', 'ffffffff-0000-4000-8000-000000000006') on conflict (k) do update set v = excluded.v;

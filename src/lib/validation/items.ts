@@ -5,7 +5,6 @@ const optUuid = z.preprocess(blank, z.string().uuid().optional());
 
 export const CONDITION_VALUES = ['new', 'like_new', 'good', 'worn', 'unusable'] as const;
 export const SEASON_VALUES = ['year_round', 'spring', 'summer', 'fall', 'winter'] as const;
-export const COLOR_VALUES = ['white', 'black', 'gray', 'cream', 'brown', 'red', 'pink', 'orange', 'yellow', 'green', 'blue', 'navy', 'purple', 'multicolor'] as const;
 export const GENDER_VALUES = ['boy', 'girl', 'neutral'] as const;
 export const STATUS_VALUES = ['active', 'stored', 'daycare', 'outgrown', 'donated', 'sold'] as const;
 
@@ -21,7 +20,6 @@ export const itemSchema = z.object({
   condition: z.enum(CONDITION_VALUES).default('good'),
   season: z.enum(SEASON_VALUES).default('year_round'),
   gender: z.preprocess(blank, z.enum(GENDER_VALUES).optional()),
-  color: z.preprocess(blank, z.enum(COLOR_VALUES).optional()),
   status: z.enum(STATUS_VALUES).default('active'),
   fitOverride: z.preprocess(blank, z.enum(['fits', 'notyet', 'small', 'outgrown']).optional()),
   fitFeedback: z.preprocess(blank, z.coerce.number().int().min(-1).max(1).optional()),

@@ -42,7 +42,7 @@ do $$ begin
                                             ('bbbbbbbb-0000-4000-8000-000000000002', 'b@example.com');
   insert into t.fx values ('A', 'aaaaaaaa-0000-4000-8000-000000000001'), ('B', 'bbbbbbbb-0000-4000-8000-000000000002');
   perform t.ok((select count(*) from public.profiles) = 2, 'profile rows are created for new users');
-  perform t.ok((select count(*) from public.categories) = 14, '14 default categories');
+  perform t.ok((select count(*) from public.categories) = 37, '37 default categories');
   perform t.ok((select count(*) from public.sizes) = 10, '10 size groups');
   perform t.ok((select count(*) from public.size_labels) = 16, '16 tag labels (10 groups, 6 aliases)');
   perform t.ok((select count(*) from public.size_labels l join public.sizes s on s.id = l.size_id
@@ -60,34 +60,34 @@ begin
 
   -- fit 3-6M to 6-9M, qty 5, active
   insert into public.inventory_items (child_id, tracking_type, name, category_id, quantity, fit_from_size_id, fit_to_size_id)
-    values (c, 'grouped', 'White bodysuits', t.cat('Short-sleeve bodysuits'), 5, t.size('3-6M'), t.size('6-9M'));
+    values (c, 'grouped', 'White bodysuits', t.cat('Short-sleeve bodysuit'), 5, t.size('3-6M'), t.size('6-9M'));
   -- fits only 6-9M
   insert into public.inventory_items (child_id, name, category_id, fit_from_size_id, fit_to_size_id)
-    values (c, 'Printed bodysuit', t.cat('Short-sleeve bodysuits'), t.size('6-9M'), t.size('6-9M'));
+    values (c, 'Printed bodysuit', t.cat('Short-sleeve bodysuit'), t.size('6-9M'), t.size('6-9M'));
   -- stored counts
   insert into public.inventory_items (child_id, tracking_type, name, category_id, quantity, status, fit_from_size_id, fit_to_size_id)
-    values (c, 'grouped', 'Stored bodysuits', t.cat('Short-sleeve bodysuits'), 2, 'stored', t.size('3-6M'), t.size('6-9M'));
+    values (c, 'grouped', 'Stored bodysuits', t.cat('Short-sleeve bodysuit'), 2, 'stored', t.size('3-6M'), t.size('6-9M'));
   -- do not count: outgrown, unusable, unknown fit, other category
   insert into public.inventory_items (child_id, tracking_type, name, category_id, quantity, status, fit_from_size_id, fit_to_size_id)
-    values (c, 'grouped', 'Outgrown', t.cat('Short-sleeve bodysuits'), 3, 'outgrown', t.size('3-6M'), t.size('6-9M'));
+    values (c, 'grouped', 'Outgrown', t.cat('Short-sleeve bodysuit'), 3, 'outgrown', t.size('3-6M'), t.size('6-9M'));
   insert into public.inventory_items (child_id, tracking_type, name, category_id, quantity, condition, fit_from_size_id, fit_to_size_id)
-    values (c, 'grouped', 'Stained', t.cat('Short-sleeve bodysuits'), 4, 'unusable', t.size('3-6M'), t.size('6-9M'));
+    values (c, 'grouped', 'Stained', t.cat('Short-sleeve bodysuit'), 4, 'unusable', t.size('3-6M'), t.size('6-9M'));
   insert into public.inventory_items (child_id, tracking_type, name, category_id, quantity)
-    values (c, 'grouped', 'No fit info', t.cat('Short-sleeve bodysuits'), 6);
+    values (c, 'grouped', 'No fit info', t.cat('Short-sleeve bodysuit'), 6);
   insert into public.inventory_items (child_id, tracking_type, name, category_id, quantity, fit_from_size_id, fit_to_size_id)
-    values (c, 'grouped', 'Leggings', t.cat('Bottoms'), 9, t.size('3-6M'), t.size('3-6M'));
+    values (c, 'grouped', 'Leggings', t.cat('Pants'), 9, t.size('3-6M'), t.size('3-6M'));
 
   insert into public.wardrobe_goals (child_id, category_id, size_id, target_quantity) values
-    (c, t.cat('Short-sleeve bodysuits'), t.size('3-6M'), 12),
-    (c, t.cat('Short-sleeve bodysuits'), t.size('6-9M'), 12),
-    (c, t.cat('Bottoms'), t.size('3-6M'), 4);
+    (c, t.cat('Short-sleeve bodysuit'), t.size('3-6M'), 12),
+    (c, t.cat('Short-sleeve bodysuit'), t.size('6-9M'), 12),
+    (c, t.cat('Pants'), t.size('3-6M'), 4);
 
-  select * into p from public.goal_progress where child_id = c and category_id = t.cat('Short-sleeve bodysuits') and size_id = t.size('3-6M');
+  select * into p from public.goal_progress where child_id = c and category_id = t.cat('Short-sleeve bodysuit') and size_id = t.size('3-6M');
   perform t.ok(p.owned = 7, format('3-6M owned counts active and stored in range, got %s', p.owned));
   perform t.ok(p.remaining = 5, 'remaining = 12 - 7');
-  select * into p from public.goal_progress where child_id = c and category_id = t.cat('Short-sleeve bodysuits') and size_id = t.size('6-9M');
+  select * into p from public.goal_progress where child_id = c and category_id = t.cat('Short-sleeve bodysuit') and size_id = t.size('6-9M');
   perform t.ok(p.owned = 8, format('a piece counts toward every size in its range, got %s', p.owned));
-  select * into p from public.goal_progress where child_id = c and category_id = t.cat('Bottoms');
+  select * into p from public.goal_progress where child_id = c and category_id = t.cat('Pants');
   perform t.ok(p.owned = 9 and p.remaining = 0, 'remaining never goes below zero');
 
   -- progress is computed from goals, capped per goal, never from summed overlapping totals
@@ -96,14 +96,14 @@ begin
                format('size progress caps each goal: %s/%s = %s%%', p.owned_toward_goal, p.goal_total, p.percent_complete));
 
   -- constraints
-  perform t.fails($q$insert into public.inventory_items (child_id, name, category_id, quantity) values ('$q$ || c || $q$', 'x', $q$ || quote_literal(t.cat('Tops')) || $q$, 2)$q$,
+  perform t.fails($q$insert into public.inventory_items (child_id, name, category_id, quantity) values ('$q$ || c || $q$', 'x', $q$ || quote_literal(t.cat('Short-sleeve top')) || $q$, 2)$q$,
                   'individual items must have quantity 1', '23514');
   perform t.fails(format($q$insert into public.inventory_items (child_id, name, category_id, fit_from_size_id, fit_to_size_id) values (%L, 'x', %L, %L, %L)$q$,
-                  c, t.cat('Tops'), t.size('6-9M'), t.size('3-6M')), 'fit range cannot run backwards', '23514');
+                  c, t.cat('Short-sleeve top'), t.size('6-9M'), t.size('3-6M')), 'fit range cannot run backwards', '23514');
   perform t.fails(format($q$insert into public.inventory_items (child_id, name, category_id, fit_from_size_id) values (%L, 'x', %L, %L)$q$,
-                  c, t.cat('Tops'), t.size('6-9M')), 'fit range needs both ends', '23514');
+                  c, t.cat('Short-sleeve top'), t.size('6-9M')), 'fit range needs both ends', '23514');
   perform t.fails(format($q$insert into public.wardrobe_goals (child_id, category_id, size_id, target_quantity) values (%L, %L, %L, 3)$q$,
-                  c, t.cat('Bottoms'), t.size('3-6M')), 'one goal per child, category and size', '23505');
+                  c, t.cat('Pants'), t.size('3-6M')), 'one goal per child, category and size', '23505');
 end $$;
 
 -- 2. Shopping: order, partial receipt, over-receipt ----------------------------------------------------
@@ -112,25 +112,25 @@ declare c uuid := t.fxv('childA'); sh uuid; inv uuid; p record; v public.shoppin
 begin
   perform t.as_user('A');
   insert into public.shopping_items (child_id, category_id, size_id, quantity_needed)
-    values (c, t.cat('Short-sleeve bodysuits'), t.size('3-6M'), 3) returning id into sh;
+    values (c, t.cat('Short-sleeve bodysuit'), t.size('3-6M'), 3) returning id into sh;
   insert into t.fx values ('shop', sh);
 
-  perform t.ok((select incoming from public.goal_progress where child_id = c and category_id = t.cat('Short-sleeve bodysuits') and size_id = t.size('3-6M')) = 0,
+  perform t.ok((select incoming from public.goal_progress where child_id = c and category_id = t.cat('Short-sleeve bodysuit') and size_id = t.size('3-6M')) = 0,
                'a needed item is not incoming yet');
   perform t.fails(format('select public.receive_shopping_item(%L, 1)', sh), 'cannot receive before ordering', '22023');
 
   v := public.order_shopping_item(sh, 3);
   perform t.ok(v.status = 'ordered' and v.quantity_ordered = 3, 'ordering sets status');
-  select * into p from public.goal_progress where child_id = c and category_id = t.cat('Short-sleeve bodysuits') and size_id = t.size('3-6M');
+  select * into p from public.goal_progress where child_id = c and category_id = t.cat('Short-sleeve bodysuit') and size_id = t.size('3-6M');
   perform t.ok(p.incoming = 3 and p.remaining = 2, format('incoming 3 reduces remaining to 2, got %s', p.remaining));
   -- incoming only counts for the matching size
-  perform t.ok((select incoming from public.goal_progress where child_id = c and category_id = t.cat('Short-sleeve bodysuits') and size_id = t.size('6-9M')) = 0,
+  perform t.ok((select incoming from public.goal_progress where child_id = c and category_id = t.cat('Short-sleeve bodysuit') and size_id = t.size('6-9M')) = 0,
                'incoming does not count for other sizes');
 
   inv := public.receive_shopping_item(sh, 2);
   select * into v from public.shopping_items where id = sh;
   perform t.ok(v.status = 'partially_received' and v.quantity_received = 2, 'partial receipt');
-  select * into p from public.goal_progress where child_id = c and category_id = t.cat('Short-sleeve bodysuits') and size_id = t.size('3-6M');
+  select * into p from public.goal_progress where child_id = c and category_id = t.cat('Short-sleeve bodysuit') and size_id = t.size('3-6M');
   perform t.ok(p.owned = 9 and p.incoming = 1 and p.remaining = 2, format('after partial: owned 9, incoming 1, remaining 2, got %s/%s/%s', p.owned, p.incoming, p.remaining));
   perform t.ok((select quantity from public.inventory_items where id = inv) = 2, 'received pieces become inventory');
   perform t.ok((select count(*) from public.shopping_receipts where shopping_item_id = sh) = 1, 'a receipt row is kept');
@@ -138,7 +138,7 @@ begin
 
   perform public.receive_shopping_item(sh, 1);
   select * into v from public.shopping_items where id = sh;
-  select * into p from public.goal_progress where child_id = c and category_id = t.cat('Short-sleeve bodysuits') and size_id = t.size('3-6M');
+  select * into p from public.goal_progress where child_id = c and category_id = t.cat('Short-sleeve bodysuit') and size_id = t.size('3-6M');
   perform t.ok(v.status = 'received' and p.owned = 10 and p.incoming = 0, 'fully received: no double counting');
   perform t.ok((select count(*) from public.shopping_receipts where shopping_item_id = sh) = 2, 'receipt history is kept');
   perform t.fails(format('select public.order_shopping_item(%L, 5)', sh), 'received items cannot be re-ordered', '22023');
@@ -183,9 +183,9 @@ begin
   perform t.ok(t.affected(format($q$update public.inventory_items set quantity = 999, tracking_type = 'grouped' where id = %L$q$, itA)) = 0, 'B cannot update A item');
   perform t.ok(t.affected(format($q$delete from public.shopping_items where id = %L$q$, shA)) = 0, 'B cannot delete A shopping');
 
-  perform t.fails(format($q$insert into public.inventory_items (child_id, name, category_id) values (%L, 'x', %L)$q$, cA, t.cat('Tops')), 'B cannot add items to A child', '42501');
-  perform t.fails(format($q$insert into public.wardrobe_goals (child_id, category_id, size_id, target_quantity) values (%L, %L, %L, 1)$q$, cA, t.cat('Tops'), t.size('3-6M')), 'B cannot add goals to A child', '42501');
-  perform t.fails(format($q$insert into public.shopping_items (child_id, category_id, size_id) values (%L, %L, %L)$q$, cA, t.cat('Tops'), t.size('3-6M')), 'B cannot add shopping to A child', '42501');
+  perform t.fails(format($q$insert into public.inventory_items (child_id, name, category_id) values (%L, 'x', %L)$q$, cA, t.cat('Short-sleeve top')), 'B cannot add items to A child', '42501');
+  perform t.fails(format($q$insert into public.wardrobe_goals (child_id, category_id, size_id, target_quantity) values (%L, %L, %L, 1)$q$, cA, t.cat('Short-sleeve top'), t.size('3-6M')), 'B cannot add goals to A child', '42501');
+  perform t.fails(format($q$insert into public.shopping_items (child_id, category_id, size_id) values (%L, %L, %L)$q$, cA, t.cat('Short-sleeve top'), t.size('3-6M')), 'B cannot add shopping to A child', '42501');
   perform t.fails(format($q$insert into public.storage_locations (child_id, name) values (%L, 'x')$q$, cA), 'B cannot add locations to A child', '42501');
   perform t.fails(format($q$insert into public.inventory_photos (inventory_item_id, storage_path) values (%L, %L)$q$, itA, t.fxv('B')::text || '/x.jpg'), 'B cannot attach photos to A item', '42501');
   perform t.fails(format('select public.receive_shopping_item(%L, 1)', shA), 'B cannot receive A shopping', 'P0002');
@@ -207,13 +207,13 @@ begin
   insert into t.fx values ('brandB', brandB), ('catB', catB), ('childB', cB);
   -- B cannot use A's size... sizes are shared; but B cannot point a fit range at a size outside the child's system
   perform t.fails(format($q$insert into public.inventory_items (child_id, name, category_id, fit_from_size_id, fit_to_size_id) values (%L, 'x', %L, %L, %L)$q$,
-                  cB, t.cat('Tops'), gen_random_uuid(), gen_random_uuid()), 'unknown sizes are rejected', '23514');
+                  cB, t.cat('Short-sleeve top'), gen_random_uuid(), gen_random_uuid()), 'unknown sizes are rejected', '23514');
   declare v_sys uuid; v_sz uuid;
   begin
     insert into public.size_systems (name, owner_id) values ('B system', t.fxv('B')) returning id into v_sys;
     insert into public.sizes (size_system_id, label, sort_order) values (v_sys, 'B-size', 1) returning id into v_sz;
     perform t.fails(format($q$insert into public.inventory_items (child_id, name, category_id, fit_from_size_id, fit_to_size_id) values (%L, 'x', %L, %L, %L)$q$,
-                    cB, t.cat('Tops'), v_sz, v_sz), 'sizes from a different size system are rejected', '23514');
+                    cB, t.cat('Short-sleeve top'), v_sz, v_sz), 'sizes from a different size system are rejected', '23514');
     insert into t.fx values ('sysB', v_sys);
   end;
 end $$;
@@ -227,7 +227,7 @@ begin
   perform t.ok((select count(*) from public.sizes where label = 'B-size') = 0, 'A cannot see B sizes');
   perform t.ok((select count(*) from public.categories where owner_id is not null) = 0, 'A cannot see B categories');
   perform t.fails(format($q$insert into public.inventory_items (child_id, name, category_id, brand_id) values (%L, 'x', %L, %L)$q$,
-                  t.fxv('childA'), t.cat('Tops'), t.fxv('brandB')), 'A cannot reference B brand', '42501');
+                  t.fxv('childA'), t.cat('Short-sleeve top'), t.fxv('brandB')), 'A cannot reference B brand', '42501');
   perform t.fails(format($q$insert into public.inventory_items (child_id, name, category_id) values (%L, 'x', %L)$q$,
                   t.fxv('childA'), t.fxv('catB')), 'A cannot reference B category', '42501');
   perform t.fails(format($q$insert into public.wardrobe_goals (child_id, category_id, size_id, target_quantity) values (%L, %L, %L, 1)$q$,

@@ -4,11 +4,9 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { getContext } from '@/lib/context';
-import { safeBack, withParams } from '@/lib/back';
 
-/** Returns to the shopping list with the filters the person had, plus a message. */
-const backFor = (formData: FormData) => (error?: string, ok?: string): never =>
-  redirect(withParams(safeBack(formData.get('back'), '/shopping'), { error, ok: error ? undefined : ok }));
+const back = (error?: string, ok?: string): never =>
+  redirect(`/shopping${error ? `?error=${encodeURIComponent(error)}` : ok ? `?ok=${encodeURIComponent(ok)}` : ''}`);
 const refresh = () => ['/shopping', '/goals', '/closet', '/dashboard'].forEach((p) => revalidatePath(p));
 const uuid = z.string().uuid();
 const qtyOf = (v: FormDataEntryValue | null) => z.coerce.number().int().min(1).max(999).safeParse(v);
@@ -17,7 +15,6 @@ const qtyOf = (v: FormDataEntryValue | null) => z.coerce.number().int().min(1).m
 const message = (e: { code?: string; message?: string }, fallback: string) => (e.code === '22023' && e.message ? e.message : fallback);
 
 export async function orderFromGap(formData: FormData) {
-  const back = backFor(formData);
   const cat = uuid.safeParse(formData.get('categoryId'));
   const size = uuid.safeParse(formData.get('sizeId'));
   const qty = qtyOf(formData.get('quantity'));
@@ -37,7 +34,6 @@ export async function orderFromGap(formData: FormData) {
 }
 
 export async function addShoppingItem(formData: FormData) {
-  const back = backFor(formData);
   const parsed = z
     .object({
       categoryId: uuid,
@@ -62,7 +58,6 @@ export async function addShoppingItem(formData: FormData) {
 }
 
 export async function markOrdered(formData: FormData) {
-  const back = backFor(formData);
   const id = uuid.safeParse(formData.get('id'));
   const qty = qtyOf(formData.get('quantity'));
   if (!id.success || !qty.success) return back('Enter a quantity of 1 or more.');
@@ -74,7 +69,6 @@ export async function markOrdered(formData: FormData) {
 }
 
 export async function receiveDelivery(formData: FormData) {
-  const back = backFor(formData);
   const id = uuid.safeParse(formData.get('id'));
   const qty = qtyOf(formData.get('quantity'));
   if (!id.success || !qty.success) return back('Enter a quantity of 1 or more.');
@@ -86,7 +80,6 @@ export async function receiveDelivery(formData: FormData) {
 }
 
 export async function cancelItem(formData: FormData) {
-  const back = backFor(formData);
   const id = uuid.safeParse(formData.get('id'));
   if (!id.success) return back('That item could not be found.');
   const ctx = await getContext();

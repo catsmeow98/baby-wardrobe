@@ -23,9 +23,9 @@ begin
   -- color
   insert into public.children (name) values ('One') returning id into c1;
   insert into public.children (name) values ('Two') returning id into c2;
-  insert into public.inventory_items (child_id, name, category_id, color) values (c1, 'Blue top', t.cat('Top'), 'blue') returning id into i1;
-  insert into public.inventory_items (child_id, name, category_id, color) values (c1, 'Striped top', t.cat('Top'), 'multicolor') returning id into i2;
-  insert into public.inventory_items (child_id, name, category_id) values (c2, 'Other child top', t.cat('Top')) returning id into i3;
+  insert into public.inventory_items (child_id, name, category_id, color) values (c1, 'Blue top', t.cat('Short-sleeve top'), 'blue') returning id into i1;
+  insert into public.inventory_items (child_id, name, category_id, color) values (c1, 'Striped top', t.cat('Short-sleeve top'), 'multicolor') returning id into i2;
+  insert into public.inventory_items (child_id, name, category_id) values (c2, 'Other child top', t.cat('Short-sleeve top')) returning id into i3;
   perform t.ok((select color from public.inventory_items where id = i2) = 'multicolor', 'multicolor is a color');
   perform t.ok((select color from public.inventory_items where name = 'Other child top') is null, 'color is optional');
   perform t.fails(format($q$update public.inventory_items set color = 'chartreuse' where id = %L$q$, i1), 'an unknown color is rejected', '23514');

@@ -8,6 +8,7 @@ import {
   type CatKey, type Combo, type Freq, type MonthClass, type Occasion, type PickOption, type PjKey, type SizeWindow, type StageAnswers,
 } from '@/lib/domain';
 import { btnGhostCls, inputCls, labelCls } from '@/components/ui';
+import { ItemIcon } from '@/components/item-icon';
 
 type Stages = Record<number, StageAnswers>;
 const MAX_COMBOS = 6;
@@ -22,7 +23,9 @@ const HINT: Record<Occasion, string> = {
 };
 const SHORT_TITLE: Record<Occasion, string> = { sleep: 'Sleep', day: 'Day', dressy: 'Dressy' };
 
-const chipCls = (on: boolean) => `rounded-full border px-2.5 py-1 text-sm ${on ? 'border-accent bg-accent text-accent-ink' : 'border-line bg-surface'}`;
+const tileCls = (on: boolean) =>
+  `flex flex-col items-center gap-1 rounded-xl border px-1.5 py-2 text-center text-xs leading-tight ${on ? 'border-accent bg-accent text-accent-ink' : 'border-line bg-surface text-accent'}`;
+const GRID = 'grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5';
 
 /**
  * Picks item types. Chosen ones show as chips you can remove. Below, a search box and the item categories as collapsed
@@ -37,6 +40,7 @@ function ItemPicker({ options, selected, onToggle, flat = false, label }: {
 }) {
   const [q, setQ] = useState('');
   const nameOf = (k: string) => options.find((o) => o.key === k)?.name ?? (k in CATEGORY_NAMES ? CATEGORY_NAMES[k as CatKey] : 'Item');
+  const groupOf = (k: string) => options.find((o) => o.key === k)?.group;
   const groups = useMemo(() => {
     const m = new Map<string, PickOption[]>();
     for (const o of options) m.set(o.group, [...(m.get(o.group) ?? []), o]);
@@ -44,8 +48,9 @@ function ItemPicker({ options, selected, onToggle, flat = false, label }: {
   }, [options]);
   const needle = q.trim().toLowerCase();
   const button = (o: PickOption) => (
-    <button key={o.key} type="button" aria-pressed={selected.includes(o.key)} onClick={() => onToggle(o.key)} className={chipCls(selected.includes(o.key))}>
-      {o.name}
+    <button key={o.key} type="button" aria-pressed={selected.includes(o.key)} onClick={() => onToggle(o.key)} className={tileCls(selected.includes(o.key))}>
+      <ItemIcon itemKey={o.key} group={o.group} size={40} />
+      <span className={selected.includes(o.key) ? '' : 'text-ink'}>{o.name}</span>
     </button>
   );
   return (
@@ -53,19 +58,19 @@ function ItemPicker({ options, selected, onToggle, flat = false, label }: {
       {selected.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {selected.map((k) => (
-            <button key={k} type="button" onClick={() => onToggle(k)} aria-label={`Remove ${nameOf(k)}`} className="rounded-full border border-accent bg-accent px-2.5 py-1 text-sm text-accent-ink">
-              {nameOf(k)} <span aria-hidden="true">×</span>
+            <button key={k} type="button" onClick={() => onToggle(k)} aria-label={`Remove ${nameOf(k)}`} className="flex items-center gap-1 rounded-full border border-accent bg-accent px-2.5 py-1 text-sm text-accent-ink">
+              <ItemIcon itemKey={k} group={groupOf(k)} size={16} />{nameOf(k)} <span aria-hidden="true">×</span>
             </button>
           ))}
         </div>
       )}
       {flat ? (
-        <div className="flex flex-wrap gap-1.5">{options.map(button)}</div>
+        <div className={GRID}>{options.map(button)}</div>
       ) : (
         <>
           <input className={`${inputCls} sm:w-64`} type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search item types" aria-label={`Search ${label.toLowerCase()}`} />
           {needle ? (
-            <div className="flex flex-wrap gap-1.5">
+            <div className={GRID}>
               {options.filter((o) => o.name.toLowerCase().includes(needle)).map(button)}
               {options.every((o) => !o.name.toLowerCase().includes(needle)) && <span className="text-sm text-muted">No item type matches.</span>}
             </div>
@@ -76,7 +81,7 @@ function ItemPicker({ options, selected, onToggle, flat = false, label }: {
                 return (
                   <details key={group} className="rounded-lg border border-line bg-surface">
                     <summary className="cursor-pointer px-2.5 py-1.5 text-sm">{group}{n > 0 ? ` (${n} chosen)` : ''}</summary>
-                    <div className="flex flex-wrap gap-1.5 border-t border-line p-2">{list.map(button)}</div>
+                    <div className={`${GRID} border-t border-line p-2`}>{list.map(button)}</div>
                   </details>
                 );
               })}

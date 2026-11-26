@@ -322,3 +322,31 @@ test('a location\'s own month labels replace the fixed calendar', () => {
   assert.equal(r.temp, 'cool');
   assert.ok(!suggestGear([10, 11, 0], 6, false, false, table).includes('snowsuit'));
 });
+
+test('the 37 built-in item types each sit in exactly one chip group and have an icon', async () => {
+  const { CHIP_GROUPS } = await import('./survey');
+  const { ITEM_ICONS } = await import('../item-icons');
+  const listed = CHIP_GROUPS.flatMap((g) => g.keys);
+  assert.equal(CAT_KEYS.length, 37);
+  assert.deepEqual([...listed].sort(), [...CAT_KEYS].sort());
+  for (const k of CAT_KEYS) assert.ok(ITEM_ICONS[k]?.length > 0, `icon for ${k}`);
+  assert.equal(CATEGORY_NAMES.top, 'Short-sleeve top');
+});
+
+test('cardigan and pullover are cool-weather layers: in season for cool and cold months, never auto-suggested', () => {
+  const a = only(base(), 4, 'day', [combo('7', 'sbs')]);
+  a.stages[4].gear = ['cardigan', 'pullover'];
+  const winter = [11, 0, 1, 2];
+  const warm = [5, 6, 7];
+  const rows = (months: number[]) => suggest(a, 4, 'winter', { ...sizeWindow(0, 4), monthIdx: months }).rows;
+  assert.equal(rows(winter).find((r) => r.key === 'cardigan')!.qty, 2);
+  assert.equal(rows(warm).find((r) => r.key === 'pullover')!.qty, 1); // chosen, so at least 1
+  assert.ok(!suggestGear(winter, 4).includes('cardigan'));
+  assert.ok(!suggestGear(winter, 4).includes('pullover'));
+});
+
+test('overalls and long-sleeve dress work as pieces in a combination', () => {
+  const a = only(base(), 4, 'dressy', [combo('3-4', 'ldress'), combo('1-2', 'lovr')]);
+  assert.ok(qOf(a, 4, 'ldress') >= 1 && qOf(a, 4, 'lovr') >= 1);
+  assert.equal(qOf(only(base(), 4, 'day', [combo('7', 'sovr')]), 4, 'sovr') > 0, true);
+});
