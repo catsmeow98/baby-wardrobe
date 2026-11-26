@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Cropper, { type Area } from 'react-easy-crop';
 import { cropBlob, rotateBlob } from '@/lib/photo-client';
+import { PhotoTouchUp } from '@/components/photo-touchup';
 import { btnCls, btnGhostCls } from '@/components/ui';
 
 /**
@@ -24,6 +25,10 @@ export function PhotoEditor({ blob, original, onSave, onCancel }: {
   const [zoom, setZoom] = useState(1);
   const [area, setArea] = useState<Area | null>(null);
   const [busy, setBusy] = useState(false);
+  const [touching, setTouching] = useState(false);
+  /** Quarter turns applied to the current picture, so the original can be turned to match before restoring. */
+  const [turns, setTurns] = useState(0);
+  const [matched, setMatched] = useState<Blob | undefined>(original);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -43,8 +48,21 @@ export function PhotoEditor({ blob, original, onSave, onCancel }: {
     setBusy(true);
     try {
       setCur(await rotateBlob(cur, n));
+      setTurns((t) => t + n);
     } catch {
       setError('That photo could not be rotated.');
+    }
+    setBusy(false);
+  };
+
+  const openTouchUp = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      setMatched(original ? await rotateBlob(original, turns) : undefined);
+      setTouching(true);
+    } catch {
+      setError('Touch-up could not start for that photo.');
     }
     setBusy(false);
   };
@@ -84,9 +102,12 @@ export function PhotoEditor({ blob, original, onSave, onCancel }: {
           <button type="button" className={btnGhostCls} disabled={busy} onClick={() => turn(3)}>Rotate left</button>
           <button type="button" className={btnGhostCls} disabled={busy} onClick={() => turn(1)}>Rotate right</button>
           {original && (
-            <button type="button" className={btnGhostCls} disabled={busy} onClick={() => setCur(showingOriginal ? blob : original)}>
+            <button type="button" className={btnGhostCls} disabled={busy} onClick={() => { setTurns(0); setCur(showingOriginal ? blob : original); }}>
               {showingOriginal ? 'Use cutout' : 'Use original (with background)'}
             </button>
+          )}
+          {!showingOriginal && (
+            <button type="button" className={btnGhostCls} disabled={busy} onClick={openTouchUp}>Touch up</button>
           )}
           <label className="ml-auto flex items-center gap-2 text-sm">
             Zoom
@@ -106,6 +127,9 @@ export function PhotoEditor({ blob, original, onSave, onCancel }: {
           <button type="button" className={btnGhostCls} disabled={busy} onClick={onCancel}>Cancel</button>
         </div>
       </div>
+      {touching && (
+        <PhotoTouchUp blob={cur} original={matched} onCancel={() => setTouching(false)} onDone={(b) => { setCur(b); setTouching(false); }} />
+      )}
     </div>
   );
 }

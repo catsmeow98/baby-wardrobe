@@ -1,3 +1,5 @@
+import { scaleBox } from '@/lib/mask-clean';
+
 const MAX_SIDE = 1600;
 /** Background removal runs on a smaller copy: it is much faster, and a closet photo does not need more. */
 const CUTOUT_SIDE = 1024;
@@ -48,7 +50,14 @@ export async function processPhoto(file: File, removeBackground: boolean): Promi
   try {
     const small = await shrinkImage(original, CUTOUT_SIDE);
     const { removeBackgroundFrom } = await import('@/lib/bg-remove');
-    return { blob: await removeBackgroundFrom(small), original, cutout: true, failed: false };
+    const { blob, box } = await removeBackgroundFrom(small);
+    if (!box) return { blob, original, cutout: true, failed: false };
+    // The cutout was cropped tight to the item. Crop the original to the same area so Restore lines up.
+    const [a, b] = await Promise.all([createImageBitmap(small), createImageBitmap(original)]);
+    const area = scaleBox(box, b.width / a.width, b.height / a.height);
+    a.close();
+    b.close();
+    return { blob, original: await cropBlob(original, area), cutout: true, failed: false };
   } catch (e) {
     console.error('Background removal failed', e);
     return { blob: original, original, cutout: false, failed: true, reason: reasonOf(e) };

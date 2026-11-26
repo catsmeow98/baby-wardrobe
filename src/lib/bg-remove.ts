@@ -1,4 +1,4 @@
-import { cleanMask } from '@/lib/mask-clean';
+import { alphaBounds, refineMask, worthCropping, type Box } from '@/lib/mask-clean';
 
 /**
  * The one place that knows how backgrounds are removed. Runs in the browser, loaded only when a photo is picked with the
@@ -55,7 +55,13 @@ const canvasOf = (w: number, h: number) => {
   return { c, ctx };
 };
 
-export async function removeBackgroundFrom(image: Blob): Promise<Blob> {
+/** The cutout, and the rectangle (in the input photo's pixels) it was cropped to, or null when it was not cropped. */
+export interface Cutout {
+  blob: Blob;
+  box: Box | null;
+}
+
+export async function removeBackgroundFrom(image: Blob): Promise<Cutout> {
   const { ort, session } = await load();
   const bmp = await createImageBitmap(image);
   const w = bmp.width;
@@ -86,8 +92,8 @@ export async function removeBackgroundFrom(image: Blob): Promise<Blob> {
   if (!(hi - lo > 1e-6)) throw new Error(`the model gave a flat result (${lo} to ${hi})`);
   const soft = new Uint8Array(plane);
   for (let i = 0; i < plane; i++) soft[i] = Math.round((255 * (sal[i] - lo)) / (hi - lo));
-  // Keep the main piece, drop stray bits and fill holes, then soften the edge a little when the browser can.
-  const clean = cleanMask(soft, SIDE, SIDE);
+  // Shape: keep the main piece (and a second item), drop specks, fill holes; edge: a soft two-pixel fade.
+  const clean = refineMask(soft, SIDE, SIDE);
   const m = small.ctx.createImageData(SIDE, SIDE);
   for (let i = 0; i < plane; i++) {
     m.data[i * 4] = clean[i];
@@ -98,7 +104,6 @@ export async function removeBackgroundFrom(image: Blob): Promise<Blob> {
   small.ctx.putImageData(m, 0, 0);
   const big = canvasOf(w, h);
   big.ctx.imageSmoothingQuality = 'high';
-  big.ctx.filter = 'blur(1px)';
   big.ctx.drawImage(small.c, 0, 0, w, h);
   const mask = big.ctx.getImageData(0, 0, w, h).data;
 
@@ -117,7 +122,22 @@ export async function removeBackgroundFrom(image: Blob): Promise<Blob> {
   const result = canvasOf(w, h);
   result.ctx.drawImage(bmp, 0, 0, w, h);
   const px = result.ctx.getImageData(0, 0, w, h);
-  for (let i = 0; i < w * h; i++) px.data[i * 4 + 3] = mask[i * 4];
+  const alpha = new Uint8Array(w * h);
+  for (let i = 0; i < w * h; i++) {
+    alpha[i] = mask[i * 4];
+    px.data[i * 4 + 3] = alpha[i];
+  }
   result.ctx.putImageData(px, 0, 0);
-  return new Promise((resolve, reject) => result.c.toBlob((b) => (b ? resolve(b) : reject(new Error('encode failed'))), 'image/png'));
+
+  // Crop tight to the item (with a margin) when it leaves real room around it.
+  const found = alphaBounds(alpha, w, h);
+  const box = found && worthCropping(found, w, h) ? found : null;
+  let source = result.c;
+  if (box) {
+    const cropped = canvasOf(box.width, box.height);
+    cropped.ctx.drawImage(result.c, box.x, box.y, box.width, box.height, 0, 0, box.width, box.height);
+    source = cropped.c;
+  }
+  const blob = await new Promise<Blob>((resolve, reject) => source.toBlob((b) => (b ? resolve(b) : reject(new Error('encode failed'))), 'image/png'));
+  return { blob, box };
 }

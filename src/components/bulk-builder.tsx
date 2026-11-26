@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { BrandSelect } from '@/components/brand-select';
 import { CategoryPicker } from '@/components/category-picker';
 import { PhotoPicker } from '@/components/photo-picker';
+import { PhotoEditor } from '@/components/photo-editor';
 import { TagSizeField, type TagValue } from '@/components/tag-size-field';
 import { createClient } from '@/lib/supabase/client';
 import { extOf, processPhoto } from '@/lib/photo-client';
@@ -14,10 +15,12 @@ import type { CategoryRow, SizeLabelRow, SizeRow } from '@/lib/db';
 
 const MAX_ROWS = 50;
 const START_ROWS = 5;
+/** Originals (with background) are held in memory for Restore. Past this many, later photos can be erased but not restored. */
+const MAX_HELD_ORIGINALS = 12;
 
 interface Row {
   id: number;
-  photo: { path: string; preview: string } | null;
+  photo: { path: string; preview: string; blob: Blob; original?: Blob } | null;
 }
 
 /**
@@ -40,6 +43,7 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const rowCount = useRef(START_ROWS);
+  const heldOriginals = useRef(0);
   rowCount.current = rows.length;
   const file = useRef<HTMLInputElement>(null);
   const guard = useRef<HTMLInputElement>(null);
@@ -65,8 +69,14 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
       }
       setBusy(`${removeBg ? 'Processing' : 'Uploading'} photo ${k + 1} of ${files.length}…`);
       let blob: Blob;
+      let original: Blob | undefined;
       try {
-        blob = (await processPhoto(files[k], removeBg)).blob;
+        const done = await processPhoto(files[k], removeBg);
+        blob = done.blob;
+        if (done.cutout && heldOriginals.current < MAX_HELD_ORIGINALS) {
+          original = done.original;
+          heldOriginals.current++;
+        }
       } catch {
         skipped++;
         continue;
@@ -77,7 +87,7 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
         skipped++;
         continue;
       }
-      const photo = { path, preview: URL.createObjectURL(blob) };
+      const photo = { path, preview: URL.createObjectURL(blob), blob, original };
       added++;
       setRows((list) => {
         // New photo rows go after the last row that already has a photo, ahead of the blank rows.
@@ -92,9 +102,23 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
   async function removeRow(row: Row) {
     setRows((list) => list.filter((r) => r.id !== row.id));
     if (row.photo) {
+      if (row.photo.original) heldOriginals.current--;
       URL.revokeObjectURL(row.photo.preview);
       await createClient().storage.from(PHOTO_BUCKET).remove([row.photo.path]);
     }
+  }
+
+  /** Uploads the edited photo for a row, swaps it in, and deletes the file it replaces. */
+  async function savePhoto(row: Row, result: Blob) {
+    if (!row.photo) return;
+    const path = `${userId}/${childId}/${crypto.randomUUID()}.${extOf(result)}`;
+    const supabase = createClient();
+    const { error: upErr } = await supabase.storage.from(PHOTO_BUCKET).upload(path, result, { contentType: result.type });
+    if (upErr) throw new Error('upload');
+    const old = row.photo;
+    URL.revokeObjectURL(old.preview);
+    setRows((list) => list.map((r) => (r.id === row.id ? { ...r, photo: { path, preview: URL.createObjectURL(result), blob: result, original: old.original } } : r)));
+    await supabase.storage.from(PHOTO_BUCKET).remove([old.path]);
   }
 
   const addBlank = () => setRows((list) => (list.length >= MAX_ROWS ? list : [...list, { id: nextId.current++, photo: null }]));
@@ -118,7 +142,7 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
       </section>
 
       {rows.map((row, pos) => (
-        <BulkRow key={row.id} row={row} pos={pos} onRemove={() => removeRow(row)} userId={userId} childId={childId}
+        <BulkRow key={row.id} row={row} pos={pos} onRemove={() => removeRow(row)} onSavePhoto={(r) => savePhoto(row, r)} userId={userId} childId={childId}
           categories={categories} labels={labels} sizes={sizes} defaultTagId={defaultTagId} brands={brands} removeBg={removeBg} />
       ))}
 
@@ -131,10 +155,11 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
   );
 }
 
-function BulkRow({ row, pos, onRemove, userId, childId, categories, labels, sizes, defaultTagId, brands, removeBg }: {
+function BulkRow({ row, pos, onRemove, onSavePhoto, userId, childId, categories, labels, sizes, defaultTagId, brands, removeBg }: {
   row: Row;
   pos: number;
   onRemove: () => void;
+  onSavePhoto: (result: Blob) => Promise<void>;
   userId: string;
   childId: string;
   categories: CategoryRow[];
@@ -145,6 +170,7 @@ function BulkRow({ row, pos, onRemove, userId, childId, categories, labels, size
   removeBg: boolean;
 }) {
   const [tag, setTag] = useState<TagValue>({ tagId: defaultTagId, custom: false, text: '' });
+  const [editing, setEditing] = useState(false);
   return (
     <fieldset className="grid gap-3 rounded-xl border border-line bg-surface p-4 sm:grid-cols-6">
       <legend className="px-1 text-xs text-muted">Row {pos + 1}</legend>
@@ -153,6 +179,8 @@ function BulkRow({ row, pos, onRemove, userId, childId, categories, labels, size
           <input type="hidden" name={`photo_${pos}`} value={row.photo.path} />
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={row.photo.preview} alt={`Photo for row ${pos + 1}`} className="size-24 rounded-lg object-cover" />
+          <button type="button" className="mt-1 text-sm text-accent underline" onClick={() => setEditing(true)}>Edit photo</button>
+          {editing && <PhotoEditor blob={row.photo.blob} original={row.photo.original} onSave={async (r) => { await onSavePhoto(r); setEditing(false); }} onCancel={() => setEditing(false)} />}
         </div>
       )}
       <CategoryPicker categories={categories} name={`cat_${pos}`} className={`${labelCls} sm:col-span-2`} allowNew />
