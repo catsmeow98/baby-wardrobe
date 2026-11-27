@@ -64,12 +64,15 @@ export async function replacePhoto(photoId: string, path: string, originalPath?:
   if (!item || !validPhotoPath(path, prefix)) return { ok: false, error: 'That upload was not accepted.' };
   const original = originalPath && validPhotoPath(originalPath, prefix) ? originalPath : undefined;
   const newFiles = pathsOf({ path, originalPath: original });
+  // A new picture can keep the photo's current file as its original (Remove background does), so files are only ever
+  // deleted when the other side no longer uses them.
+  const oldAll = pathsOf({ path: photo.storage_path as string, originalPath: (photo.original_path as string | null) ?? undefined });
   const { error } = await ctx.supabase.from('inventory_photos').update({ storage_path: path, original_path: original ?? null }).eq('id', id.data);
   if (error) {
-    await ctx.supabase.storage.from(PHOTO_BUCKET).remove(newFiles);
+    await ctx.supabase.storage.from(PHOTO_BUCKET).remove(newFiles.filter((f) => !oldAll.includes(f)));
     return { ok: false, error: 'We could not save that photo. Try again.' };
   }
-  const oldFiles = pathsOf({ path: photo.storage_path as string, originalPath: (photo.original_path as string | null) ?? undefined }).filter((f) => !newFiles.includes(f));
+  const oldFiles = oldAll.filter((f) => !newFiles.includes(f));
   await ctx.supabase.storage.from(PHOTO_BUCKET).remove(oldFiles);
   refresh(photo.inventory_item_id as string);
   return { ok: true };

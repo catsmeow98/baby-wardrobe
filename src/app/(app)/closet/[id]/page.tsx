@@ -7,7 +7,7 @@ import { withCurrent } from '@/lib/categories';
 import { FormMessage } from '@/components/form-message';
 import type { ItemRow, SizeLabelRow } from '@/lib/db';
 import { PhotoUploader } from '@/components/photo-uploader';
-import { PhotoEditButton } from '@/components/photo-edit-button';
+import { ItemPhoto } from '@/components/item-photo';
 import { TypeIcon } from '@/components/item-icon';
 import { MAX_PHOTOS_PER_ITEM, signedUrls } from '@/lib/photos';
 import { ItemForm } from '../item-form';
@@ -67,18 +67,21 @@ export default async function EditItemPage({
             {photos.map((p) => (
               <li key={p.id} className="flex flex-col gap-1.5">
                 {urls.get(p.storage_path) ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={urls.get(p.storage_path)} alt={`${item.name}`} className={`aspect-square w-full rounded-lg ${p.storage_path.endsWith('.png') ? 'bg-line object-contain' : 'object-cover'}`} />
+                  <ItemPhoto photoId={p.id} url={urls.get(p.storage_path)!} path={p.storage_path} originalPath={p.original_path ?? undefined} alt={item.name} userId={ctx.user.id} childId={item.child_id}>
+                    <form action={deletePhoto}>
+                      <input type="hidden" name="photoId" value={p.id} />
+                      <button type="submit" className="text-sm text-bad underline">Delete photo</button>
+                    </form>
+                  </ItemPhoto>
                 ) : (
-                  <div className="flex aspect-square items-center justify-center rounded-lg bg-line text-sm text-muted">Unavailable</div>
+                  <>
+                    <div className="flex aspect-square items-center justify-center rounded-lg bg-line text-sm text-muted">Unavailable</div>
+                    <form action={deletePhoto}>
+                      <input type="hidden" name="photoId" value={p.id} />
+                      <button type="submit" className="text-sm text-bad underline">Delete photo</button>
+                    </form>
+                  </>
                 )}
-                <div className="flex flex-wrap items-center gap-3">
-                  {urls.get(p.storage_path) && <PhotoEditButton photoId={p.id} url={urls.get(p.storage_path)!} path={p.storage_path} originalPath={p.original_path ?? undefined} userId={ctx.user.id} childId={item.child_id} />}
-                  <form action={deletePhoto}>
-                    <input type="hidden" name="photoId" value={p.id} />
-                    <button type="submit" className="text-sm text-bad underline">Delete photo</button>
-                  </form>
-                </div>
               </li>
             ))}
           </ul>

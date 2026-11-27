@@ -13,7 +13,7 @@ import { replacePhoto } from '@/app/(app)/closet/photo-actions';
  * Turn left, turn right and "Edit" for a photo already on an item. A turn is a quarter turn, saved straight away; Edit opens the editor.
  * Either way the saved file (and its original, turned to match) is swapped for the new one.
  */
-export function PhotoEditButton({ photoId, url, path, originalPath, userId, childId }: {
+export function PhotoEditButton({ photoId, url, path, originalPath, userId, childId, onSaved }: {
   photoId: string;
   url: string;
   /** The photo's storage path, to tell when it is its own original. */
@@ -22,6 +22,8 @@ export function PhotoEditButton({ photoId, url, path, originalPath, userId, chil
   originalPath?: string;
   userId: string;
   childId: string;
+  /** Told the new picture as soon as it is saved, so the page can show it before it reloads. */
+  onSaved?: (picture: Blob) => void;
 }) {
   const router = useRouter();
   const [blob, setBlob] = useState<Blob | null>(null);
@@ -60,17 +62,24 @@ export function PhotoEditButton({ photoId, url, path, originalPath, userId, chil
 
   /** Removes the background from a photo that kept it: the cutout replaces it, and the photo as it was becomes its original. */
   async function removeBackground() {
-    setCutting('Starting…');
+    setCutting('Loading photo…');
     setError(null);
     try {
       const res = await fetch(url);
       if (!res.ok) throw new Error('the photo could not be loaded');
       const picture = await res.blob();
+      setCutting('Removing background…');
       const small = await shrinkImage(picture, CUTOUT_SIDE);
       const { removeBackgroundFrom } = await import('@/lib/bg-remove');
       const cutout = await removeBackgroundFrom(small, setCutting);
       setCutting('Saving…');
-      await save(cutout, picture);
+      // Only the cutout is uploaded: the photo's current file is already stored and becomes its original as it is.
+      const ref = await uploadPhoto(createClient(), userId, childId, cutout);
+      if (!ref || !path) throw new Error('the upload failed');
+      const done = await replacePhoto(photoId, ref.path, path);
+      if (!done.ok) throw new Error(done.error);
+      onSaved?.(cutout);
+      router.refresh();
     } catch (e) {
       setError(`The background could not be removed (${reasonOf(e).slice(0, 120)}). The photo is unchanged.`);
     }
@@ -96,6 +105,7 @@ export function PhotoEditButton({ photoId, url, path, originalPath, userId, chil
     const res = await replacePhoto(photoId, ref.path, ref.originalPath);
     if (!res.ok) throw new Error(res.error);
     setBlob(null);
+    onSaved?.(result);
     router.refresh();
   }
 
