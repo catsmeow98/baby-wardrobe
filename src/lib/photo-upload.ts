@@ -8,7 +8,8 @@ import type { PhotoRef } from '@/lib/photo-paths';
  * original goes first. If the picture then fails to upload, the original is removed again. If only the original fails,
  * the picture is still saved, just without a way back. Returns the paths, or null when the picture itself did not upload.
  */
-export async function uploadPhoto(supabase: SupabaseClient, userId: string, childId: string, blob: Blob, original?: Blob): Promise<PhotoRef | null> {
+/** onError, when given, gets the storage error's message (null is still returned), so a caller can say what went wrong. */
+export async function uploadPhoto(supabase: SupabaseClient, userId: string, childId: string, blob: Blob, original?: Blob, onError?: (message: string) => void): Promise<PhotoRef | null> {
   const stem = `${userId}/${childId}/${crypto.randomUUID()}`;
   const store = supabase.storage.from(PHOTO_BUCKET);
   let originalPath: string | undefined;
@@ -21,6 +22,8 @@ export async function uploadPhoto(supabase: SupabaseClient, userId: string, chil
   const path = `${stem}.${extOf(blob)}`;
   const { error } = await store.upload(path, blob, { contentType: blob.type });
   if (error) {
+    console.error('Photo upload failed', error);
+    onError?.(`upload failed: ${error.message} (${Math.round(blob.size / 1024)} KB ${blob.type})`);
     if (originalPath) await store.remove([originalPath]);
     return null;
   }

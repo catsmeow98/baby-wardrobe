@@ -38,7 +38,7 @@ export interface ProcessedPhoto {
 
 /** Shrinks a photo and, when asked, removes its background. Never throws for a removal problem: it falls back to the original. */
 /** A readable cause. The browser's AI engine throws a bare number when it runs out of memory. */
-const reasonOf = (e: unknown): string => {
+export const reasonOf = (e: unknown): string => {
   const m = e instanceof Error ? e.message : String(e);
   return /^\d+$/.test(m.trim()) ? `the browser ran out of memory (code ${m.trim()})` : m;
 };

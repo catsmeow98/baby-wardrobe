@@ -8,7 +8,7 @@ import { PhotoPicker } from '@/components/photo-picker';
 import { PhotoEditor } from '@/components/photo-editor';
 import { TagSizeField, type TagValue } from '@/components/tag-size-field';
 import { createClient } from '@/lib/supabase/client';
-import { processPhoto } from '@/lib/photo-client';
+import { processPhoto, reasonOf } from '@/lib/photo-client';
 import { downloadOriginal, uploadPhoto } from '@/lib/photo-upload';
 import { joinPhotoField, pathsOf } from '@/lib/photo-paths';
 import { PHOTO_BUCKET } from '@/lib/photos';
@@ -120,6 +120,7 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
     setError(null);
     const supabase = createClient();
     let skipped = 0;
+    const problems: string[] = [];
     let added = 0;
     let firstNew: number | null = null;
     const startRows = rowCount.current;
@@ -135,13 +136,16 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
         const done = await processPhoto(files[k], removeBg, (text) => setBusy(`Photo ${k + 1} of ${files.length}: ${text}`));
         blob = done.blob;
         if (done.cutout) original = done.original;
-      } catch {
+      } catch (err) {
+        console.error('Photo could not be read', err);
+        problems.push(`Photo ${k + 1}: could not be read (${reasonOf(err).slice(0, 160)})`);
         skipped++;
         continue;
       }
       // The original is stored with the cutout, so Restore works later. It is not kept in memory.
-      const ref = await uploadPhoto(supabase, userId, childId, blob, original);
+      const ref = await uploadPhoto(supabase, userId, childId, blob, original, (m) => problems.push(`Photo ${k + 1}: ${m.slice(0, 200)}`));
       if (!ref) {
+        if (problems.length < skipped + 1) problems.push(`Photo ${k + 1}: upload failed`);
         skipped++;
         continue;
       }
@@ -151,7 +155,7 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
       setRows((list) => [...list, { id, photo: { ...ref, preview: URL.createObjectURL(blob), blob } }]);
     }
     setBusy(null);
-    if (skipped) setError(`${skipped} photo${skipped > 1 ? 's' : ''} could not be added. Check your connection or try a JPEG or PNG.`);
+    if (skipped) setError(`${skipped} photo${skipped > 1 ? 's' : ''} could not be added. ${problems.join(' · ')}`);
     // Once the photos are in, move on to the first new one (unless some failed, so the message can be read first).
     else if (firstNew !== null) go(String(firstNew));
   }
