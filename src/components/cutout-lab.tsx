@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { btnCls, btnGhostCls } from '@/components/ui';
-import { LAB_MODELS, runLabModel, type LabModel, type LabResult } from '@/lib/cutout-lab';
+import { LAB_MODELS, NATIVE_MODEL, hasNativeSegmenter, runLabModel, type LabModel, type LabResult } from '@/lib/cutout-lab';
 
 const CHECKER = 'repeating-conic-gradient(#e4e4e7 0% 25%, #fafafa 0% 50%) 0 0 / 16px 16px';
 
@@ -20,6 +20,11 @@ export function CutoutLab() {
   const [preview, setPreview] = useState<string | null>(null);
   const [cards, setCards] = useState<Record<string, Card>>({});
   const anyBusy = Object.values(cards).some((c) => c.busy);
+  // Inside the Android app, Google's native cutout goes first.
+  const [models, setModels] = useState<LabModel[]>(LAB_MODELS);
+  useEffect(() => {
+    if (hasNativeSegmenter()) setModels([NATIVE_MODEL, ...LAB_MODELS]);
+  }, []);
 
   useEffect(() => {
     if (!file) return setPreview(null);
@@ -54,17 +59,17 @@ export function CutoutLab() {
       </label>
       {preview && <img src={preview} alt="The photo being tested" className="max-h-64 rounded-lg border border-line object-contain" />}
 
-      {LAB_MODELS.map((m) => {
+      {models.map((m) => {
         const c = cards[m.id] ?? EMPTY;
         return (
           <section key={m.id} className="flex flex-col gap-2 rounded-xl border border-line bg-surface p-4">
             <div>
               <h2 className="font-display text-lg font-bold">{m.label}</h2>
-              <p className="text-sm text-muted">{m.note} About {m.sizeMB} MB, {m.licence}.</p>
+              <p className="text-sm text-muted">{m.note} {m.native ? `${m.licence}.` : `About ${m.sizeMB} MB, ${m.licence}.`}</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <button type="button" className={c.result ? btnGhostCls : btnCls} disabled={!file || anyBusy} onClick={() => run(m)}>
-                {c.result ? 'Run again' : `Run (downloads ${m.sizeMB} MB the first time)`}
+                {c.result ? 'Run again' : m.native ? 'Run' : `Run (downloads ${m.sizeMB} MB the first time)`}
               </button>
               {c.busy && <span className="text-sm text-muted" role="status">{c.status}</span>}
             </div>
@@ -72,7 +77,9 @@ export function CutoutLab() {
             {c.result && (
               <>
                 <p className="text-sm text-muted">
-                  Download {c.result.downloadSeconds.toFixed(1)} s · start {c.result.loadSeconds.toFixed(1)} s · cut out {c.result.runSeconds.toFixed(1)} s · keeps {c.result.keptPercent}% of the photo
+                  {c.result.nativeMs !== undefined
+                    ? <>ML Kit {(c.result.nativeMs / 1000).toFixed(2)} s · with sending the photo {c.result.runSeconds.toFixed(1)} s · keeps {c.result.keptPercent}% of the photo</>
+                    : <>Download {c.result.downloadSeconds.toFixed(1)} s · start {c.result.loadSeconds.toFixed(1)} s · cut out {c.result.runSeconds.toFixed(1)} s · keeps {c.result.keptPercent}% of the photo</>}
                 </p>
                 <div className="grid grid-cols-2 gap-2">
                   {[['What the app would save', c.result.cleanUrl], ['Raw model output', c.result.rawUrl]].map(([label, url]) => (

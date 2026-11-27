@@ -17,6 +17,8 @@ export interface LabModel {
   std: [number, number, number];
   /** True when the output is raw logits (squash with a sigmoid). Otherwise the output is stretched to its own min..max. */
   sigmoid: boolean;
+  /** Runs in the Android app through its native SubjectSegmenter plugin (Google ML Kit) instead of in the browser. */
+  native?: boolean;
 }
 
 export const LAB_MODELS: LabModel[] = [
@@ -55,6 +57,47 @@ export const LAB_MODELS: LabModel[] = [
   },
 ];
 
+/** Google's on-device subject segmentation, through the Android app's native plugin. Shown only inside the app. */
+export const NATIVE_MODEL: LabModel = {
+  id: 'mlkit-native',
+  label: 'Android ML Kit (native)',
+  note: "Google's subject segmentation, built into Android (Play services). Nothing to download in the app; the first run may wait for Play services to fetch it.",
+  sizeMB: 0,
+  url: '',
+  licence: 'Google ML Kit terms (beta API)',
+  mean: [0, 0, 0],
+  std: [1, 1, 1],
+  sigmoid: false,
+  native: true,
+};
+
+interface NativeBridge {
+  isNativePlatform?: () => boolean;
+  registerPlugin?: (name: string) => Record<string, (opts: unknown) => Promise<unknown>>;
+  Plugins?: Record<string, Record<string, (opts: unknown) => Promise<unknown>> | undefined>;
+}
+const bridge = (): NativeBridge | undefined => (globalThis as { Capacitor?: NativeBridge }).Capacitor;
+
+/** True inside the Android app, where the native ML Kit plugin is there to call. */
+export const hasNativeSegmenter = () => Boolean(bridge()?.isNativePlatform?.());
+
+/** The photo (longest side at most 1024) through ML Kit: a confidence mask, one byte (0..255) per pixel, at the photo's shape. */
+async function nativeMask(bmp: ImageBitmap): Promise<{ mask: Uint8Array; w: number; h: number; ms: number }> {
+  const cap = bridge();
+  const plugin = cap?.Plugins?.SubjectSegmenter ?? cap?.registerPlugin?.('SubjectSegmenter');
+  if (!plugin?.segment) throw new Error('The native cutout is only in the Android app (update the app if it is missing).');
+  const scale = Math.min(1, SIDE / Math.max(bmp.width, bmp.height));
+  const c = canvasOf(Math.max(1, Math.round(bmp.width * scale)), Math.max(1, Math.round(bmp.height * scale)));
+  c.ctx.drawImage(bmp, 0, 0, c.c.width, c.c.height);
+  const jpeg = c.c.toDataURL('image/jpeg', 0.92).split(',')[1];
+  const res = (await plugin.segment({ image: jpeg })) as { mask: string; width: number; height: number; ms: number };
+  const bin = atob(res.mask);
+  const mask = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) mask[i] = bin.charCodeAt(i);
+  if (mask.length !== res.width * res.height) throw new Error(`unexpected mask size (${mask.length})`);
+  return { mask, w: res.width, h: res.height, ms: res.ms };
+}
+
 export interface LabResult {
   /** Object URLs for PNGs. The page revokes them when a new result replaces these. */
   cleanUrl: string;
@@ -63,6 +106,8 @@ export interface LabResult {
   loadSeconds: number;
   runSeconds: number;
   keptPercent: number;
+  /** ML Kit's own processing time, for the native model. */
+  nativeMs?: number;
 }
 
 interface Tensor {
@@ -119,6 +164,7 @@ async function download(url: string, onProgress: (done: number, total: number) =
 const png = (c: HTMLCanvasElement) => new Promise<string>((resolve, reject) => c.toBlob((b) => (b ? resolve(URL.createObjectURL(b)) : reject(new Error('encode failed'))), 'image/png'));
 
 export async function runLabModel(model: LabModel, image: Blob, onStatus: (text: string) => void): Promise<LabResult> {
+  if (model.native) return runNative(image, onStatus);
   const t0 = performance.now();
   const bytes = await download(model.url, (done, total) =>
     onStatus(total ? `Downloading ${model.label}: ${Math.round((100 * done) / total)}% of ${Math.round(total / 1e6)} MB` : `Downloading ${model.label}: ${Math.round(done / 1e6)} MB`));
@@ -199,4 +245,70 @@ export async function runLabModel(model: LabModel, image: Blob, onStatus: (text:
   } finally {
     await session.release?.().catch(() => undefined);
   }
+}
+
+/** The native ML Kit run, finished with the same cleanup and pictures as the browser models so they compare fairly. */
+async function runNative(image: Blob, onStatus: (text: string) => void): Promise<LabResult> {
+  onStatus('Cutting out on the phone (ML Kit)…');
+  const t0 = performance.now();
+  const bmp = await createImageBitmap(image);
+  const native = await nativeMask(bmp);
+  const t1 = performance.now();
+  // The mask, squashed to the lab's 1024 square, so refineMask and the pictures work exactly as for the other models.
+  const m = canvasOf(native.w, native.h);
+  const md = m.ctx.createImageData(native.w, native.h);
+  for (let i = 0; i < native.mask.length; i++) {
+    md.data[i * 4] = native.mask[i];
+    md.data[i * 4 + 1] = native.mask[i];
+    md.data[i * 4 + 2] = native.mask[i];
+    md.data[i * 4 + 3] = 255;
+  }
+  m.ctx.putImageData(md, 0, 0);
+  const sq = canvasOf(SIDE, SIDE);
+  sq.ctx.imageSmoothingQuality = 'high';
+  sq.ctx.drawImage(m.c, 0, 0, SIDE, SIDE);
+  const sqd = sq.ctx.getImageData(0, 0, SIDE, SIDE).data;
+  const plane = SIDE * SIDE;
+  const soft = new Uint8Array(plane);
+  for (let i = 0; i < plane; i++) soft[i] = sqd[i * 4];
+  const clean = refineMask(soft, SIDE, SIDE);
+
+  const scale = Math.min(1, SHOW_MAX / Math.max(bmp.width, bmp.height));
+  const w = Math.max(1, Math.round(bmp.width * scale));
+  const h = Math.max(1, Math.round(bmp.height * scale));
+  const cutout = async (alpha: ArrayLike<number>) => {
+    const a = canvasOf(SIDE, SIDE);
+    const ad = a.ctx.createImageData(SIDE, SIDE);
+    for (let i = 0; i < plane; i++) {
+      ad.data[i * 4] = alpha[i];
+      ad.data[i * 4 + 1] = alpha[i];
+      ad.data[i * 4 + 2] = alpha[i];
+      ad.data[i * 4 + 3] = 255;
+    }
+    a.ctx.putImageData(ad, 0, 0);
+    const big = canvasOf(w, h);
+    big.ctx.imageSmoothingQuality = 'high';
+    big.ctx.drawImage(a.c, 0, 0, w, h);
+    const mask = big.ctx.getImageData(0, 0, w, h).data;
+    const res = canvasOf(w, h);
+    res.ctx.drawImage(bmp, 0, 0, w, h);
+    const px = res.ctx.getImageData(0, 0, w, h);
+    for (let i = 0; i < w * h; i++) px.data[i * 4 + 3] = mask[i * 4];
+    res.ctx.putImageData(px, 0, 0);
+    return png(res.c);
+  };
+  const cleanUrl = await cutout(clean);
+  const rawUrl = await cutout(soft);
+  let kept = 0;
+  for (let i = 0; i < plane; i += 7) if (clean[i] > 127) kept++;
+  return {
+    cleanUrl,
+    rawUrl,
+    downloadSeconds: 0,
+    loadSeconds: 0,
+    // ML Kit's own time for the cutout, then the round trip (sending the photo and the mask) on top.
+    runSeconds: (t1 - t0) / 1000,
+    keptPercent: Math.round((100 * kept) / Math.ceil(plane / 7)),
+    nativeMs: native.ms,
+  };
 }
