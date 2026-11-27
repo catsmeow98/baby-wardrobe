@@ -1,0 +1,12 @@
+{
+  "name": "baby-wardrobe-android",
+  "private": true,
+  "description": "The Android app: a Capacitor shell that opens the live site. Built by .github/workflows/android.yml; see mobile/README.md.",
+  "dependencies": {
+    "@capacitor/android": "^8.0.0",
+    "@capacitor/core": "^8.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.0.0"
+  }
+}

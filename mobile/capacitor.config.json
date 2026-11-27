@@ -1,0 +1,10 @@
+{
+  "appId": "com.babywardrobe.app",
+  "appName": "Baby Wardrobe",
+  "webDir": "www",
+  "server": {
+    "url": "https://baby-clothes-tracker-gamma.vercel.app",
+    "androidScheme": "https",
+    "errorPath": "offline.html"
+  }
+}

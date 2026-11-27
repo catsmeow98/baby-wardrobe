@@ -1,0 +1,72 @@
+name: Android app
+
+on:
+  push:
+    branches: [main]
+    paths: ['mobile/**', '.github/workflows/android.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write # to publish the APK as a release
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Check the signing secrets
+        env:
+          KS: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          PW: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -z "$KS" ] || [ -z "$PW" ]; then
+            echo "::error::Add the ANDROID_KEYSTORE_BASE64 and ANDROID_KEYSTORE_PASSWORD secrets (repo Settings > Secrets and variables > Actions). See mobile/README.md."
+            exit 1
+          fi
+
+      - name: Install Capacitor
+        run: npm install --no-audit --no-fund
+
+      - name: Generate the Android project
+        run: npx cap add android
+
+      - name: Set the version (run number, so each build installs over the last)
+        run: |
+          sed -i -E "s/versionCode [0-9]+/versionCode ${{ github.run_number }}/; s/versionName \"[^\"]*\"/versionName \"1.0.${{ github.run_number }}\"/" android/app/build.gradle
+          grep -E "versionCode|versionName" android/app/build.gradle
+
+      - name: Build
+        working-directory: mobile/android
+        run: ./gradlew --no-daemon assembleRelease
+
+      - name: Sign
+        env:
+          KS: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          PW: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          echo "$KS" | base64 -d > "$RUNNER_TEMP/release.jks"
+          BT="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
+          "$BT/zipalign" -f -p 4 android/app/build/outputs/apk/release/app-release-unsigned.apk "$RUNNER_TEMP/aligned.apk"
+          "$BT/apksigner" sign --ks "$RUNNER_TEMP/release.jks" --ks-pass env:PW --ks-key-alias babywardrobe --out baby-wardrobe.apk "$RUNNER_TEMP/aligned.apk"
+          "$BT/apksigner" verify --print-certs baby-wardrobe.apk | head -3
+          rm "$RUNNER_TEMP/release.jks"
+
+      - name: Publish as a release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "android-${{ github.run_number }}" baby-wardrobe.apk \
+            --title "Android app 1.0.${{ github.run_number }}" \
+            --notes "Install this on your phone to update the app. Built from ${{ github.sha }}." \
+            --latest
