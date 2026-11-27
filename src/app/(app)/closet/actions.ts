@@ -132,7 +132,7 @@ export async function saveItem(formData: FormData) {
   if (id.success) {
     const { error } = await ctx.supabase.from('inventory_items').update(row).eq('id', id.data);
     if (error) return fail(path, 'We could not save that item. Check the sizes and try again.');
-    revalidatePath('/closet');
+    ['/closet', '/dashboard', '/shopping', '/goals'].forEach((p) => revalidatePath(p));
     return redirect(backTo);
   }
   const { data: made, error } = await ctx.supabase.from('inventory_items').insert({ ...row, child_id: ctx.active.id }).select('id').single();
@@ -163,13 +163,20 @@ const MAX_BULK_ROWS = 50;
 
 export async function bulkCreate(formData: FormData) {
   const backTo = backOf(formData);
-  const fail = (p: string, m: string): never => failWith(p, m, backTo);
+  // A failed save from a shopping trip goes back to that trip.
+  const tripQs = z.string().uuid().safeParse(formData.get('trip') || undefined);
+  const fail = (p: string, m: string): never =>
+    tripQs.success && p === '/closet/bulk' ? redirect(`${p}?trip=${tripQs.data}&error=${encodeURIComponent(m)}${backTo !== '/closet' ? `&back=${encodeURIComponent(backTo)}` : ''}`) : failWith(p, m, backTo);
   const path = '/closet/bulk';
   const shared = z
     .object({ condition: z.enum(CONDITION_VALUES), season: z.enum(SEASON_VALUES), status: z.enum(STATUS_VALUES), gender: z.enum(GENDER_VALUES).nullable() })
     .safeParse({ condition: formData.get('condition'), season: formData.get('season'), status: formData.get('status'), gender: formData.get('gender') || null });
   if (!shared.success) return fail(path, 'Check the condition, season and status.');
-  const count = Math.min(MAX_BULK_ROWS, Math.max(1, Number(formData.get('rows')) || 0));
+  const count = Math.min(MAX_BULK_ROWS, Math.max(0, Number(formData.get('rows')) || 0));
+  // From a shopping trip: rows can say which received placeholder they are (match_i), and "nophoto" lines add pieces with no
+  // photo. Everything then goes through complete_received, which swaps the placeholders for these items in one transaction.
+  const trip = z.string().uuid().safeParse(formData.get('trip') || undefined);
+  const consume: { item: string; qty: number }[] = [];
 
   const ctx = await getContext();
   if (!ctx.active) return fail('/closet', 'Add a child first.');
@@ -207,6 +214,8 @@ export async function bulkCreate(formData: FormData) {
     const range = resolveFitRange(tagO, null, thruO, tagTo);
     if ('error' in range) return fail(path, `${n}: ${range.error}`);
     if (brand && !brandCache.has(brand.toLowerCase())) brandCache.set(brand.toLowerCase(), await brandId(ctx, brand));
+    const match = z.string().uuid().safeParse(text('match') || undefined);
+    if (trip.success && match.success) consume.push({ item: match.data, qty: qty.data });
     sourceRow.push(i);
     rows.push({
       child_id: ctx.active.id,
@@ -230,9 +239,60 @@ export async function bulkCreate(formData: FormData) {
   const unused: string[] = [];
   for (let i = 0; i < count; i++) if (!sourceRow.includes(i)) unused.push(...formData.getAll(`photo_${i}`).map(String));
   if (unused.length) await discardPhotos(ctx.supabase, ctx.user.id, ctx.active.id, unused);
+  if (trip.success) {
+    // Pieces from the trip added without a photo: one plain item each, like the placeholder they come from.
+    const wanted = formData.getAll('nophoto').map(String).flatMap((v) => {
+      const [item, n] = v.split(':');
+      const id = z.string().uuid().safeParse(item);
+      const k = Number(n);
+      return id.success && Number.isInteger(k) && k > 0 && k <= 999 ? [{ item: id.data, n: k }] : [];
+    });
+    if (wanted.length) {
+      const { data: holders } = await ctx.supabase
+        .from('inventory_items')
+        .select('id, category_id, label_id, fit_from_size_id, fit_to_size_id')
+        .in('id', wanted.map((w) => w.item))
+        .eq('needs_details', true);
+      for (const w of wanted) {
+        const h = (holders ?? []).find((x: { id: string }) => x.id === w.item) as
+          { id: string; category_id: string; label_id: string | null; fit_from_size_id: string | null; fit_to_size_id: string | null } | undefined;
+        if (!h) return fail(path, 'Those received pieces were already added. Reload the trip and try again.');
+        for (let k = 0; k < w.n; k++) {
+          sourceRow.push(-1);
+          rows.push({
+            child_id: ctx.active.id,
+            name: ctx.catById.get(h.category_id)?.name ?? 'Item',
+            category_id: h.category_id,
+            tracking_type: 'individual',
+            quantity: 1,
+            label_id: h.label_id,
+            fit_from_size_id: h.fit_from_size_id,
+            fit_to_size_id: h.fit_to_size_id,
+            condition: shared.data.condition,
+            season: shared.data.season,
+            gender: shared.data.gender,
+            status: shared.data.status,
+          });
+        }
+        consume.push({ item: w.item, qty: w.n });
+      }
+    }
+  }
   if (!rows.length) return fail(path, 'Add at least one item: a photo, a name or a brand.');
   // One insert, so either every row is saved or none is.
-  const { data: made, error } = await ctx.supabase.from('inventory_items').insert(rows).select('id');
+  let made: { id: string }[] | null = null;
+  let error: { code?: string; message?: string } | null = null;
+  if (trip.success && consume.length) {
+    // One transaction: the new items in, the received placeholders down (or gone). Ids come back in order.
+    const res = await ctx.supabase.rpc('complete_received', { p_rows: rows, p_consume: consume });
+    error = res.error;
+    made = ((res.data as string[] | null) ?? []).map((id) => ({ id }));
+    if (error?.code === '22023') return fail(path, `${error.message}. Nothing was added; reload the trip and try again.`);
+  } else {
+    const res = await ctx.supabase.from('inventory_items').insert(rows).select('id');
+    error = res.error;
+    made = (res.data as { id: string }[] | null) ?? null;
+  }
   if (error) return fail(path, 'We could not save those items. Nothing was added. Try again.');
   // Attach each row's photos. Rows come back in the order they were sent, so index i matches sourceRow[i].
   let photoProblem = false;

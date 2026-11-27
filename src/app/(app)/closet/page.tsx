@@ -188,6 +188,7 @@ export default async function ClosetPage({ searchParams }: { searchParams: Promi
                     {i.status !== 'active' && <Pill>{STATUSES.find(([v]) => v === i.status)?.[1]}</Pill>}
                     {i.condition === 'unusable' && <Pill tone="bad">{CONDITIONS.find(([v]) => v === i.condition)?.[1]}</Pill>}
                     {fb && <Pill>{fb}</Pill>}
+                    {raw.needs_details && <Pill tone="warn">Needs photos</Pill>}
                   </span>
                 </Link>
               </li>

@@ -11,6 +11,8 @@ import type { GoalRow, ItemRow, ShoppingRow } from '@/lib/db';
 import { KEPT_STATUSES, countFitting, fitStateFor, goalProgress, sizeProgress, transition, type FitState } from '@/lib/domain';
 import { forecastFor, loadMeasurements } from '@/lib/forecast-data';
 import { TypeIcon } from '@/components/item-icon';
+import { TripCard } from '@/components/trip-card';
+import { loadTrips } from '@/lib/trips-data';
 
 export const metadata: Metadata = { title: 'Dashboard' };
 
@@ -31,6 +33,7 @@ export default async function DashboardPage() {
   const ctx = await getContext();
   if (!ctx.active) return <><SetupBanner ctx={ctx} /><NoChild /></>;
   const child = ctx.active;
+  const trips = await loadTrips(ctx, child.id);
   const [{ data: itemRows }, { data: goalRows }, { data: shopRows }] = await Promise.all([
     ctx.supabase.from('inventory_items').select('*').eq('child_id', child.id),
     ctx.supabase.from('wardrobe_goals').select('*').eq('child_id', child.id),
@@ -101,6 +104,14 @@ export default async function DashboardPage() {
           <p className="mb-3 text-muted">Your closet is empty. Add what {child.name} already has, then set goals.</p>
           <Link className={btnGhostCls} href="/closet/bulk">Bulk add items</Link>
         </div>
+      )}
+
+      {trips.length > 0 && (
+        <section className="flex flex-col gap-2">
+          <h2 className="font-display text-lg font-bold">Shopping trips needing photos</h2>
+          {trips.slice(0, 5).map((t) => <TripCard key={t.id} trip={t} typeName={(id) => ctx.catById.get(id)?.name ?? 'Item'} back="/dashboard" />)}
+          {trips.length > 5 && <p className="text-sm text-muted">And {trips.length - 5} more.</p>}
+        </section>
       )}
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

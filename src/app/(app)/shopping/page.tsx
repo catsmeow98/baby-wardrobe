@@ -19,11 +19,13 @@ import { buildNeedsTable } from '@/lib/needs-table';
 import { addShoppingItem, cancelItem, markOrdered, orderFromGap, receiveDelivery } from './actions';
 import { TypeIcon } from '@/components/item-icon';
 import { NeedsCart } from '@/components/needs-cart';
+import { TripCard } from '@/components/trip-card';
+import { loadTrips } from '@/lib/trips-data';
 import { iconForType } from '@/lib/item-icons';
 
 export const metadata: Metadata = { title: 'Shopping' };
 
-export default async function ShoppingPage({ searchParams }: { searchParams: Promise<{ error?: string; ok?: string; group?: string | string[]; cat?: string | string[]; size?: string | string[] }> }) {
+export default async function ShoppingPage({ searchParams }: { searchParams: Promise<{ error?: string; ok?: string; trip?: string; group?: string | string[]; cat?: string | string[]; size?: string | string[] }> }) {
   const sp = await searchParams;
   const ctx = await getContext();
   if (!ctx.active) return <NoChild />;
@@ -36,6 +38,9 @@ export default async function ShoppingPage({ searchParams }: { searchParams: Pro
     ctx.supabase.from('shopping_items').select('*').eq('child_id', child.id).order('created_at', { ascending: false }),
   ]);
   const shopRowsT = (shopRows ?? []) as ShoppingRow[];
+  // Just received (a Receive, or Bought & received in the cart): offer to add photos for that trip.
+  const tripId = sp.trip && /^[0-9a-f-]{36}$/i.test(sp.trip) ? sp.trip : undefined;
+  const justReceived = tripId ? (await loadTrips(ctx, child.id, tripId))[0] : undefined;
   const progress = goalProgress(toGoals((goalRows ?? []) as GoalRow[], ctx), toInventory((itemRows ?? []) as ItemRow[], ctx), toShopping(shopRowsT, ctx));
   const visibleIds = new Set(ctx.categories.map((c) => c.id));
   const groupIds = listOf(sp.group);
@@ -111,6 +116,10 @@ export default async function ShoppingPage({ searchParams }: { searchParams: Pro
         <p className="text-muted">Needs come from your goals. Ordered items count as incoming until you receive them.</p>
       </div>
       <FormMessage error={sp.error} message={sp.ok} />
+      {justReceived && (
+        <TripCard trip={justReceived} typeName={(id) => ctx.catById.get(id)?.name ?? 'Item'} back={currentUrl('/shopping', { ...sp, trip: undefined, ok: undefined })} prompt
+          laterHref={currentUrl('/shopping', { ...sp, trip: undefined, ok: undefined })} />
+      )}
 
       <form className="flex flex-wrap items-center gap-2" method="get" role="search">
         <TypeFilters categories={ctx.categories} groups={ctx.groups} sizes={ctx.sizes} group={groupIds} cat={cats} size={sizeList} />

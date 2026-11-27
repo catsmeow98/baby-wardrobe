@@ -14,6 +14,7 @@ import { ItemForm } from '../item-form';
 import { deletePhoto } from '../photo-actions';
 import { deleteItem, saveItem } from '../actions';
 import { safeBack } from '@/lib/back';
+import { tripOfItem } from '@/lib/trips-data';
 
 export const metadata: Metadata = { title: 'Edit item' };
 
@@ -48,6 +49,7 @@ export default async function EditItemPage({
   const urls = await signedUrls(ctx.supabase, photos.map((p) => p.storage_path));
   const { data: inOutfits } = await ctx.supabase.from('outfit_items').select('outfits(id, name)').eq('item_id', item.id);
   const outfitLinks = ((inOutfits ?? []) as unknown as { outfits: { id: string; name: string } | null }[]).flatMap((r) => (r.outfits ? [r.outfits] : []));
+  const trip = item.needs_details ? await tripOfItem(ctx, item.id) : null;
   const brandName = brandList.find((b) => b.id === item.brand_id)?.name ?? '';
   return (
     <>
@@ -60,6 +62,12 @@ export default async function EditItemPage({
         </p>
       </div>
       <FormMessage error={error} />
+      {item.needs_details && (
+        <p className="flex flex-wrap items-center gap-3 rounded-lg bg-warn-soft p-3 text-sm text-warn">
+          These {item.quantity > 1 ? `${item.quantity} pieces were` : 'piece was'} received from a shopping trip and still {item.quantity > 1 ? 'need' : 'needs'} photos and details.
+          {trip && <Link className="font-medium underline" href={`/closet/bulk?trip=${trip}&back=${encodeURIComponent(`/closet/${item.id}`)}`}>Add photos for the whole trip</Link>}
+        </p>
+      )}
       <section className="rounded-xl border border-line bg-surface p-4">
         <h2 className="mb-2 font-display text-lg font-bold">Photos</h2>
         {photos.length > 0 && (

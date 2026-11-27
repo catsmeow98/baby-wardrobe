@@ -18,7 +18,7 @@ export interface ItemRow {
   id: string; child_id: string; tracking_type: 'individual' | 'grouped'; name: string; brand_id: string | null;
   category_id: string; label_id: string | null; fit_from_size_id: string | null; fit_to_size_id: string | null;
   quantity: number; condition: string; season: string; status: string; fit_override: string | null;
-  fit_feedback: number | null; notes: string | null; custom_tag: string | null; gender: string | null; color: string | null;
+  fit_feedback: number | null; notes: string | null; needs_details?: boolean; custom_tag: string | null; gender: string | null; color: string | null;
 }
 export interface GoalRow { id: string; child_id: string; category_id: string; size_id: string; target_quantity: number }
 export interface ShoppingRow {

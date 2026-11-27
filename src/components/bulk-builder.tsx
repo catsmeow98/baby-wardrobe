@@ -6,7 +6,9 @@ import { useEffect, useRef, useState } from 'react';
 import { useTurnQueue } from '@/components/use-turn-queue';
 import { BrandSelect } from '@/components/brand-select';
 import { CategoryPicker } from '@/components/category-picker';
-import { TypeIcon } from '@/components/item-icon';
+import { ItemIcon, TypeIcon } from '@/components/item-icon';
+import { LocalTime } from '@/components/local-time';
+import { guessLine, piecesLeft } from '@/lib/trips';
 import { groupCategories } from '@/lib/categories';
 import { PhotoPicker } from '@/components/photo-picker';
 import { PhotoEditor } from '@/components/photo-editor';
@@ -22,6 +24,21 @@ import type { CategoryRow, SizeLabelRow, SizeRow } from '@/lib/db';
 
 const MAX_ROWS = 50;
 const PHOTOS = 'photos';
+const REVIEW = 'review';
+
+/** A line of a shopping trip, as bulk add shows it: the received placeholder and what it holds. */
+export interface TripLineView {
+  itemId: string;
+  categoryId: string;
+  sizeId: string | null;
+  labelId: string | null;
+  qty: number;
+  typeName: string;
+  sizeLabel: string;
+  icon: string;
+}
+interface Meta { match: string; qty: number }
+const NO_META: Meta = { match: '', qty: 1 };
 
 interface Row {
   id: number;
@@ -35,7 +52,7 @@ interface Row {
  * them all to bulkCreate as before. Field names carry the item's position (cat_0, name_1 and so on). The browser's Back button
  * steps back one screen.
  */
-export function BulkBuilder({ userId, childId, categories, labels, sizes, brands, defaultTagId, removeBg = false, back, error: serverError, children }: {
+export function BulkBuilder({ userId, childId, categories, labels, sizes, brands, defaultTagId, removeBg = false, back, error: serverError, trip, tripGone = false, children }: {
   userId: string;
   childId: string;
   categories: CategoryRow[];
@@ -48,6 +65,13 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
   back: string;
   /** A message from a failed save. */
   error?: string;
+  /**
+   * From a shopping trip: what was received. Each photo is matched to a line ("Which one is this?"), and a last screen asks
+   * for a photo or a No photo tick for every piece, so the trip is done in one save.
+   */
+  trip?: { id: string; at: string; lines: TripLineView[] };
+  /** The trip in the address is already done (or not this child's). */
+  tripGone?: boolean;
   /** The details shared by every item, shown on the first screen. */
   children?: React.ReactNode;
 }) {
@@ -67,13 +91,24 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
   const guard = useRef<HTMLInputElement>(null);
   const top = useRef<HTMLDivElement>(null);
   const sets = useRef(new Map<number, HTMLFieldSetElement>());
+  // Trip matching: which received line each item is, and how many pieces it takes (one photo = one piece unless it is a pack).
+  const lines = trip?.lines ?? [];
+  const [meta, setMeta] = useState<Record<number, Meta>>({});
+  const metaRef = useRef(meta);
+  metaRef.current = meta;
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
+  const usesOf = (rs: readonly Row[], m: Record<number, Meta>) => rs.map((r) => ({ itemId: m[r.id]?.match ?? '', qty: m[r.id]?.qty ?? 1 }));
+  const left = piecesLeft(lines, usesOf(rows, meta));
+  const [noPhoto, setNoPhoto] = useState<Record<string, boolean>>({});
+  const [reviewError, setReviewError] = useState<string | null>(null);
 
   useEffect(() => {
     guard.current?.setCustomValidity(busy || turningRows.length ? 'Photos are still uploading. Wait a moment, then try again.' : '');
   }, [busy, turningRows.length]);
 
   // Screens: the photo screen, then one per item. A screen for an item that was removed falls back to the photo screen.
-  const steps = [PHOTOS, ...rows.map((r) => String(r.id))];
+  const steps = [PHOTOS, ...rows.map((r) => String(r.id)), ...(trip ? [REVIEW] : [])];
   const idx = Math.max(0, steps.indexOf(stepId));
   const current = steps[idx];
   const last = idx === steps.length - 1 && idx > 0;
@@ -108,6 +143,20 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
   };
   /** Before saving, finds any item still missing something (one reached by a thumbnail skips the checks) and shows it. */
   const allOk = () => {
+    if (trip) {
+      const over = lines.find((l) => (left.get(l.itemId) ?? 0) < 0);
+      const open = lines.find((l) => (left.get(l.itemId) ?? 0) > 0 && !noPhoto[l.itemId]);
+      const bad = over
+        ? `More ${over.typeName} (${over.sizeLabel}) are matched than were bought. Change one of those photos to Something else, or untick its pack.`
+        : open
+          ? `${open.typeName} (${open.sizeLabel}) still has ${left.get(open.itemId)} without a photo: tick No photo, or go back and match a photo.`
+          : null;
+      setReviewError(bad);
+      if (bad) {
+        if (current !== REVIEW) go(REVIEW);
+        return false;
+      }
+    }
     for (const r of rows) {
       const bad = firstInvalid(sets.current.get(r.id));
       if (!bad) continue;
@@ -132,6 +181,8 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
     const problems: string[] = [];
     let added = 0;
     const startRows = rowCount.current;
+    // From a trip, each new photo starts as the next piece still to match, in the trip's order.
+    const guessLeft = piecesLeft(lines, usesOf(rowsRef.current, metaRef.current));
     for (let k = 0; k < files.length; k++) {
       if (startRows + added >= MAX_ROWS) {
         setError(`A bulk add holds up to ${MAX_ROWS} items, so the rest of the photos were skipped.`);
@@ -159,12 +210,17 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
       }
       const id = nextId.current++;
       added++;
+      const g = guessLine(lines, guessLeft);
+      if (g) {
+        guessLeft.set(g, (guessLeft.get(g) ?? 0) - 1);
+        setMeta((m) => ({ ...m, [id]: { match: g, qty: 1 } }));
+      }
       setRows((list) => [...list, { id, photo: { ...ref, preview: URL.createObjectURL(blob), blob } }]);
     }
     setBusy(null);
     if (skipped) setError(`${skipped} photo${skipped > 1 ? 's' : ''} could not be added. ${problems.join(' · ')}`);
     // Say they are all in and wait for Next, rather than jumping ahead.
-    else if (added) setDone(added === 1 ? 'Your photo is uploaded. Tap Next to fill in its details.' : `All ${added} photos are uploaded. Tap Next to fill in the details.`);
+    else if (added) setDone(`${added === 1 ? 'Your photo is uploaded.' : `All ${added} photos are uploaded.`} Tap Next to ${trip ? 'match each one to what you bought' : added === 1 ? 'fill in its details' : 'fill in the details'}.`);
   }
 
   const addBlank = () => {
@@ -204,14 +260,16 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
   async function exit(e: React.MouseEvent) {
     e.preventDefault();
     if (busy !== null || rows.length > 0) {
-      if (!window.confirm('Leave bulk add? Your progress will be lost and nothing will be added to the closet.')) return;
+      if (!window.confirm(trip
+        ? 'Leave for now? This trip stays on your Home screen to finish later. Photos added here are not kept.'
+        : 'Leave bulk add? Your progress will be lost and nothing will be added to the closet.')) return;
       const paths = rows.flatMap((r) => (r.photo ? pathsOf(r.photo) : []));
       if (paths.length) await createClient().storage.from(PHOTO_BUCKET).remove(paths).catch(() => undefined);
     }
     router.push(back);
   }
 
-  const label = current === PHOTOS ? 'Photos' : `Item ${idx} of ${rows.length}`;
+  const label = current === PHOTOS ? 'Photos' : current === REVIEW ? 'Check the trip' : `Item ${idx} of ${rows.length}`;
   // The keyboard's Enter (Go) key never saves the batch; it closes the keyboard. Only the save button saves.
   const noEnter = (e: React.KeyboardEvent) => {
     const t = e.target as HTMLElement;
@@ -244,6 +302,22 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
             <p className="text-muted">Choose photos of your items, one photo per item. When they have loaded you go through them one at a time to fill in the details. Quantity above 1 makes a group, like a 5-pack.</p>
           </div>
           {serverError && <p role="alert" className="text-sm font-medium text-bad">{serverError}</p>}
+          {tripGone && <p role="status" className="rounded-lg bg-warn-soft p-3 text-sm text-warn">That shopping trip is already done, so this is a plain bulk add.</p>}
+          {trip && (
+            <div className="rounded-xl border border-accent bg-accent-soft p-3">
+              <p className="text-sm">Shopping trip · <b><LocalTime iso={trip.at} /></b></p>
+              <ul className="mt-1 flex flex-col gap-1">
+                {lines.map((l) => (
+                  <li key={l.itemId} className="flex items-center gap-2 text-sm">
+                    <ItemIcon itemKey={l.icon} size={20} className="shrink-0 text-accent" />
+                    <span className="flex-1">{l.qty} × {l.typeName} <span className="text-muted">{l.sizeLabel}</span></span>
+                    <span className="text-xs text-muted tabular-nums">{l.qty - Math.max(0, left.get(l.itemId) ?? 0)} of {l.qty} matched</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-1 text-xs text-muted">One photo per piece. A pack in one photo can be marked as the whole pack. Anything without a photo gets a No photo tick at the end.</p>
+            </div>
+          )}
           <div className="flex flex-wrap items-center gap-3">
             <input ref={file} type="file" accept="image/*" multiple className="sr-only" onChange={onPhotos} aria-label="Choose photos, one per item" />
             <button type="button" className={btnCls} disabled={busy !== null || rows.length >= MAX_ROWS} onClick={() => file.current?.click()}>
@@ -274,8 +348,41 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
         {rows.map((row, pos) => (
           <BulkRow key={row.id} row={row} pos={pos} hidden={current !== String(row.id)} onRemove={() => removeRow(row)} onSavePhoto={(r, o) => savePhoto(row, r, o)}
             onEditor={setEditorOpen} onTurning={(on) => setTurningRows((l) => (on ? (l.includes(row.id) ? l : [...l, row.id]) : l.filter((x) => x !== row.id)))} setRef={(el) => (el ? sets.current.set(row.id, el) : sets.current.delete(row.id))} userId={userId} childId={childId}
-            categories={categories} labels={labels} sizes={sizes} defaultTagId={defaultTagId} brands={brands} removeBg={removeBg} />
+            categories={categories} labels={labels} sizes={sizes} defaultTagId={defaultTagId} brands={brands} removeBg={removeBg}
+            tripLines={trip ? lines : undefined} left={left} meta={meta[row.id] ?? NO_META} onMeta={(m) => setMeta((all) => ({ ...all, [row.id]: m }))} />
         ))}
+
+        {trip && (
+          <section hidden={current !== REVIEW} className="flex flex-col gap-4">
+            <div>
+              <h1 className="font-display text-2xl font-bold">Check the trip</h1>
+              <p className="text-muted">Every piece from the trip needs a photo, or a tick to add it without one.</p>
+            </div>
+            <ul className="flex flex-col gap-2">
+              {lines.map((l) => {
+                const n = left.get(l.itemId) ?? 0;
+                return (
+                  <li key={l.itemId} className="flex flex-col gap-1 rounded-xl border border-line bg-surface p-3">
+                    <span className="flex items-center gap-2">
+                      <ItemIcon itemKey={l.icon} size={22} className="shrink-0 text-accent" />
+                      <b className="flex-1">{l.qty} × {l.typeName} <span className="font-normal text-muted">{l.sizeLabel}</span></b>
+                    </span>
+                    {n === 0 && <span className="text-sm text-good">✓ Every piece has a photo</span>}
+                    {n < 0 && <span className="text-sm text-bad">{-n} more matched than were bought</span>}
+                    {n > 0 && (
+                      <label className="flex items-center gap-2 text-sm">
+                        <input type="checkbox" name="nophoto" value={`${l.itemId}:${n}`} checked={Boolean(noPhoto[l.itemId])}
+                          onChange={(e) => { setNoPhoto((x) => ({ ...x, [l.itemId]: e.target.checked })); setReviewError(null); }} className="size-4 accent-accent" />
+                        {n} without a photo: add {n === 1 ? 'it' : 'them'} with no photo
+                      </label>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+            {reviewError && <p role="alert" className="text-sm text-bad">{reviewError}</p>}
+          </section>
+        )}
       </div>
 
       {/* Hidden while the photo editor is open, so it does not cover the editor's buttons. */}
@@ -286,9 +393,9 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
           {last ? (
             // Not a submit button: a tap on Next that lands here would otherwise finish as a save, because the browser decides what
             // a tap does after React has already swapped the button. This one saves only from its own tap, through requestSubmit.
-            <button key="save" type="button" className={btnCls} onClick={(e) => { if (allOk()) e.currentTarget.form?.requestSubmit(); }}>Add {rows.length} item{rows.length === 1 ? '' : 's'} to closet</button>
+            <button key="save" type="button" className={btnCls} onClick={(e) => { if (allOk()) e.currentTarget.form?.requestSubmit(); }}>{trip ? 'Save to closet' : `Add ${rows.length} item${rows.length === 1 ? '' : 's'} to closet`}</button>
           ) : (
-            <button key="next" type="button" className={btnCls} onClick={next} disabled={rows.length === 0 || busy !== null}>Next</button>
+            <button key="next" type="button" className={btnCls} onClick={next} disabled={steps.length <= 1 || busy !== null}>Next</button>
           )}
         </div>
       </div>
@@ -296,7 +403,7 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
   );
 }
 
-function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onEditor, onTurning, setRef, userId, childId, categories, labels, sizes, defaultTagId, brands, removeBg }: {
+function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onEditor, onTurning, setRef, userId, childId, categories, labels, sizes, defaultTagId, brands, removeBg, tripLines, left, meta, onMeta }: {
   row: Row;
   pos: number;
   hidden: boolean;
@@ -313,8 +420,14 @@ function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onEditor, onTurning,
   defaultTagId: string;
   brands: string[];
   removeBg: boolean;
+  /** From a shopping trip: its lines, the pieces left on each, and which line this item is. */
+  tripLines?: TripLineView[];
+  left: ReadonlyMap<string, number>;
+  meta: Meta;
+  onMeta: (m: Meta) => void;
 }) {
-  const [tag, setTag] = useState<TagValue>({ tagId: defaultTagId, custom: false, text: '' });
+  const line = tripLines?.find((l) => l.itemId === meta.match);
+  const [tag, setTag] = useState<TagValue>(() => ({ tagId: line?.labelId ?? defaultTagId, custom: false, text: '' }));
   const [editing, setEditingState] = useState(false);
   const setEditing = (open: boolean) => {
     setEditingState(open);
@@ -324,7 +437,15 @@ function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onEditor, onTurning,
   const [opening, setOpening] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   // The chosen item type, for the placeholder icon of an item without a photo. Starts where the picker starts.
-  const [type, setType] = useState<CategoryRow | undefined>(() => groupCategories(categories)[0]?.items[0]);
+  const [type, setType] = useState<CategoryRow | undefined>(() => (line && categories.find((c) => c.id === line.categoryId)) || groupCategories(categories)[0]?.items[0]);
+  /** "Which one is this?": fills in the item type and the tag size bought, as one piece. */
+  const choose = (l: TripLineView) => {
+    onMeta({ match: l.itemId, qty: 1 });
+    setTag({ tagId: l.labelId ?? defaultTagId, custom: false, text: '' });
+    setType(categories.find((c) => c.id === l.categoryId));
+  };
+  // Pieces this item could take on its line: what is left there plus what it already holds.
+  const avail = line ? (left.get(line.itemId) ?? 0) + meta.qty : 0;
 
   // Turns show at once; quick taps are saved together once they stop. The stored original turns too, so Restore lines up.
   const turns = useTurnQueue(async (q) => {
@@ -375,12 +496,41 @@ function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onEditor, onTurning,
           {editing && <PhotoEditor blob={row.photo.blob} original={original} onSave={async (r, o) => { await onSavePhoto(r, o); setEditing(false); }} onCancel={() => setEditing(false)} />}
         </div>
       )}
+      {tripLines && (
+        <div className="flex flex-col gap-2 rounded-xl border border-accent bg-accent-soft p-3 sm:col-span-6">
+          <input type="hidden" name={`match_${pos}`} value={meta.match} />
+          <p className="font-medium">Which one is this?</p>
+          <div className="flex flex-wrap gap-2">
+            {tripLines.map((l) => {
+              const on = meta.match === l.itemId;
+              const free = (left.get(l.itemId) ?? 0) + (on ? meta.qty : 0);
+              return (
+                <button key={l.itemId} type="button" aria-pressed={on} disabled={!on && free <= 0} onClick={() => choose(l)}
+                  className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm disabled:opacity-40 ${on ? 'border-accent bg-accent text-accent-ink' : 'border-line bg-surface'}`}>
+                  <ItemIcon itemKey={l.icon} size={18} />
+                  {l.typeName} {l.sizeLabel}
+                  <span className="text-xs opacity-80">· {on ? Math.max(0, left.get(l.itemId) ?? 0) : free} left</span>
+                </button>
+              );
+            })}
+            <button type="button" aria-pressed={!meta.match} onClick={() => onMeta({ match: '', qty: meta.qty })}
+              className={`rounded-full border px-3 py-1.5 text-sm ${!meta.match ? 'border-accent bg-accent text-accent-ink' : 'border-line bg-surface'}`}>Something else</button>
+          </div>
+          {line && avail > 1 && (
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={meta.qty > 1} onChange={(e) => onMeta({ match: meta.match, qty: e.target.checked ? avail : 1 })} className="size-4 accent-accent" />
+              This photo is the whole pack ({avail} pieces)
+            </label>
+          )}
+        </div>
+      )}
       {!row.photo && (
         <div className="flex justify-center sm:col-span-6">
           <span className="flex size-32 items-center justify-center rounded-xl border border-line bg-surface text-accent"><TypeIcon type={type} size={72} /></span>
         </div>
       )}
-      <CategoryPicker categories={categories} name={`cat_${pos}`} className={`${labelCls} sm:col-span-2`} allowNew onTypeChange={setType} />
+      {/* Re-made when the trip line changes, so the item type follows "Which one is this?". */}
+      <CategoryPicker key={`${row.id}:${meta.match}`} categories={categories} name={`cat_${pos}`} defaultId={line?.categoryId ?? type?.id} className={`${labelCls} sm:col-span-2`} allowNew onTypeChange={setType} />
       <label className={`${labelCls} sm:col-span-2`}>Name (optional)
         <input className={inputCls} name={`name_${pos}`} maxLength={160} />
       </label>
@@ -401,7 +551,8 @@ function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onEditor, onTurning,
         </select>
       </label>
       <label className={labelCls}>Quantity
-        <input className={inputCls} type="number" name={`qty_${pos}`} min={1} max={999} defaultValue={1} />
+        <input className={inputCls} type="number" name={`qty_${pos}`} min={1} max={999} value={meta.qty || ''}
+          onChange={(e) => onMeta({ match: meta.match, qty: Math.max(0, Math.min(999, Math.round(Number(e.target.value) || 0))) })} />
       </label>
       {!row.photo && (
         <div className={`${labelCls} sm:col-span-6`}>

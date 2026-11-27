@@ -6,15 +6,32 @@ import { inputCls, labelCls } from '@/components/ui';
 import { CONDITIONS, GENDERS, SEASONS, STATUSES } from '@/lib/db';
 import type { SizeLabelRow } from '@/lib/db';
 import { bulkCreate } from '../actions';
-import { safeBack } from '@/lib/back';
+import { safeBack, safeBackAny } from '@/lib/back';
+import { loadTrips } from '@/lib/trips-data';
+import { iconForType } from '@/lib/item-icons';
+import { sizeName } from '@/lib/db';
 
 export const metadata: Metadata = { title: 'Bulk add' };
 
-export default async function BulkPage({ searchParams }: { searchParams: Promise<{ error?: string; back?: string }> }) {
-  const { error, back: rawBack } = await searchParams;
+export default async function BulkPage({ searchParams }: { searchParams: Promise<{ error?: string; back?: string; trip?: string }> }) {
+  const { error, back: rawBack, trip: rawTrip } = await searchParams;
+  // After saving, the closet (to see the new items); Exit goes back wherever bulk add was opened from.
   const back = safeBack(rawBack, '/closet');
+  const exitTo = safeBackAny(rawBack, ['/closet', '/shopping', '/dashboard'], '/closet');
   const ctx = await getContext();
   if (!ctx.active) return <NoChild />;
+  // From a shopping trip: what was received and still needs photos and details.
+  const tripId = rawTrip && /^[0-9a-f-]{36}$/i.test(rawTrip) ? rawTrip : undefined;
+  const found = tripId ? (await loadTrips(ctx, ctx.active.id, tripId))[0] : undefined;
+  const trip = found && {
+    id: found.id,
+    at: found.at,
+    lines: found.lines.map((l) => {
+      const c = ctx.catById.get(l.categoryId);
+      const z = l.sizeId ? ctx.sizeById.get(l.sizeId) : undefined;
+      return { itemId: l.itemId, categoryId: l.categoryId, sizeId: l.sizeId, labelId: l.labelId, qty: l.qty, typeName: c?.name ?? 'Item', sizeLabel: z ? sizeName(z) : '', icon: iconForType(c) };
+    }),
+  };
   const [{ data: labelData }, { data: brands }] = await Promise.all([
     ctx.supabase.from('size_labels').select('id, size_id, label, sort_order'),
     ctx.supabase.from('brands').select('name').order('name'),
@@ -27,6 +44,7 @@ export default async function BulkPage({ searchParams }: { searchParams: Promise
   return (
     <form action={bulkCreate}>
       <input type="hidden" name="back" value={back} />
+      {trip && <input type="hidden" name="trip" value={trip.id} />}
       <BulkBuilder
         userId={ctx.user.id}
         childId={ctx.active.id}
@@ -36,12 +54,14 @@ export default async function BulkPage({ searchParams }: { searchParams: Promise
         brands={(brands ?? []).map((b: { name: string }) => b.name)}
         defaultTagId={defaultTag ?? ''}
         removeBg={ctx.settings.removeBackground}
-        back={back}
+        back={exitTo}
+        trip={trip}
+        tripGone={Boolean(tripId && !found)}
         error={error}
       >
         <div className="grid gap-3 sm:grid-cols-2">
           <label className={labelCls}>Condition
-            <select className={inputCls} name="condition" defaultValue="good">{CONDITIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
+            <select className={inputCls} name="condition" defaultValue={trip ? 'new' : 'good'}>{CONDITIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
           </label>
           <label className={labelCls}>Season
             <select className={inputCls} name="season" defaultValue="year_round">{SEASONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>

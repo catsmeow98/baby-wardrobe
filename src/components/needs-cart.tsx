@@ -6,7 +6,7 @@ import { ItemIcon } from '@/components/item-icon';
 import { btnCls, btnGhostCls } from '@/components/ui';
 import { MAX_IN_CART, cartKey, cartLines, cartPieces, cartStorageKey, leftToFind, parseCart, setInCart, splitKey, type Cart } from '@/lib/cart';
 import Link from 'next/link';
-import { closetPieces, markCartBought, type ClosetPiece } from '@/app/(app)/shopping/actions';
+import { closetPieces, markCartBought, receiveCart, type ClosetPiece } from '@/app/(app)/shopping/actions';
 
 export interface NeedsColumn { order: number; sizeId: string; label: string }
 export interface CellInfo { goal: number; owned: number; incoming: number }
@@ -95,6 +95,23 @@ export function NeedsCart({ childId, columns, rows, types, sizeLabels }: {
     } catch {
       setCloset({ title, pieces: [], error: 'Your closet could not be loaded. Check your signal and try again.' });
     }
+  }
+
+  /** In the store: bought and in hand. Into the closet now (as one trip), then straight on to add photos. */
+  async function received() {
+    setSaving(true);
+    setMessage(null);
+    try {
+      const res = await receiveCart(lines);
+      if (res.saved.length) setCart((c) => res.saved.reduce((acc, k) => setInCart(acc, k, 0), c));
+      if (res.error) setMessage({ text: res.error, bad: true });
+      else setShowCart(false);
+      if (res.trip) router.push(`/shopping?trip=${res.trip}`);
+      else router.refresh();
+    } catch {
+      setMessage({ text: 'Could not reach the server. Your cart is still here; try again when you have signal.', bad: true });
+    }
+    setSaving(false);
   }
 
   function clearCart() {
@@ -267,8 +284,9 @@ export function NeedsCart({ childId, columns, rows, types, sizeLabels }: {
           {lines.length === 0 && <p className="py-3 text-center text-muted">The cart is empty.</p>}
           {lines.length > 0 && (
             <div className="flex flex-col gap-2 pt-2">
-              <button type="button" className={btnCls} disabled={saving} onClick={bought}>{saving ? 'Saving…' : 'Mark bought & clear'}</button>
-              <p className="text-xs text-muted">Adds these to your shopping list as ordered, so they count as incoming. Mark them received when you add them to the closet.</p>
+              <button type="button" className={btnCls} disabled={saving} onClick={received}>{saving ? 'Saving…' : 'Bought & received'}</button>
+              <p className="text-xs text-muted">Puts these in your closet now as one shopping trip, then offers to add photos and details.</p>
+              <button type="button" className={btnGhostCls} disabled={saving} onClick={bought}>Mark ordered (not here yet)</button>
               <div className="flex justify-between">
                 <button type="button" className="text-sm text-bad underline" onClick={clearCart}>Clear cart</button>
                 <button type="button" className={btnGhostCls} onClick={() => setShowCart(false)}>Close</button>

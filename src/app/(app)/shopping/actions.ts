@@ -83,10 +83,12 @@ export async function receiveDelivery(formData: FormData) {
   const qty = qtyOf(formData.get('quantity'));
   if (!id.success || !qty.success) return back('Enter a quantity of 1 or more.');
   const ctx = await getContext();
-  const { error } = await ctx.supabase.rpc('receive_shopping_item', { p_shopping_item: id.data, p_quantity: qty.data });
+  // Each receive is a trip, so its pieces can get photos and details together later (see bulk add).
+  const trip = crypto.randomUUID();
+  const { error } = await ctx.supabase.rpc('receive_shopping_item', { p_shopping_item: id.data, p_quantity: qty.data, p_trip: trip });
   if (error) return back(message(error, 'We could not record that delivery.'));
   refresh();
-  return back(undefined, `${qty.data} added to your closet.`);
+  return redirect(withParams(safeBack(formData.get('back'), '/shopping'), { ok: `${qty.data} added to your closet.`, trip }));
 }
 
 export async function cancelItem(formData: FormData) {
@@ -179,4 +181,40 @@ export async function closetPieces(categoryId: unknown, sizeId: unknown): Promis
       };
     }),
   };
+}
+
+/**
+ * "Bought & received" for the in-store cart: each line goes on the shopping list as ordered and received at once, all in one
+ * trip, so the pieces are in the closet (as placeholders) and can get photos and details together. Returns the lines saved
+ * and the trip.
+ */
+export async function receiveCart(lines: unknown): Promise<{ saved: string[]; trip: string | null; error?: string }> {
+  const parsed = z.array(cartLineSchema).min(1).max(100).safeParse(lines);
+  if (!parsed.success) return { saved: [], trip: null, error: 'The cart could not be read. Try again.' };
+  const ctx = await getContext();
+  if (!ctx.active) return { saved: [], trip: null, error: 'Add a child first.' };
+  const known = new Set(ctx.sizes.map((s) => s.id));
+  const trip = crypto.randomUUID();
+  const saved: string[] = [];
+  for (const l of parsed.data) {
+    if (!known.has(l.sizeId) || !ctx.catById.has(l.categoryId)) continue;
+    const { data, error } = await ctx.supabase
+      .from('shopping_items')
+      .insert({ child_id: ctx.active.id, category_id: l.categoryId, size_id: l.sizeId, quantity_needed: l.qty, notes: 'Bought in store' })
+      .select('id')
+      .single();
+    if (error || !data) break;
+    const { error: e2 } = await ctx.supabase.rpc('order_shopping_item', { p_shopping_item: data.id, p_quantity: l.qty });
+    const { error: e3 } = e2 ? { error: e2 } : await ctx.supabase.rpc('receive_shopping_item', { p_shopping_item: data.id, p_quantity: l.qty, p_trip: trip });
+    if (e3) {
+      await ctx.supabase.from('shopping_items').delete().eq('id', data.id);
+      break;
+    }
+    saved.push(`${l.categoryId}|${l.sizeId}`);
+  }
+  if (saved.length) refresh();
+  const done = saved.length ? trip : null;
+  return saved.length === parsed.data.length
+    ? { saved, trip: done }
+    : { saved, trip: done, error: `${saved.length} of ${parsed.data.length} cart lines were saved. The rest are still in the cart; try again.` };
 }
