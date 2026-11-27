@@ -8,6 +8,7 @@ import { FormMessage } from '@/components/form-message';
 import type { ItemRow, SizeLabelRow } from '@/lib/db';
 import { PhotoUploader } from '@/components/photo-uploader';
 import { PhotoEditButton } from '@/components/photo-edit-button';
+import { TypeIcon } from '@/components/item-icon';
 import { MAX_PHOTOS_PER_ITEM, signedUrls } from '@/lib/photos';
 import { ItemForm } from '../item-form';
 import { deletePhoto } from '../photo-actions';
@@ -51,7 +52,13 @@ export default async function EditItemPage({
   return (
     <>
       <p className="text-sm"><Link className="text-accent underline" href={back}>← Back to closet</Link></p>
-      <h1 className="font-display text-2xl font-bold">Edit item</h1>
+      <div>
+        <h1 className="font-display text-2xl font-bold">Edit item</h1>
+        <p className="flex items-center gap-1.5 text-muted">
+          <TypeIcon type={ctx.catById.get(item.category_id)} size={24} className="text-accent" />
+          {item.name}{ctx.catById.get(item.category_id) ? ` · ${ctx.catById.get(item.category_id)!.name}` : ''}
+        </p>
+      </div>
       <FormMessage error={error} />
       <section className="rounded-xl border border-line bg-surface p-4">
         <h2 className="mb-2 font-display text-lg font-bold">Photos</h2>

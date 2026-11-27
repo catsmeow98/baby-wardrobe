@@ -4,6 +4,7 @@ import { FormMessage } from '@/components/form-message';
 import { btnCls, btnGhostCls, inputCls, labelCls } from '@/components/ui';
 import { KEPT_STATUSES } from '@/lib/domain';
 import { addCategory, addGroup, deleteCategory, deleteGroup, hideGroup, hideItemType, restoreDefaults, saveGroup, saveItemType } from './actions';
+import { TypeIcon } from '@/components/item-icon';
 
 export const metadata: Metadata = { title: 'Item types' };
 
@@ -105,6 +106,7 @@ export default async function CategoriesPage({ searchParams }: { searchParams: P
                     return (
                       <li key={c.id} className="flex flex-col gap-2 border-t border-line py-3">
                         <div className="flex flex-wrap items-end gap-2">
+                          <span className="flex size-10 shrink-0 items-center justify-center self-end rounded-lg bg-line/60 text-accent" title="Icon for this item type"><TypeIcon type={c} size={28} /></span>
                           <form action={saveItemType} className="flex flex-wrap items-end gap-2">
                             <input type="hidden" name="id" value={c.id} />
                             <label className={labelCls}>{c.is_default ? <><Star /> Item type</> : 'Item type'}<input className={inputCls} name="name" defaultValue={c.name} maxLength={60} required /></label>

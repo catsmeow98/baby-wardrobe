@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { ColorDot } from '@/components/color-dot';
+import { ItemIcon } from '@/components/item-icon';
 import { btnCls, btnGhostCls, inputCls, labelCls } from '@/components/ui';
 import { COLORS } from '@/lib/db';
 import type { PickItem } from '@/lib/outfit-data';
@@ -58,7 +59,7 @@ export function OutfitBuilder({ action, items, groups, types, initial }: {
                     {i?.photoUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={i.photoUrl} alt="" className={`size-6 rounded-full bg-line ${i.cutout ? 'object-contain' : 'object-cover'}`} />
-                    ) : <ColorDot color={i?.color} className="ml-1" />}
+                    ) : <span className="flex size-6 items-center justify-center rounded-full bg-surface text-accent"><ItemIcon itemKey={i?.icon ?? 'g_other'} size={16} /></span>}
                     {i?.name ?? 'Item'} <span aria-hidden="true">×</span>
                   </button>
                 </li>
@@ -100,7 +101,7 @@ export function OutfitBuilder({ action, items, groups, types, initial }: {
                     {i.photoUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={i.photoUrl} alt="" loading="lazy" className={`size-full ${i.cutout ? 'object-contain' : 'object-cover'}`} />
-                    ) : <span className="flex size-full items-center justify-center text-muted">No photo</span>}
+                    ) : <span className="flex size-full items-center justify-center text-accent"><ItemIcon itemKey={i.icon} size={40} /></span>}
                     {on && <span className="absolute right-1 top-1 flex size-5 items-center justify-center rounded-full bg-accent text-accent-ink" aria-hidden="true">✓</span>}
                   </span>
                   <span className="font-bold [overflow-wrap:anywhere]"><ColorDot color={i.color} className="mr-1" />{i.name}</span>

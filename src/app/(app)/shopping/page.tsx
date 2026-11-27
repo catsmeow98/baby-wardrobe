@@ -16,6 +16,7 @@ import { goalProgress } from '@/lib/domain';
 import { currentUrl } from '@/lib/back';
 import { buildNeedsTable } from '@/lib/needs-table';
 import { addShoppingItem, cancelItem, markOrdered, orderFromGap, receiveDelivery } from './actions';
+import { TypeIcon } from '@/components/item-icon';
 
 export const metadata: Metadata = { title: 'Shopping' };
 
@@ -60,7 +61,7 @@ export default async function ShoppingPage({ searchParams }: { searchParams: Pro
     return (
       <li key={s.id} className="grid gap-2 border-t border-line py-3 first:border-t-0 sm:grid-cols-[minmax(160px,1.4fr)_auto_minmax(120px,1fr)_auto] sm:items-center">
         <div>
-          <b>{ctx.catById.get(s.category_id)?.name}</b> <span className="text-sm text-muted">size {size ? sizeName(size) : ''}</span>
+          <TypeIcon type={ctx.catById.get(s.category_id)} size={22} className="mr-1.5 inline-block align-[-5px] text-accent" /><b>{ctx.catById.get(s.category_id)?.name}</b> <span className="text-sm text-muted">size {size ? sizeName(size) : ''}</span>
           <div className="text-sm text-muted">{s.notes ?? ''}{s.estimated_price ? ` · $${Number(s.estimated_price).toFixed(2)}` : ''}</div>
         </div>
         <div className="flex gap-1.5">
@@ -133,7 +134,7 @@ export default async function ShoppingPage({ searchParams }: { searchParams: Pro
               <tbody>
                 {needs.rows.map((r) => (
                   <tr key={r.categoryId} className="border-t border-line">
-                    <th scope="row" className="sticky left-0 bg-surface py-2 pr-3 text-left font-medium">{ctx.catById.get(r.categoryId)?.name ?? 'Item'}</th>
+                    <th scope="row" className="sticky left-0 bg-surface py-2 pr-3 text-left font-medium"><span className="flex items-center gap-1.5"><TypeIcon type={ctx.catById.get(r.categoryId)} size={18} className="shrink-0 text-accent" />{ctx.catById.get(r.categoryId)?.name ?? 'Item'}</span></th>
                     {needs.sizes.map((n) => {
                       const v = r.cells.get(n);
                       return <td key={n} className={`px-3 py-2 text-center tabular-nums ${v ? 'font-semibold' : 'text-muted'}`}>{v ?? '–'}</td>;

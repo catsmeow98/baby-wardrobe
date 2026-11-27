@@ -8,6 +8,7 @@ import { COLORS, CONDITIONS, FIT_FEEDBACK, FIT_LABELS, GENDERS, SEASONS, STATUSE
 import type { ItemRow, SizeLabelRow } from '@/lib/db';
 import { ColorDot } from '@/components/color-dot';
 import { TypeFilters } from '@/components/type-filters';
+import { TypeIcon } from '@/components/item-icon';
 import { matchesCategory } from '@/lib/categories';
 import { signedUrls } from '@/lib/photos';
 import { FilterPanel } from '@/components/filter-panel';
@@ -137,6 +138,11 @@ export default async function ClosetPage({ searchParams }: { searchParams: Promi
         <button className={btnGhostCls} type="submit">Filter</button>
         <Link className={btnGhostCls} href="/closet">Clear</Link>
       </form>
+      {sp.cat && ctx.catById.get(sp.cat) && (
+        <p className="flex items-center gap-1.5 text-sm text-muted">
+          Showing <TypeIcon type={ctx.catById.get(sp.cat)} size={20} className="text-accent" /><b className="text-ink">{ctx.catById.get(sp.cat)!.name}</b>
+        </p>
+      )}
 
       {ctx.currentSize === null && (
         <p className="rounded-lg bg-warn-soft p-3 text-sm text-warn">
@@ -158,9 +164,13 @@ export default async function ClosetPage({ searchParams }: { searchParams: Promi
             return (
               <li key={i.id}>
                 <Link href={`/closet/${i.id}?back=${bk}`} className="flex h-full flex-col gap-1.5 rounded-xl border border-line bg-surface p-2.5 hover:border-accent sm:p-3">
-                  {coverPath.has(i.id) && coverUrls.get(coverPath.get(i.id)!) && (
+                  {coverPath.has(i.id) && coverUrls.get(coverPath.get(i.id)!) ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={coverUrls.get(coverPath.get(i.id)!)} alt="" loading="lazy" className={`mb-1 aspect-[4/3] w-full rounded-lg ${coverPath.get(i.id)!.endsWith('.png') ? 'bg-line object-contain' : 'object-cover'}`} />
+                  ) : (
+                    <span className="mb-1 flex aspect-[4/3] w-full items-center justify-center rounded-lg bg-line/60 text-muted">
+                      <TypeIcon type={ctx.catById.get(i.categoryId)} size={56} />
+                    </span>
                   )}
                   <div className="flex items-start justify-between gap-2">
                     <span className="font-bold [overflow-wrap:anywhere]">{i.name}</span>

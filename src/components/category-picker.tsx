@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { labelCls, inputCls } from '@/components/ui';
 import { groupCategories } from '@/lib/categories';
 import type { CategoryRow } from '@/lib/db';
+import { TypeIcon } from '@/components/item-icon';
 
 const NEW_TYPE = '__new';
 const NEW_GROUP = '__newgroup';
@@ -16,12 +17,14 @@ const NEW_GROUP = '__newgroup';
  * category id, or "__new") and name_newGroup, and the server creates them. Both cells are returned as a fragment, type
  * first, so the form's own grid decides where they sit.
  */
-export function CategoryPicker({ categories, name, defaultId, className = labelCls, allowNew = false }: {
+export function CategoryPicker({ categories, name, defaultId, className = labelCls, allowNew = false, onTypeChange }: {
   categories: readonly CategoryRow[];
   name: string;
   defaultId?: string;
   className?: string;
   allowNew?: boolean;
+  /** Told the chosen item type when it changes (undefined while making a new one). */
+  onTypeChange?: (type: CategoryRow | undefined) => void;
 }) {
   const groups = groupCategories(categories);
   const start = categories.find((c) => c.id === defaultId) ?? groups[0]?.items[0];
@@ -36,12 +39,13 @@ export function CategoryPicker({ categories, name, defaultId, className = labelC
   return (
     <>
       <label className={className}>
-        Item type
+        <span className="flex items-center gap-1.5">Item type {chosen && <TypeIcon type={chosen} size={20} className="text-accent" />}</span>
         <select
           className={inputCls}
           value={itemId}
           onChange={(e) => {
             setItemId(e.target.value);
+            onTypeChange?.(categories.find((c) => c.id === e.target.value));
             // Start a new type in the category of the one the person was just looking at.
             const prev = categories.find((c) => c.id === itemId);
             if (e.target.value === NEW_TYPE && prev) setNewGroupLabel(prev.grp);

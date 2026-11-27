@@ -1,4 +1,5 @@
 import { ColorDot } from '@/components/color-dot';
+import { ItemIcon } from '@/components/item-icon';
 import type { PickItem } from '@/lib/outfit-data';
 
 /** Up to six items as a grid of photo tiles. An item with no photo shows its name and color. */
@@ -13,8 +14,8 @@ export function OutfitCollage({ items }: { items: readonly PickItem[] }) {
             <img src={i.photoUrl} alt={i.name} loading="lazy" className={`size-full ${i.cutout ? 'object-contain' : 'object-cover'}`} />
           ) : (
             <span className="flex size-full flex-col items-center justify-center gap-1 p-1 text-center text-xs text-muted">
-              <ColorDot color={i.color} />
-              <span className="[overflow-wrap:anywhere]">{i.name}</span>
+              <ItemIcon itemKey={i.icon} size={40} className="text-accent" />
+              <span className="flex items-center gap-1 [overflow-wrap:anywhere]"><ColorDot color={i.color} />{i.name}</span>
             </span>
           )}
         </li>

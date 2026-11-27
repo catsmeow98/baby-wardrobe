@@ -2,6 +2,7 @@ import { toInventory, type Ctx } from '@/lib/context';
 import type { ItemRow } from '@/lib/db';
 import { fitStateFor } from '@/lib/domain';
 import { signedUrls } from '@/lib/photos';
+import { iconForType } from '@/lib/item-icons';
 
 /** An item as the outfit picker and collage show it. */
 export interface PickItem {
@@ -10,6 +11,8 @@ export interface PickItem {
   typeId: string;
   typeName: string;
   groupId: string;
+  /** The item type's icon key (see ItemIcon). */
+  icon: string;
   color: string | null;
   photoUrl: string | null;
   /** A cutout photo is a PNG: it is shown whole on a plain tile, not cropped to fill. */
@@ -37,6 +40,7 @@ export async function pickItems(ctx: Ctx, rows: readonly ItemRow[]): Promise<Pic
       typeId: r.category_id,
       typeName: t?.name ?? 'Item',
       groupId: t?.group_id ?? '',
+      icon: iconForType(t),
       color: r.color,
       photoUrl: path ? (urls.get(path) ?? null) : null,
       cutout: Boolean(path?.endsWith('.png')),

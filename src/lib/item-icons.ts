@@ -1,3 +1,5 @@
+import { CATEGORY_NAMES } from './domain/survey';
+
 /**
  * Original line icons for item types, drawn for this app. Each is a list of SVG path strings on a 24 x 24 grid, meant to be
  * stroked (thin, round caps and joins) and not filled. A path that starts with ~ is drawn as a thin dotted line (a zipper);
@@ -73,4 +75,12 @@ export function iconKeyFor(key: string, groupName?: string): string {
   if (key in ITEM_ICONS) return key;
   const hit = GROUP_HINTS.find(([re]) => re.test(groupName ?? ''));
   return hit ? hit[1] : 'g_other';
+}
+
+const KEY_OF_NAME = new Map<string, string>(Object.entries(CATEGORY_NAMES).map(([k, v]) => [v, k]));
+
+/** The icon for an item type row: a built-in by its built-in name (so a rename keeps its icon), anything else by its item category. */
+export function iconForType(c: { id: string; is_default: boolean; base_name: string; grp: string } | undefined): string {
+  if (!c) return 'g_other';
+  return iconKeyFor(c.is_default ? (KEY_OF_NAME.get(c.base_name) ?? c.id) : c.id, c.grp);
 }

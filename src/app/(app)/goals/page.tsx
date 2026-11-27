@@ -6,6 +6,7 @@ import { NoChild } from '@/components/no-child';
 import { ProgressBar } from '@/components/progress-bar';
 import { btnCls, btnGhostCls, inputCls, labelCls } from '@/components/ui';
 import { TypeFilters } from '@/components/type-filters';
+import { TypeIcon } from '@/components/item-icon';
 import { groupCategories, matchesCategory } from '@/lib/categories';
 import { sizeName } from '@/lib/db';
 import type { GoalRow, ItemRow, ShoppingRow } from '@/lib/db';
@@ -112,7 +113,7 @@ export default async function GoalsPage({ searchParams }: { searchParams: Promis
             const remaining = goal ? Math.max(0, goal.target - owned - incoming) : null;
             return (
               <li key={c.id} className={`grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-2 border-t border-line py-3 first:border-t-0 sm:grid-cols-[minmax(150px,1.2fr)_90px_minmax(180px,1fr)_minmax(90px,1fr)] ${!goal || goal.target === 0 ? 'opacity-60 focus-within:opacity-100' : ''}`}>
-                <span className="font-bold">{c.name}</span>
+                <span className="flex items-center gap-2 font-bold"><TypeIcon type={c} size={24} className="shrink-0 text-accent" />{c.name}</span>
                 <label className="text-sm text-muted">
                   {/* Keyed by the size and the saved value: an uncontrolled box keeps whatever it first showed, so without this it
                       went stale after the survey saved goals or the size changed, and Save goals wrote the stale number back. */}

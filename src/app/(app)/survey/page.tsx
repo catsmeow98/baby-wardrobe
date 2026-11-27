@@ -79,7 +79,7 @@ export default async function SurveyPage({ searchParams }: { searchParams: Promi
         <p className="text-sm text-muted">
           {usedForecast ? 'Months and seasons come from the size forecast where it reaches a size, and from age elsewhere. ' : 'Each size is planned for the season it falls in, estimated from the birth month. '}
         </p>
-        <SurveyResults results={results} />
+        <SurveyResults results={results} groups={Object.fromEntries(options.map((o) => [o.key, o.group]))} />
       </section>
 
       <section className="flex flex-col gap-2 rounded-xl border border-line bg-surface p-4">

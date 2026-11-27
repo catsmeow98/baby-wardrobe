@@ -10,6 +10,7 @@ import { FIT_LABELS, sizeName } from '@/lib/db';
 import type { GoalRow, ItemRow, ShoppingRow } from '@/lib/db';
 import { KEPT_STATUSES, countFitting, fitStateFor, goalProgress, sizeProgress, transition, type FitState } from '@/lib/domain';
 import { forecastFor, loadMeasurements } from '@/lib/forecast-data';
+import { TypeIcon } from '@/components/item-icon';
 
 export const metadata: Metadata = { title: 'Dashboard' };
 
@@ -165,7 +166,7 @@ export default async function DashboardPage() {
               return (
                 <li key={`${g.categoryId}-${g.size}`} className="grid grid-cols-[1fr_auto] items-center gap-2 border-t border-line py-2.5 first:border-t-0">
                   <div className="flex flex-col gap-1.5">
-                    <span><b>{ctx.catById.get(g.categoryId)?.name}</b> <span className="text-sm text-muted">in {s ? sizeName(s) : ''}</span></span>
+                    <span className="flex items-center gap-1.5"><TypeIcon type={ctx.catById.get(g.categoryId)} size={22} className="shrink-0 text-accent" /><span><b>{ctx.catById.get(g.categoryId)?.name}</b> <span className="text-sm text-muted">in {s ? sizeName(s) : ''}</span></span></span>
                     <ProgressBar owned={g.owned} incoming={g.incoming} goal={g.target} />
                   </div>
                   <span className="text-right"><b className="font-display text-xl tabular-nums">{g.remaining}</b><span className="block text-xs text-muted">to buy</span></span>

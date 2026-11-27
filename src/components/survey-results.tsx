@@ -1,9 +1,11 @@
 import { displaySize, type SizeSuggestion } from '@/lib/domain';
+import { ItemIcon } from '@/components/item-icon';
 
 const SEASON_LABEL = { spring: 'spring', summer: 'summer', fall: 'fall', winter: 'winter' } as const;
 
 /** Suggested quantities for every size: a grid of categories by size, then the reasoning for each size. */
-export function SurveyResults({ results }: { results: SizeSuggestion[] }) {
+/** groups: item category name by key, so the person's own types get their category's icon (built-ins have their own). */
+export function SurveyResults({ results, groups = {} }: { results: SizeSuggestion[]; groups?: Record<string, string> }) {
   // Every item type that any size asks for, in the order first seen (built-ins first, then the person's own).
   const names = new Map<string, string>();
   for (const r of results) for (const x of r.rows) if (!names.has(x.key)) names.set(x.key, x.name);
@@ -28,7 +30,7 @@ export function SurveyResults({ results }: { results: SizeSuggestion[] }) {
           <tbody>
             {used.map((k) => (
               <tr key={k} className="border-t border-line">
-                <th className="sticky left-0 bg-surface py-1.5 pr-3 font-medium">{names.get(k)}</th>
+                <th className="sticky left-0 bg-surface py-1.5 pr-3 font-medium"><span className="flex items-center gap-1.5"><ItemIcon itemKey={k} group={groups[k]} size={18} className="shrink-0 text-accent" />{names.get(k)}</span></th>
                 {results.map((r) => {
                   const n = qtyOf(r, k);
                   return <td key={r.size} className={`px-2 text-right tabular-nums ${n ? 'font-bold' : 'text-muted'}`}>{n || '–'}</td>;
@@ -54,7 +56,7 @@ export function SurveyResults({ results }: { results: SizeSuggestion[] }) {
                 {r.rows.filter((x) => x.qty > 0).map((x) => (
                   <li key={x.key} className="grid grid-cols-[2.5rem_1fr] gap-x-3 border-t border-line py-2 first:border-t-0 sm:grid-cols-[2.5rem_minmax(140px,1fr)_2fr]">
                     <b className="font-display text-lg tabular-nums">{x.qty}</b>
-                    <span className="font-bold">{x.name}</span>
+                    <span className="flex items-center gap-1.5 font-bold"><ItemIcon itemKey={x.key} group={groups[x.key]} size={20} className="shrink-0 text-accent" />{x.name}</span>
                     <span className="col-span-2 text-sm text-muted sm:col-span-1">{x.why}</span>
                   </li>
                 ))}

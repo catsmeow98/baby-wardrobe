@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { BrandSelect } from '@/components/brand-select';
 import { CategoryPicker } from '@/components/category-picker';
+import { TypeIcon } from '@/components/item-icon';
+import { groupCategories } from '@/lib/categories';
 import { PhotoPicker } from '@/components/photo-picker';
 import { PhotoEditor } from '@/components/photo-editor';
 import { TagSizeField, type TagValue } from '@/components/tag-size-field';
@@ -318,6 +320,8 @@ function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onEditor, setRef, us
   const [opening, setOpening] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   const [turning, setTurning] = useState(false);
+  // The chosen item type, for the placeholder icon of an item without a photo. Starts where the picker starts.
+  const [type, setType] = useState<CategoryRow | undefined>(() => groupCategories(categories)[0]?.items[0]);
 
   /** A quarter turn (1 clockwise, -1 counterclockwise) without opening the editor. The stored original is turned too, so Restore lines up. */
   async function turn(dir: 1 | -1) {
@@ -372,7 +376,12 @@ function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onEditor, setRef, us
           {editing && <PhotoEditor blob={row.photo.blob} original={original} onSave={async (r, o) => { await onSavePhoto(r, o); setEditing(false); }} onCancel={() => setEditing(false)} />}
         </div>
       )}
-      <CategoryPicker categories={categories} name={`cat_${pos}`} className={`${labelCls} sm:col-span-2`} allowNew />
+      {!row.photo && (
+        <div className="flex justify-center sm:col-span-6">
+          <span className="flex size-32 items-center justify-center rounded-xl border border-line bg-surface text-accent"><TypeIcon type={type} size={72} /></span>
+        </div>
+      )}
+      <CategoryPicker categories={categories} name={`cat_${pos}`} className={`${labelCls} sm:col-span-2`} allowNew onTypeChange={setType} />
       <label className={`${labelCls} sm:col-span-2`}>Name (optional)
         <input className={inputCls} name={`name_${pos}`} maxLength={160} />
       </label>
