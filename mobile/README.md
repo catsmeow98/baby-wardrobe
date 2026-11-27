@@ -5,6 +5,10 @@ they are deployed, with no new app needed. A new app file is needed only for nat
 
 ## Builds
 
+On a phone, open the releases link below, download `baby-wardrobe.apk` and open it. The first time, Android asks to allow
+installs from Chrome.
+
+
 `.github/workflows/android.yml` builds a signed APK on GitHub whenever something in `mobile/` changes on `main`, or when run by hand
 (Actions tab, "Android app", Run workflow). Each build is published as a GitHub release; the newest is always at
 https://github.com/catsmeow98/baby-wardrobe/releases/latest . Install it on the phone and it updates the installed app in place.
