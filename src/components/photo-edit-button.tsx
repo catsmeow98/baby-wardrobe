@@ -10,7 +10,7 @@ import { turnWithOriginal } from '@/lib/photo-client';
 import { replacePhoto } from '@/app/(app)/closet/photo-actions';
 
 /**
- * "Turn" and "Edit" for a photo already on an item. Turn gives it a quarter turn clockwise straight away; Edit opens the editor.
+ * Turn left, turn right and "Edit" for a photo already on an item. A turn is a quarter turn, saved straight away; Edit opens the editor.
  * Either way the saved file (and its original, turned to match) is swapped for the new one.
  */
 export function PhotoEditButton({ photoId, url, path, originalPath, userId, childId }: {
@@ -55,12 +55,12 @@ export function PhotoEditButton({ photoId, url, path, originalPath, userId, chil
     setLoading(false);
   }
 
-  async function turn() {
+  async function turn(dir: 1 | -1) {
     setTurning(true);
     setError(null);
     try {
       const { picture, found } = await fetchBoth();
-      const done = await turnWithOriginal(picture, found, sameFile);
+      const done = await turnWithOriginal(picture, found, sameFile, dir);
       await save(done.result, done.original);
     } catch {
       setError('That photo could not be turned. Check your connection and try again.');
@@ -79,7 +79,8 @@ export function PhotoEditButton({ photoId, url, path, originalPath, userId, chil
 
   return (
     <>
-      <button type="button" className={`${btnGhostCls} !px-2 !py-1 text-sm`} disabled={loading || turning} onClick={turn} aria-label="Turn photo a quarter turn clockwise">{turning ? 'Turning…' : 'Turn ↻'}</button>
+      <button type="button" className={`${btnGhostCls} !px-2 !py-1 text-sm`} disabled={loading || turning} onClick={() => turn(-1)} aria-label="Turn photo left">{turning ? '…' : '↺'}</button>
+      <button type="button" className={`${btnGhostCls} !px-2 !py-1 text-sm`} disabled={loading || turning} onClick={() => turn(1)} aria-label="Turn photo right">{turning ? '…' : '↻'}</button>
       <button type="button" className={`${btnGhostCls} !px-2 !py-1 text-sm`} disabled={loading || turning} onClick={open}>{loading ? 'Opening…' : 'Edit'}</button>
       {error && <span role="alert" className="text-xs text-bad">{error}</span>}
       {blob && <PhotoEditor blob={blob} original={original} onSave={save} onCancel={() => setBlob(null)} />}

@@ -207,8 +207,7 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
   }
 
   const label = current === PHOTOS ? 'Photos' : `Item ${idx} of ${rows.length}`;
-  // The phone keyboard's Enter (Go) key would submit the form from a text box, which on the last item saves the batch before
-  // it is finished. Enter closes the keyboard instead; only the save button saves.
+  // The keyboard's Enter (Go) key never saves the batch; it closes the keyboard. Only the save button saves.
   const noEnter = (e: React.KeyboardEvent) => {
     const t = e.target as HTMLElement;
     if (e.key === 'Enter' && t instanceof HTMLInputElement && t.type !== 'submit' && t.type !== 'button') {
@@ -279,9 +278,11 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
           {idx > 0 ? <button type="button" className={btnGhostCls} onClick={() => window.history.back()}>Back</button> : <Link className={btnGhostCls} href={back} onClick={exit}>Exit</Link>}
           <span className="flex-1" />
           {last ? (
-            <button className={btnCls} type="submit" onClick={(e) => { if (!allOk()) e.preventDefault(); }}>Add {rows.length} item{rows.length === 1 ? '' : 's'} to closet</button>
+            // Not a submit button: a tap on Next that lands here would otherwise finish as a save, because the browser decides what
+            // a tap does after React has already swapped the button. This one saves only from its own tap, through requestSubmit.
+            <button key="save" type="button" className={btnCls} onClick={(e) => { if (allOk()) e.currentTarget.form?.requestSubmit(); }}>Add {rows.length} item{rows.length === 1 ? '' : 's'} to closet</button>
           ) : (
-            <button type="button" className={btnCls} onClick={next} disabled={rows.length === 0 || busy !== null}>Next</button>
+            <button key="next" type="button" className={btnCls} onClick={next} disabled={rows.length === 0 || busy !== null}>Next</button>
           )}
         </div>
       </div>
@@ -317,8 +318,8 @@ function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onEditor, setRef, us
   const [editError, setEditError] = useState<string | null>(null);
   const [turning, setTurning] = useState(false);
 
-  /** A quarter turn clockwise without opening the editor. The stored original is turned too, so Restore lines up. */
-  async function turn() {
+  /** A quarter turn (1 clockwise, -1 counterclockwise) without opening the editor. The stored original is turned too, so Restore lines up. */
+  async function turn(dir: 1 | -1) {
     if (!row.photo) return;
     setEditError(null);
     setTurning(true);
@@ -330,7 +331,7 @@ function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onEditor, setRef, us
         original = (await downloadOriginal(createClient(), originalPath)) ?? undefined;
         if (!original) throw new Error('original');
       }
-      const done = await turnWithOriginal(blob, original, sameFile);
+      const done = await turnWithOriginal(blob, original, sameFile, dir);
       await onSavePhoto(done.result, done.original);
     } catch {
       setEditError('The photo could not be turned. Check your connection and try again.');
@@ -362,7 +363,8 @@ function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onEditor, setRef, us
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={row.photo.preview} alt={`Photo for item ${pos + 1}`} className="max-h-72 w-full rounded-xl border border-line bg-surface object-contain" />
           <div className="flex gap-4">
-            <button type="button" className="text-sm text-accent underline" disabled={turning || opening} onClick={turn}>{turning ? 'Turning…' : 'Turn ↻'}</button>
+            <button type="button" className="text-sm text-accent underline" disabled={turning || opening} onClick={() => turn(-1)} aria-label="Turn left">{turning ? 'Turning…' : '↺ Left'}</button>
+            <button type="button" className="text-sm text-accent underline" disabled={turning || opening} onClick={() => turn(1)} aria-label="Turn right">{turning ? 'Turning…' : 'Right ↻'}</button>
             <button type="button" className="text-sm text-accent underline" disabled={opening || turning} onClick={openEditor}>{opening ? 'Opening…' : 'Edit photo'}</button>
           </div>
           {editError && <p role="alert" className="text-sm text-bad">{editError}</p>}

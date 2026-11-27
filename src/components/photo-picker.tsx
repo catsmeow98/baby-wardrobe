@@ -86,12 +86,12 @@ export function PhotoPicker({ userId, childId, name, label = 'Add photos', max =
   }
 
   const [turning, setTurning] = useState<string | null>(null);
-  /** A quarter turn clockwise without opening the editor; the kept original turns too. */
-  async function turn(p: Picked) {
+  /** A quarter turn either way without opening the editor; the kept original turns too. */
+  async function turn(p: Picked, dir: 1 | -1) {
     setError(null);
     setTurning(p.path);
     try {
-      const done = await turnWithOriginal(p.blob, p.original, p.originalPath === p.path);
+      const done = await turnWithOriginal(p.blob, p.original, p.originalPath === p.path, dir);
       await saveEdit(p, done.result, done.original);
     } catch {
       setError('The photo could not be turned. Check your connection and try again.');
@@ -111,7 +111,8 @@ export function PhotoPicker({ userId, childId, name, label = 'Add photos', max =
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={p.preview} alt="" className="size-16 rounded-lg bg-line object-contain" />
               <span className="flex gap-2">
-                <button type="button" className="text-xs text-accent underline" disabled={turning !== null} onClick={() => turn(p)}>{turning === p.path ? 'Turning…' : 'Turn ↻'}</button>
+                <button type="button" className="text-xs text-accent underline" disabled={turning !== null} onClick={() => turn(p, -1)} aria-label="Turn left">{turning === p.path ? '…' : '↺'}</button>
+                <button type="button" className="text-xs text-accent underline" disabled={turning !== null} onClick={() => turn(p, 1)} aria-label="Turn right">{turning === p.path ? '…' : '↻'}</button>
                 <button type="button" className="text-xs text-accent underline" disabled={turning !== null} onClick={() => setEditing(p)}>Edit</button>
               </span>
               <button type="button" onClick={() => remove(p)} aria-label="Remove photo"
