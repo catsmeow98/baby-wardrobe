@@ -36,7 +36,6 @@ test('filters combine', () => {
   assert.deepEqual(names({ q: 'carter' }), ['White bodysuits']);
   assert.deepEqual(names({ fit: 'notyet' }), ['Snowsuit']);
   assert.deepEqual(names({ fit: 'outgrown' }), ['Old sleeper']);
-  assert.deepEqual(names({ fit: 'small' }), []);
   assert.deepEqual(names({ status: 'outgrown' }), ['Old sleeper']);
   assert.deepEqual(names({ season: 'winter', categoryId: 'b' }), ['Snowsuit']);
   assert.deepEqual(names({ tagGroup: 3 }), ['Snowsuit']);

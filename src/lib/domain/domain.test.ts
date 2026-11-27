@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  SIZE_GROUPS, TAG_SIZES, groupOfTag, displaySize, fitState, goalProgress, sizeProgress,
+  SIZE_GROUPS, TAG_SIZES, groupOfTag, displaySize, fitState, goalProgress, sizeProgress, countFitting,
   orderItem, receive, ShoppingError, type InventoryItem, type Goal, type ShoppingItem,
 } from './index';
 
@@ -36,10 +36,10 @@ test('fit state follows the child current size', () => {
   assert.equal(fitState(item({ fitFrom: S36, fitTo: S69 }), cur), 'fits');
   assert.equal(fitState(item({ fitFrom: S69, fitTo: S69 }), cur), 'notyet');
   assert.equal(fitState(item({ fitFrom: 0, fitTo: 1 }), cur), 'outgrown');
-  assert.equal(fitState(item({ fitFrom: 1, fitTo: S36 }), cur), 'small');
+  assert.equal(fitState(item({ fitFrom: 1, fitTo: S36 }), cur), 'fits', 'the top of its range still fits (there is no separate getting-small state)');
   assert.equal(fitState(item({ fitFrom: S36, fitTo: S36 }), cur), 'fits', 'a single-size item at the current size fits');
   assert.equal(fitState(item({ fitFrom: null, fitTo: null }), cur), 'unknown');
-  assert.equal(fitState(item({ fitOverride: 'small' }), cur), 'small', 'override wins');
+  assert.equal(fitState(item({ fitOverride: 'outgrown' }), cur), 'outgrown', 'override wins');
 });
 
 const items: InventoryItem[] = [
@@ -112,4 +112,19 @@ test('shopping validation', () => {
   assert.throws(() => orderItem(shop({ status: 'cancelled' }), 2), ShoppingError);
   assert.throws(() => orderItem(shop({ ordered: 3, received: 2, status: 'partially_received' }), 1), /already received/);
   assert.equal(orderItem(shop({ ordered: 3, received: 2, status: 'partially_received' }), 2).status, 'received');
+});
+
+test('countFitting: overlapping ranges count toward a size, unusable and outgrown pieces do not', () => {
+  const next = S69; // the next size up
+  const list = [
+    item({ fitFrom: S36, fitTo: S69, quantity: 2 }), // 3-6M to 6-9M: overlaps
+    item({ fitFrom: S69, fitTo: S69, quantity: 3 }), // exactly the next size
+    item({ fitFrom: S69, fitTo: S69 + 3, quantity: 1 }), // starts at the next size and runs larger
+    item({ fitFrom: 0, fitTo: S36, quantity: 5 }), // too small by then
+    item({ fitFrom: S69, fitTo: S69, quantity: 4, condition: 'unusable' }),
+    item({ fitFrom: S69, fitTo: S69, quantity: 6, status: 'outgrown' }),
+    item({ fitFrom: null, fitTo: null, quantity: 7 }),
+  ];
+  assert.equal(countFitting(list, next), 2 + 3 + 1);
+  assert.equal(countFitting([], next), 0);
 });

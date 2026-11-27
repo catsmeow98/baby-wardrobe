@@ -37,7 +37,7 @@ export const COLORS: readonly (readonly [string, string, string])[] = [
 ];
 export const GENDERS = [['boy', 'Boy'], ['girl', 'Girl'], ['neutral', 'Neutral']] as const;
 export const STATUSES: [string, string][] = [['active', 'Active'], ['stored', 'Stored'], ['daycare', 'Spare at daycare'], ['outgrown', 'Outgrown'], ['donated', 'Donated'], ['sold', 'Sold']];
-export const FIT_LABELS: Record<string, string> = { fits: 'Fits now', small: 'Getting small', notyet: 'Not yet', outgrown: 'Outgrown', unknown: 'Fit unknown' };
+export const FIT_LABELS: Record<string, string> = { fits: 'Fits now', notyet: 'Not yet', outgrown: 'Outgrown', unknown: 'Fit unknown' };
 export const FIT_FEEDBACK: [string, string][] = [['-1', 'Ran small'], ['0', 'True to size'], ['1', 'Ran large']];
 export const SHOPPING_STATUS: Record<string, string> = {
   needed: 'Needed', ordered: 'Ordered', partially_received: 'Partly received', received: 'Received', cancelled: 'Cancelled',

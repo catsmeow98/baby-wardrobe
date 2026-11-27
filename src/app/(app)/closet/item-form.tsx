@@ -109,7 +109,7 @@ export function ItemForm({ action, categories, sizes, labels, brands, defaults: 
           Fit status
           <select className={inputCls} name="fitOverride" defaultValue={d.fitOverride ?? ''}>
             <option value="">Work it out from the child&apos;s size</option>
-            {['fits', 'notyet', 'small', 'outgrown'].map((v) => <option key={v} value={v}>{FIT_LABELS[v]}</option>)}
+            {['fits', 'notyet', 'outgrown'].map((v) => <option key={v} value={v}>{FIT_LABELS[v]}</option>)}
           </select>
         </label>
         <label className={`${labelCls} sm:col-span-2`}>

@@ -40,7 +40,7 @@ export async function pickItems(ctx: Ctx, rows: readonly ItemRow[]): Promise<Pic
       color: r.color,
       photoUrl: path ? (urls.get(path) ?? null) : null,
       cutout: Boolean(path?.endsWith('.png')),
-      warn: r.status !== 'active' ? `Not in use (${r.status})` : state === 'small' || state === 'outgrown' ? 'No longer fits' : null,
+      warn: r.status !== 'active' ? `Not in use (${r.status})` : state === 'outgrown' ? 'No longer fits' : null,
     };
   });
 }

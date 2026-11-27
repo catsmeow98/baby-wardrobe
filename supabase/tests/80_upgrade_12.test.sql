@@ -143,3 +143,19 @@ begin
   if not exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'inventory_photos' and column_name = 'original_path') then raise exception 'FAILED: original_path column'; end if;
   raise notice 'PHOTO ORIGINAL CHECKS PASSED (migration 15 ran twice)';
 end $$;
+
+-- Migration 16: "getting small" overrides become "fits", and the value is no longer allowed.
+update public.inventory_items set fit_override = 'small' where id = (select id from public.inventory_items limit 1);
+\i migrations/20260101000016_remove_getting_small.sql
+\i migrations/20260101000016_remove_getting_small.sql
+do $$
+declare failed boolean := false;
+begin
+  if exists (select 1 from public.inventory_items where fit_override = 'small') then raise exception 'FAILED: small overrides converted'; end if;
+  if not exists (select 1 from public.inventory_items where fit_override = 'fits') then raise exception 'FAILED: converted to fits'; end if;
+  begin
+    update public.inventory_items set fit_override = 'small' where id = (select id from public.inventory_items limit 1);
+  exception when check_violation then failed := true; end;
+  if not failed then raise exception 'FAILED: small must be rejected'; end if;
+  raise notice 'GETTING SMALL REMOVED CHECKS PASSED (migration 16 ran twice)';
+end $$;

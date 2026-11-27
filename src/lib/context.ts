@@ -78,7 +78,7 @@ export interface Settings {
 }
 export type Ctx = Awaited<ReturnType<typeof getContext>>;
 
-const FIT_OVERRIDES = ['fits', 'notyet', 'small', 'outgrown'];
+const FIT_OVERRIDES = ['fits', 'notyet', 'outgrown'];
 
 /** Converts database rows into the shapes the tested domain code uses. */
 export function toInventory(rows: ItemRow[], ctx: Pick<Ctx, 'orderOf'>, tagGroupOf?: Map<string, number>): ClosetItem[] {

@@ -1,6 +1,6 @@
 export type ItemStatus = 'active' | 'stored' | 'daycare' | 'outgrown' | 'donated' | 'sold';
 export type Condition = 'new' | 'like_new' | 'good' | 'worn' | 'unusable';
-export type FitState = 'fits' | 'small' | 'notyet' | 'outgrown' | 'unknown';
+export type FitState = 'fits' | 'notyet' | 'outgrown' | 'unknown';
 export type ShoppingStatus = 'needed' | 'ordered' | 'partially_received' | 'received' | 'cancelled';
 
 /** An inventory record. Fit range ends are size-group orders; null when the fit is unknown. */

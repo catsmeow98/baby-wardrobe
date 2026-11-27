@@ -1,6 +1,5 @@
 const tones: Record<string, string> = {
   fits: 'bg-good-soft text-good',
-  small: 'bg-warn-soft text-warn',
   notyet: 'bg-accent-soft text-accent',
   outgrown: 'bg-line text-muted',
   unknown: 'bg-line text-muted',

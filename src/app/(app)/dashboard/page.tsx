@@ -8,7 +8,7 @@ import { ProgressBar } from '@/components/progress-bar';
 import { btnCls, btnGhostCls } from '@/components/ui';
 import { FIT_LABELS, sizeName } from '@/lib/db';
 import type { GoalRow, ItemRow, ShoppingRow } from '@/lib/db';
-import { KEPT_STATUSES, fitStateFor, goalProgress, sizeProgress, transition, type FitState } from '@/lib/domain';
+import { KEPT_STATUSES, countFitting, fitStateFor, goalProgress, sizeProgress, transition, type FitState } from '@/lib/domain';
 import { forecastFor, loadMeasurements } from '@/lib/forecast-data';
 
 export const metadata: Metadata = { title: 'Dashboard' };
@@ -24,7 +24,7 @@ function Stat({ label, value, note }: { label: string; value: React.ReactNode; n
 }
 
 const monthOf = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' });
-const FIT_ORDER: FitState[] = ['fits', 'small', 'notyet', 'outgrown', 'unknown'];
+const FIT_ORDER: FitState[] = ['fits', 'notyet', 'outgrown', 'unknown'];
 
 export default async function DashboardPage() {
   const ctx = await getContext();
@@ -42,13 +42,15 @@ export default async function DashboardPage() {
 
   const cur = ctx.currentSize;
   const active = items.filter((i) => i.status === 'active');
-  const fitsNow = active.filter((i) => ['fits', 'small'].includes(fitStateFor(i, cur))).reduce((s, i) => s + i.quantity, 0);
-  const small = active.filter((i) => fitStateFor(i, cur) === 'small').reduce((s, i) => s + i.quantity, 0);
+  const fitsNow = active.filter((i) => fitStateFor(i, cur) === 'fits').reduce((s, i) => s + i.quantity, 0);
   const upcoming = active.filter((i) => fitStateFor(i, cur) === 'notyet').reduce((s, i) => s + i.quantity, 0);
-  const nextOrder = cur === null ? null : Math.min(cur + 1, ctx.sizes.length - 1);
+  const nextOrder = cur === null || cur + 1 >= ctx.sizes.length ? null : cur + 1;
   const nextSize = nextOrder === null ? null : ctx.sizeByOrder.get(nextOrder);
   const curSize = cur === null ? null : ctx.sizeByOrder.get(cur);
   const comp = cur === null ? null : sizeProgress(progress, child.id, cur);
+  // Next size: pieces that fit it (overlapping ranges count, so a 6-12M and a 9-18M piece both count toward 9-12M) and goal completion.
+  const nextFit = nextOrder === null ? null : countFitting(items, nextOrder);
+  const nextComp = nextOrder === null ? null : sizeProgress(progress, child.id, nextOrder);
   const gaps = progress.filter((p) => p.remaining > 0 && (cur === null || p.size >= cur)).sort((a, b) => b.remaining - a.remaining);
   const openNeeds = gaps.length + shopRowsT.filter((s) => s.status === 'needed').length;
 
@@ -96,11 +98,18 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label="Fits now" value={cur === null ? '–' : fitsNow} note={small ? `${small} getting small` : 'pieces in active use'} />
-        <Stat label="Not yet" value={cur === null ? '–' : upcoming} note="pieces for larger sizes" />
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <Stat label="Fits now" value={cur === null ? '–' : fitsNow} note="pieces in active use" />
         <Stat label={curSize ? `${curSize.label} goals` : 'Goals'} value={comp?.percent == null ? 'None' : `${comp.percent}%`}
           note={comp && comp.goalTotal ? `${comp.ownedTowardGoal} of ${comp.goalTotal} target pieces` : 'Set goals to track this size'} />
+        {nextSize && nextFit !== null && nextComp && (
+          <>
+            <Stat label={`${nextSize.label} closet`} value={nextFit} note="pieces that fit next size, including overlaps" />
+            <Stat label={`${nextSize.label} goals`} value={nextComp.percent == null ? 'None' : `${nextComp.percent}%`}
+              note={nextComp.goalTotal ? `${nextComp.ownedTowardGoal} of ${nextComp.goalTotal} target pieces` : 'Set goals to track next size'} />
+          </>
+        )}
+        <Stat label="Not yet" value={cur === null ? '–' : upcoming} note="pieces for larger sizes" />
         <Stat label="Open needs" value={openNeeds} note={`${gaps.length} goal gaps`} />
       </div>
 

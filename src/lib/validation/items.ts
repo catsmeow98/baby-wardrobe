@@ -23,7 +23,7 @@ export const itemSchema = z.object({
   gender: z.preprocess(blank, z.enum(GENDER_VALUES).optional()),
   color: z.preprocess(blank, z.enum(COLOR_VALUES).optional()),
   status: z.enum(STATUS_VALUES).default('active'),
-  fitOverride: z.preprocess(blank, z.enum(['fits', 'notyet', 'small', 'outgrown']).optional()),
+  fitOverride: z.preprocess(blank, z.enum(['fits', 'notyet', 'outgrown']).optional()),
   fitFeedback: z.preprocess(blank, z.coerce.number().int().min(-1).max(1).optional()),
   notes: z.string().trim().max(1000, 'Use 1000 characters or fewer for notes.').default(''),
 });

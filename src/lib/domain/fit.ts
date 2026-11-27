@@ -11,6 +11,10 @@ export const isUsable = (i: Pick<InventoryItem, 'status' | 'condition'>): boolea
 export const fitsSize = (i: Pick<InventoryItem, 'fitFrom' | 'fitTo'>, size: number): boolean =>
   i.fitFrom !== null && i.fitTo !== null && i.fitFrom <= size && size <= i.fitTo;
 
+/** How many usable pieces fit a size, counting overlapping ranges (a 6-12M piece and a 9-18M piece both count toward 9-12M). */
+export const countFitting = (items: readonly InventoryItem[], size: number): number =>
+  items.filter((i) => countsTowardSize(i, size)).reduce((sum, i) => sum + i.quantity, 0);
+
 /** Counts toward a goal at this size. */
 export const countsTowardSize = (i: InventoryItem, size: number): boolean => isUsable(i) && fitsSize(i, size);
 
@@ -20,7 +24,6 @@ export function fitState(i: InventoryItem, currentSize: number): FitState {
   if (i.fitFrom === null || i.fitTo === null) return 'unknown';
   if (currentSize < i.fitFrom) return 'notyet';
   if (currentSize > i.fitTo) return 'outgrown';
-  if (currentSize === i.fitTo && i.fitFrom < i.fitTo) return 'small';
   return 'fits';
 }
 
