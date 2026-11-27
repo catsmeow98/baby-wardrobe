@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/client';
 import { downloadOriginal, uploadPhoto } from '@/lib/photo-upload';
 import { btnGhostCls } from '@/components/ui';
 import { PhotoEditor } from '@/components/photo-editor';
-import { turnWithOriginal } from '@/lib/photo-client';
+import { CUTOUT_SIDE, reasonOf, shrinkImage, turnWithOriginal } from '@/lib/photo-client';
 import { replacePhoto } from '@/app/(app)/closet/photo-actions';
 
 /**
@@ -29,6 +29,9 @@ export function PhotoEditButton({ photoId, url, path, originalPath, userId, chil
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [turning, setTurning] = useState(false);
+  const [cutting, setCutting] = useState<string | null>(null);
+  // A photo saved with its background (a JPEG; cutouts are PNGs) can have it removed now.
+  const hasBackground = Boolean(path && !path.toLowerCase().endsWith('.png'));
   const sameFile = Boolean(originalPath && path && originalPath === path);
 
   /** The picture and its stored original. If the original cannot be fetched, stop: changing the photo without it would lose it. */
@@ -55,6 +58,25 @@ export function PhotoEditButton({ photoId, url, path, originalPath, userId, chil
     setLoading(false);
   }
 
+  /** Removes the background from a photo that kept it: the cutout replaces it, and the photo as it was becomes its original. */
+  async function removeBackground() {
+    setCutting('Starting…');
+    setError(null);
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('the photo could not be loaded');
+      const picture = await res.blob();
+      const small = await shrinkImage(picture, CUTOUT_SIDE);
+      const { removeBackgroundFrom } = await import('@/lib/bg-remove');
+      const cutout = await removeBackgroundFrom(small, setCutting);
+      setCutting('Saving…');
+      await save(cutout, picture);
+    } catch (e) {
+      setError(`The background could not be removed (${reasonOf(e).slice(0, 120)}). The photo is unchanged.`);
+    }
+    setCutting(null);
+  }
+
   async function turn(dir: 1 | -1) {
     setTurning(true);
     setError(null);
@@ -79,9 +101,14 @@ export function PhotoEditButton({ photoId, url, path, originalPath, userId, chil
 
   return (
     <>
-      <button type="button" className={`${btnGhostCls} !px-2 !py-1 text-sm`} disabled={loading || turning} onClick={() => turn(-1)} aria-label="Turn photo left">{turning ? '…' : '↺'}</button>
-      <button type="button" className={`${btnGhostCls} !px-2 !py-1 text-sm`} disabled={loading || turning} onClick={() => turn(1)} aria-label="Turn photo right">{turning ? '…' : '↻'}</button>
-      <button type="button" className={`${btnGhostCls} !px-2 !py-1 text-sm`} disabled={loading || turning} onClick={open}>{loading ? 'Opening…' : 'Edit'}</button>
+      <button type="button" className={`${btnGhostCls} !px-2 !py-1 text-sm`} disabled={loading || turning || cutting !== null} onClick={() => turn(-1)} aria-label="Turn photo left">{turning ? '…' : '↺'}</button>
+      <button type="button" className={`${btnGhostCls} !px-2 !py-1 text-sm`} disabled={loading || turning || cutting !== null} onClick={() => turn(1)} aria-label="Turn photo right">{turning ? '…' : '↻'}</button>
+      <button type="button" className={`${btnGhostCls} !px-2 !py-1 text-sm`} disabled={loading || turning || cutting !== null} onClick={open}>{loading ? 'Opening…' : 'Edit'}</button>
+      {hasBackground && (
+        <button type="button" className={`${btnGhostCls} !px-2 !py-1 text-sm`} disabled={loading || turning || cutting !== null} onClick={removeBackground}>
+          {cutting ?? 'Remove background'}
+        </button>
+      )}
       {error && <span role="alert" className="text-xs text-bad">{error}</span>}
       {blob && <PhotoEditor blob={blob} original={original} onSave={save} onCancel={() => setBlob(null)} />}
     </>

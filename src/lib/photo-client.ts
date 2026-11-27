@@ -1,7 +1,7 @@
 import { scaleBox } from '@/lib/mask-clean';
 const MAX_SIDE = 1600;
 /** Background removal runs on a smaller copy: it is much faster, and a closet photo does not need more. */
-const CUTOUT_SIDE = 1024;
+export const CUTOUT_SIDE = 1024;
 
 const encode = async (canvas: HTMLCanvasElement, type: string, quality?: number): Promise<Blob> => {
   const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, type, quality));
