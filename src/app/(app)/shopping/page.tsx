@@ -124,7 +124,7 @@ export default async function ShoppingPage({ searchParams }: { searchParams: Pro
           <NeedsCart
             childId={child.id}
             columns={needs.sizes.flatMap((n) => { const z = ctx.sizeByOrder.get(n); return z ? [{ order: n, sizeId: z.id, label: sizeName(z) }] : []; })}
-            rows={needs.rows.map((r) => ({ categoryId: r.categoryId, cells: Object.fromEntries(r.cells) }))}
+            rows={needs.rows.map((r) => ({ categoryId: r.categoryId, cells: Object.fromEntries(r.cells), info: Object.fromEntries(gaps.filter((g) => g.categoryId === r.categoryId).map((g) => [g.size, { goal: g.target, owned: g.owned, incoming: g.incoming }])) }))}
             types={Object.fromEntries(ctx.categories.map((c) => [c.id, { name: c.name, icon: iconForType(c) }]))}
             sizeLabels={Object.fromEntries(ctx.sizes.map((z) => [z.id, sizeName(z)]))}
           />

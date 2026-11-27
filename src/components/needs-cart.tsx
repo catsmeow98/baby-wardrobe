@@ -8,7 +8,8 @@ import { MAX_IN_CART, cartKey, cartLines, cartPieces, cartStorageKey, leftToFind
 import { markCartBought } from '@/app/(app)/shopping/actions';
 
 export interface NeedsColumn { order: number; sizeId: string; label: string }
-export interface NeedsRow { categoryId: string; cells: Record<number, number> }
+export interface CellInfo { goal: number; owned: number; incoming: number }
+export interface NeedsRow { categoryId: string; cells: Record<number, number>; /** Goal, closet and on-order counts behind each cell, by size order. */ info?: Record<number, CellInfo> }
 export interface TypeInfo { name: string; icon: string }
 
 /**
@@ -28,7 +29,7 @@ export function NeedsCart({ childId, columns, rows, types, sizeLabels }: {
   const router = useRouter();
   const [cart, setCart] = useState<Cart>({});
   const [loaded, setLoaded] = useState(false);
-  const [open, setOpen] = useState<{ categoryId: string; sizeId: string; need: number } | null>(null);
+  const [open, setOpen] = useState<{ categoryId: string; sizeId: string; need: number; info?: CellInfo } | null>(null);
   const [showCart, setShowCart] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ text: string; bad: boolean } | null>(null);
@@ -118,7 +119,7 @@ export function NeedsCart({ childId, columns, rows, types, sizeLabels }: {
                   const rest = leftToFind(need, got);
                   return (
                     <td key={col.order} className="px-1 py-1 text-center">
-                      <button type="button" onClick={() => setOpen({ categoryId: r.categoryId, sizeId: col.sizeId, need })}
+                      <button type="button" onClick={() => setOpen({ categoryId: r.categoryId, sizeId: col.sizeId, need, info: r.info?.[col.order] })}
                         aria-label={`${name(r.categoryId)}, ${col.label}: need ${need}${got ? `, ${got} in cart` : ''}`}
                         className={`min-w-11 rounded-lg px-2 py-1.5 tabular-nums ${got ? (rest === 0 ? 'bg-good-soft text-good' : 'bg-accent-soft') : 'hover:bg-line/60'}`}>
                         <span className="block font-semibold">{rest === 0 ? '✓' : rest}</span>
@@ -160,6 +161,11 @@ export function NeedsCart({ childId, columns, rows, types, sizeLabels }: {
             <div>
               <p className="font-display text-lg font-bold">{name(open.categoryId)}</p>
               <p className="text-sm text-muted">{sizeLabels[open.sizeId] ?? ''} · Need {open.need}</p>
+              {open.info && (
+                <p className="text-xs text-muted">
+                  Goal {open.info.goal} · {open.info.owned} in closet{open.info.incoming > 0 ? ` · ${open.info.incoming} on order` : ''}
+                </p>
+              )}
             </div>
           </div>
           <div className="flex items-center justify-center gap-5 py-2">
