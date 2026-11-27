@@ -122,7 +122,7 @@ export function PhotoTouchUp({ blob, original, onDone, onCancel }: {
     `rounded-full border px-3 py-1 text-sm disabled:opacity-40 ${active ? 'border-accent bg-accent text-accent-ink' : 'border-line bg-surface'} ${disabled ? '' : ''}`;
 
   return (
-    <div role="dialog" aria-modal="true" aria-label="Touch up photo" className="fixed inset-0 z-[60] flex flex-col bg-black/80 p-3">
+    <div role="dialog" aria-modal="true" aria-label="Touch up photo" className="fixed inset-0 z-[60] flex flex-col bg-black/80 px-3 pt-[calc(0.75rem+var(--safe-top))] pb-[calc(0.75rem+var(--safe-bottom))]">
       <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-xl" style={{ background: CHECKER }}>
         <canvas
           ref={canvasRef}

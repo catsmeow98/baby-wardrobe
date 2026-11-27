@@ -161,7 +161,7 @@ export function NeedsCart({ childId, columns, rows, types, sizeLabels }: {
       {/* The cart bar, above the phone's bottom navigation. */}
       {pieces > 0 && !open && !showCart && (
         <button type="button" onClick={() => setShowCart(true)}
-          className="fixed inset-x-3 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-30 mx-auto flex max-w-md items-center justify-between rounded-full bg-accent px-5 py-3 text-accent-ink shadow-lg md:bottom-6">
+          className="fixed inset-x-3 bottom-[calc(4.5rem+var(--safe-bottom))] z-30 mx-auto flex max-w-md items-center justify-between rounded-full bg-accent px-5 py-3 text-accent-ink shadow-lg md:bottom-6">
           <span>🛒 Cart: <b>{pieces}</b> piece{pieces === 1 ? '' : 's'}, {lines.length} item{lines.length === 1 ? '' : 's'}</span>
           <span className="font-bold underline">View</span>
         </button>
@@ -291,7 +291,7 @@ function Sheet({ children, onClose, label }: { children: React.ReactNode; onClos
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40" onClick={onClose}>
       <div role="dialog" aria-modal="true" aria-label={label} onClick={(e) => e.stopPropagation()}
-        className="flex w-full max-w-md flex-col gap-3 rounded-t-2xl bg-bg p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-xl">
+        className="flex w-full max-w-md flex-col gap-3 rounded-t-2xl bg-bg p-4 pb-[calc(1rem+var(--safe-bottom))] shadow-xl">
         {children}
       </div>
     </div>

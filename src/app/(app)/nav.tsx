@@ -69,7 +69,7 @@ export function Nav({ children }: { children?: React.ReactNode }) {
         ))}
       </nav>
 
-      <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-30 flex border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] md:hidden">
+      <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-30 flex border-t border-line bg-surface pb-[var(--safe-bottom)] md:hidden">
         {MAIN.map((e) => (
           <Link key={e[0]} href={e[0]} aria-current={isOn(path, e) ? 'page' : undefined} className={`${tab} ${isOn(path, e) ? 'font-bold text-accent' : 'text-muted'}`}>
             <Icon name={e[1]} />
@@ -85,7 +85,7 @@ export function Nav({ children }: { children?: React.ReactNode }) {
       {open && (
         <div className="fixed inset-0 z-40 md:hidden" role="dialog" aria-modal="true" aria-label="More">
           <button type="button" aria-label="Close" className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} />
-          <div className="absolute inset-x-0 bottom-0 flex max-h-[80vh] flex-col gap-4 overflow-y-auto rounded-t-2xl border-t border-line bg-surface p-4 pb-24">
+          <div className="absolute inset-x-0 bottom-0 flex max-h-[80vh] flex-col gap-4 overflow-y-auto rounded-t-2xl border-t border-line bg-surface p-4 pb-[calc(6rem+var(--safe-bottom))]">
             <ul className="grid grid-cols-2 gap-2">
               {MORE.map((e) => (
                 <li key={e[0]}>

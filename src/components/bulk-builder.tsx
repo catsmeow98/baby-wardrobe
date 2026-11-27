@@ -219,8 +219,8 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-bg" onKeyDown={noEnter}>
-      <div ref={top} className="mx-auto flex max-w-xl flex-col gap-5 px-4 pb-32 pt-3">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-bg pt-[var(--safe-top)]" onKeyDown={noEnter}>
+      <div ref={top} className="mx-auto flex max-w-xl flex-col gap-5 px-4 pb-[calc(8rem+var(--safe-bottom))] pt-3">
         <input type="hidden" name="rows" value={rows.length} />
         {/* Blocks submit while photos upload. Not read-only, because read-only fields skip validation. */}
         <input ref={guard} className="sr-only" tabIndex={-1} aria-hidden="true" value="ok" onChange={() => undefined} required />
@@ -276,7 +276,7 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
       </div>
 
       {/* Hidden while the photo editor is open, so it does not cover the editor's buttons. */}
-      <div hidden={editorOpen} className="fixed inset-x-0 bottom-0 z-[60] border-t border-line bg-bg p-3">
+      <div hidden={editorOpen} className="fixed inset-x-0 bottom-0 z-[60] border-t border-line bg-bg px-3 pt-3 pb-[calc(0.75rem+var(--safe-bottom))]">
         <div className="mx-auto flex max-w-xl items-center gap-3">
           {idx > 0 ? <button type="button" className={btnGhostCls} onClick={() => window.history.back()}>Back</button> : <Link className={btnGhostCls} href={back} onClick={exit}>Exit</Link>}
           <span className="flex-1" />

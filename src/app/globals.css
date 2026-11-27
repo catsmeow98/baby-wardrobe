@@ -66,3 +66,16 @@ body {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+
+/*
+ * Room for the phone's status bar (top) and navigation bar (bottom). In the Android app the page draws under them
+ * (viewport-fit=cover); env() gives their size, and Capacitor's --safe-area-inset-* is the fallback for older WebViews.
+ * Both are 0 in an ordinary browser tab.
+ */
+:root {
+  --safe-top: max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px));
+  --safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--safe-area-inset-bottom, 0px));
+}
+body {
+  padding-top: var(--safe-top);
+}

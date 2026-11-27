@@ -284,8 +284,8 @@ export function SurveyWizard({ initial, startStep, options, gearOptions, windows
   const skipTo = size !== undefined && !picking ? nextSizeStart(steps, size) : null;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-bg">
-      <div ref={top} className="mx-auto flex max-w-xl flex-col gap-5 px-4 pb-32 pt-3">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-bg pt-[var(--safe-top)]">
+      <div ref={top} className="mx-auto flex max-w-xl flex-col gap-5 px-4 pb-[calc(8rem+var(--safe-bottom))] pt-3">
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between text-sm text-muted">
             <span>{sectionLabel} · {idx + 1} of {steps.length}</span>
@@ -303,7 +303,7 @@ export function SurveyWizard({ initial, startStep, options, gearOptions, windows
           </div>
         )}
       </div>
-      <div className="fixed inset-x-0 bottom-0 z-[60] border-t border-line bg-bg p-3">
+      <div className="fixed inset-x-0 bottom-0 z-[60] border-t border-line bg-bg px-3 pt-3 pb-[calc(0.75rem+var(--safe-bottom))]">
         <div className="mx-auto flex max-w-xl items-center gap-3">
           {picking ? <span /> : idx > 0 ? <button type="button" className={btnGhostCls} onClick={prev}>Back</button> : <Link className={btnGhostCls} href={back}>Exit</Link>}
           <span className="flex-1" />

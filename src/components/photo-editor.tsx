@@ -94,7 +94,7 @@ export function PhotoEditor({ blob, original, onSave, onCancel }: {
   const options: [string, 'whole' | number][] = [['Whole photo', 'whole'], ['Square', 1], ['4:3', 4 / 3], ['3:4', 3 / 4]];
 
   return (
-    <div role="dialog" aria-modal="true" aria-label="Edit photo" className="fixed inset-0 z-50 flex flex-col bg-black/80 p-3">
+    <div role="dialog" aria-modal="true" aria-label="Edit photo" className="fixed inset-0 z-50 flex flex-col bg-black/80 px-3 pt-[calc(0.75rem+var(--safe-top))] pb-[calc(0.75rem+var(--safe-bottom))]">
       <div className="relative min-h-0 flex-1 overflow-hidden rounded-xl">
         {src && (
           <Cropper

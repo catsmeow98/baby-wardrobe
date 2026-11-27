@@ -30,7 +30,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     );
 
   return (
-    <div className="mx-auto max-w-4xl px-4 pb-28 md:pb-16">
+    <div className="mx-auto max-w-4xl px-4 pb-[calc(7rem+var(--safe-bottom))] md:pb-16">
       <header className="flex items-center justify-between gap-3 pt-3">
         <Link href="/dashboard" className="font-display text-xl font-bold">Baby Wardrobe</Link>
         <div className="flex items-center gap-3 text-sm">

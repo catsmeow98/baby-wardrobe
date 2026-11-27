@@ -19,7 +19,7 @@ const GOALS_BACK = encodeURIComponent('/welcome?step=goals');
 /** The bar fixed to the bottom of every screen. Next either links on or submits the form with the given id. */
 function Bar({ back, skip, next }: { back: StepId | null; skip?: StepId | null; next: { label: string; href: string } | { label: string; formId: string } }) {
   return (
-    <div className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-bg p-3">
+    <div className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-bg px-3 pt-3 pb-[calc(0.75rem+var(--safe-bottom))]">
       <div className="mx-auto flex max-w-xl items-center gap-3">
         {back ? <Link href={stepPath(back)} className={btnGhostCls}>Back</Link> : <span />}
         <span className="flex-1" />
