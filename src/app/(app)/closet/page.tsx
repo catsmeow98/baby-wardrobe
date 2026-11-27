@@ -62,6 +62,7 @@ export default async function ClosetPage({ searchParams }: { searchParams: Promi
       season: sp.season,
     },
     ctx.currentSize,
+    ctx.currentSizeTo,
   );
   const filtered = shown
     .filter((i) => matchesCategory(ctx.catById.get(i.categoryId), { group: sp.group }))
@@ -157,7 +158,7 @@ export default async function ClosetPage({ searchParams }: { searchParams: Promi
       ) : (
         <ul className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-3">
           {ordered.map((i) => {
-            const state = fitStateFor(i, ctx.currentSize);
+            const state = fitStateFor(i, ctx.currentSize, ctx.currentSizeTo);
             const raw = rowOf.get(i.id)!;
             const tag = raw.label_id ? labelById.get(raw.label_id)?.label : (raw.custom_tag ?? undefined);
             const fb = fbLabel(feedbackById.get(i.id));

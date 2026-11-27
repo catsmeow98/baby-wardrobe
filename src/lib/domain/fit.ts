@@ -18,17 +18,22 @@ export const countFitting = (items: readonly InventoryItem[], size: number): num
 /** Counts toward a goal at this size. */
 export const countsTowardSize = (i: InventoryItem, size: number): boolean => isUsable(i) && fitsSize(i, size);
 
-/** How an item relates to the child's current size. A parent's override wins. */
-export function fitState(i: InventoryItem, currentSize: number): FitState {
+/**
+ * How an item relates to the child's current size, which can be a range (currentSize up to currentTo, for a baby between
+ * sizes). It fits when its fit range overlaps the current range, is not yet when it starts above the top, and is outgrown
+ * when it ends below the bottom. A parent's override wins.
+ */
+export function fitState(i: InventoryItem, currentSize: number, currentTo: number = currentSize): FitState {
   if (i.fitOverride) return i.fitOverride;
   if (i.fitFrom === null || i.fitTo === null) return 'unknown';
-  if (currentSize < i.fitFrom) return 'notyet';
+  const top = Math.max(currentSize, currentTo);
+  if (top < i.fitFrom) return 'notyet';
   if (currentSize > i.fitTo) return 'outgrown';
   return 'fits';
 }
 
 /** Like fitState, but a child with no current size set gets 'unknown' (unless a parent override applies). */
-export function fitStateFor(i: InventoryItem, currentSize: number | null): FitState {
+export function fitStateFor(i: InventoryItem, currentSize: number | null, currentTo?: number | null): FitState {
   if (i.fitOverride) return i.fitOverride;
-  return currentSize === null ? 'unknown' : fitState(i, currentSize);
+  return currentSize === null ? 'unknown' : fitState(i, currentSize, currentTo ?? currentSize);
 }

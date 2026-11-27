@@ -90,12 +90,13 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
           <ul className="flex flex-col gap-3">
             {ctx.children.map((c) => {
               const size = c.current_size_id ? bySize.get(c.current_size_id) : undefined;
+              const sizeTo = c.current_size_to_id ? bySize.get(c.current_size_to_id) : undefined;
               return (
                 <li key={c.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-surface p-4">
                   <div>
                     <p className="font-bold">{c.name}</p>
                     <p className="text-sm text-muted">
-                      {size ? `Size ${sizeName(size)}` : 'Size not set'}
+                      {size ? (sizeTo && sizeTo.id !== size.id ? `Sizes ${sizeName(size)} to ${sizeName(sizeTo)}` : `Size ${sizeName(size)}`) : 'Size not set'}
                       {c.birth_date ? ` · born ${c.birth_date}` : ''}
                     </p>
                   </div>
@@ -104,12 +105,21 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
                     <form action={updateChild} className="mt-2 flex flex-col gap-2">
                       <input type="hidden" name="id" value={c.id} />
                       <label className={labelCls}>Name<input className={inputCls} name="name" defaultValue={c.name} maxLength={80} required /></label>
-                      <label className={labelCls}>Current size
-                        <select className={inputCls} name="currentSizeId" defaultValue={c.current_size_id ?? ''}>
-                          <option value="">Not set</option>
-                          {ctx.sizes.map((s) => <option key={s.id} value={s.id}>{sizeName(s)}</option>)}
-                        </select>
-                      </label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <label className={labelCls}>Current size
+                          <select className={inputCls} name="currentSizeId" defaultValue={c.current_size_id ?? ''}>
+                            <option value="">Not set</option>
+                            {ctx.sizes.map((s) => <option key={s.id} value={s.id}>{sizeName(s)}</option>)}
+                          </select>
+                        </label>
+                        <label className={labelCls}>Up to (optional)
+                          <select className={inputCls} name="currentSizeToId" defaultValue={c.current_size_to_id ?? ''}>
+                            <option value="">Just this size</option>
+                            {ctx.sizes.map((s) => <option key={s.id} value={s.id}>{sizeName(s)}</option>)}
+                          </select>
+                        </label>
+                      </div>
+                      <p className="-mt-1 text-xs text-muted">Between sizes? Set &quot;Up to&quot;: clothes in any size from the first to the second count as fitting now.</p>
                       <label className={labelCls}>Birth date (optional)<input className={inputCls} type="date" name="birthDate" defaultValue={c.birth_date ?? ''} /></label>
                       <label className={labelCls}>Growth reference (for forecasts)
                         <select className={inputCls} name="growthReference" defaultValue={c.growth_reference ?? ''}>

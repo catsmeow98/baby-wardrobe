@@ -15,6 +15,8 @@ export const childSchema = z.object({
   ),
   growthReference: z.preprocess(emptyToUndefined, z.enum(['girls', 'boys'], { message: 'Choose a growth reference from the list.' }).optional()),
   currentSizeId: z.preprocess(emptyToUndefined, z.string().uuid('Choose a size from the list.').optional()),
+  /** Top of the current size range, for a child between sizes. Empty means a single size. */
+  currentSizeToId: z.preprocess(emptyToUndefined, z.string().uuid('Choose a size from the list.').optional()),
 });
 
 export type ChildInput = z.infer<typeof childSchema>;

@@ -47,11 +47,11 @@ export interface ClosetFilters {
   season?: string;
 }
 
-export function filterItems(items: readonly ClosetItem[], f: ClosetFilters, currentSize: number | null): ClosetItem[] {
+export function filterItems(items: readonly ClosetItem[], f: ClosetFilters, currentSize: number | null, currentTo?: number | null): ClosetItem[] {
   const q = f.q?.trim().toLowerCase();
   return items.filter((i) => {
     if (q && !`${i.name} ${i.brand ?? ''} ${i.notes ?? ''}`.toLowerCase().includes(q)) return false;
-    if (f.fit && fitStateFor(i, currentSize) !== f.fit) return false;
+    if (f.fit && fitStateFor(i, currentSize, currentTo) !== f.fit) return false;
     if (f.categoryId && i.categoryId !== f.categoryId) return false;
     if (f.tagGroup !== undefined && f.tagGroup !== null && i.tagGroup !== f.tagGroup) return false;
     if (f.status && i.status !== f.status) return false;

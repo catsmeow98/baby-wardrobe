@@ -15,7 +15,7 @@ export async function getContext() {
   if (!user) redirect('/login');
 
   const [{ data: kids }, { data: sizeData }, { data: catData }, { data: groupData }, { data: catPrefData }, { data: groupPrefData }, { data: settingsRow }] = await Promise.all([
-    supabase.from('children').select('id, name, birth_date, current_size_id, growth_reference, survey_answers').order('created_at'),
+    supabase.from('children').select('id, name, birth_date, current_size_id, current_size_to_id, growth_reference, survey_answers').order('created_at'),
     supabase.from('sizes').select('id, label, alias, sort_order').order('sort_order'),
     supabase.from('categories').select('id, name, sort_order, owner_id, group_id'),
     supabase.from('category_groups').select('id, name, sort_order, owner_id'),
@@ -54,6 +54,9 @@ export async function getContext() {
   const sizeByOrder = new Map(sizes.map((s) => [s.sort_order, s]));
   const catById = new Map(allCategories.map((c) => [c.id, c]));
   const currentSize = active?.current_size_id ? (orderOf.get(active.current_size_id) ?? null) : null;
+  // Top of the current size range (the same as currentSize when the child is in one size). Never below the bottom.
+  const toOrder = active?.current_size_to_id ? orderOf.get(active.current_size_to_id) : undefined;
+  const currentSizeTo = currentSize === null ? null : Math.max(currentSize, toOrder ?? currentSize);
 
   // Account settings. Without a row (or before migration 11 is run) the defaults apply: remove backgrounds, no location.
   const s = settingsRow as { remove_background: boolean; place_name: string | null; month_classes: string[] | null; setup_dismissed_at: string | null } | null;
@@ -64,7 +67,7 @@ export async function getContext() {
     setupDismissedAt: s?.setup_dismissed_at ?? null,
   };
 
-  return { supabase, user, settings, children, active, sizes, categories, allCategories, groups, allGroups, orderOf, sizeById, sizeByOrder, catById, currentSize };
+  return { supabase, user, settings, children, active, sizes, categories, allCategories, groups, allGroups, orderOf, sizeById, sizeByOrder, catById, currentSize, currentSizeTo };
 }
 export interface Settings {
   /** Remove the background from photos as they are added. */

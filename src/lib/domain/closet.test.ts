@@ -42,3 +42,14 @@ test('filters combine', () => {
   assert.deepEqual(names({ fit: 'unknown' }, null), ['White bodysuits', 'Snowsuit', 'Old sleeper'], 'no current size means unknown fit');
   assert.equal(fitStateFor(it({ fitOverride: 'fits' }), null), 'fits');
 });
+
+test('a current size range: overlapping items fit, others are not yet or outgrown', () => {
+  // Sizes by order: 2 = 3-6M, 3 = 6-9M. The child is between them.
+  assert.equal(fitStateFor(it({ fitFrom: 3, fitTo: 3 }), 2, 3), 'fits', 'a next-size piece fits while between sizes');
+  assert.equal(fitStateFor(it({ fitFrom: 3, fitTo: 3 }), 2), 'notyet', 'with a single size it is not yet');
+  assert.equal(fitStateFor(it({ fitFrom: 1, fitTo: 2 }), 2, 3), 'fits', 'a smaller piece still fits at the bottom of the range');
+  assert.equal(fitStateFor(it({ fitFrom: 0, fitTo: 1 }), 2, 3), 'outgrown');
+  assert.equal(fitStateFor(it({ fitFrom: 4, fitTo: 5 }), 2, 3), 'notyet');
+  assert.equal(fitStateFor(it({ fitFrom: 3, fitTo: 3 }), 2, 1), 'notyet', 'a top below the bottom is treated as a single size');
+  assert.equal(fitStateFor(it({ fitFrom: 3, fitTo: 3 }), 2, null), 'notyet');
+});

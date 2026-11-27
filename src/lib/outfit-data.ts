@@ -32,7 +32,7 @@ export async function pickItems(ctx: Ctx, rows: readonly ItemRow[]): Promise<Pic
   const inv = new Map(toInventory([...rows], ctx).map((i) => [i.id, i]));
   return rows.map((r) => {
     const t = ctx.catById.get(r.category_id);
-    const state = inv.get(r.id) ? fitStateFor(inv.get(r.id)!, ctx.currentSize) : 'unknown';
+    const state = inv.get(r.id) ? fitStateFor(inv.get(r.id)!, ctx.currentSize, ctx.currentSizeTo) : 'unknown';
     const path = cover.get(r.id);
     return {
       id: r.id,

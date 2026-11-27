@@ -42,10 +42,12 @@ export default async function DashboardPage() {
   const progress = goalProgress(toGoals((goalRows ?? []) as GoalRow[], ctx), items, toShopping(shopRowsT, ctx));
 
   const cur = ctx.currentSize;
+  // The top of the current size range (the same as cur for a single size): the next size is the one above it.
+  const curTo = ctx.currentSizeTo;
   const active = items.filter((i) => i.status === 'active');
-  const fitsNow = active.filter((i) => fitStateFor(i, cur) === 'fits').reduce((s, i) => s + i.quantity, 0);
-  const upcoming = active.filter((i) => fitStateFor(i, cur) === 'notyet').reduce((s, i) => s + i.quantity, 0);
-  const nextOrder = cur === null || cur + 1 >= ctx.sizes.length ? null : cur + 1;
+  const fitsNow = active.filter((i) => fitStateFor(i, cur, curTo) === 'fits').reduce((s, i) => s + i.quantity, 0);
+  const upcoming = active.filter((i) => fitStateFor(i, cur, curTo) === 'notyet').reduce((s, i) => s + i.quantity, 0);
+  const nextOrder = curTo === null || curTo + 1 >= ctx.sizes.length ? null : curTo + 1;
   const nextSize = nextOrder === null ? null : ctx.sizeByOrder.get(nextOrder);
   const curSize = cur === null ? null : ctx.sizeByOrder.get(cur);
   const comp = cur === null ? null : sizeProgress(progress, child.id, cur);
@@ -58,7 +60,7 @@ export default async function DashboardPage() {
   // Fit breakdown across everything being kept (active or stored), by number of pieces.
   const kept = items.filter((i) => KEPT_STATUSES.includes(i.status));
   const byFit = new Map<FitState, number>();
-  for (const i of kept) byFit.set(fitStateFor(i, cur), (byFit.get(fitStateFor(i, cur)) ?? 0) + i.quantity);
+  for (const i of kept) byFit.set(fitStateFor(i, cur, curTo), (byFit.get(fitStateFor(i, cur, curTo)) ?? 0) + i.quantity);
   const unknownFit = items.filter((i) => KEPT_STATUSES.includes(i.status) && i.fitFrom === null && !i.fitOverride).length;
   const unusable = items.filter((i) => i.condition === 'unusable' && KEPT_STATUSES.includes(i.status)).length;
 
@@ -80,7 +82,9 @@ export default async function DashboardPage() {
       <div>
         <h1 className="font-display text-2xl font-bold">{child.name}&apos;s wardrobe</h1>
         <p className="text-muted">
-          {curSize ? `Size ${sizeName(curSize)} now.${nextSize ? ` Next size up is ${sizeName(nextSize)}.` : ''}` : 'No current size set.'}
+          {curSize
+            ? `${curTo !== null && curTo !== cur ? `Sizes ${sizeName(curSize)} to ${sizeName(ctx.sizeByOrder.get(curTo) ?? curSize)}` : `Size ${sizeName(curSize)}`} now.${nextSize ? ` Next size up is ${sizeName(nextSize)}.` : ''}`
+            : 'No current size set.'}
           {cur === null && <> <Link className="text-accent underline" href="/account#children">Set a size</Link> to see fit and goal progress.</>}
         </p>
       </div>

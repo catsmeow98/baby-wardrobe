@@ -41,6 +41,7 @@ export async function updateChild(formData: FormData) {
     name: formData.get('name'),
     birthDate: formData.get('birthDate'),
     currentSizeId: formData.get('currentSizeId'),
+    currentSizeToId: formData.get('currentSizeToId'),
     growthReference: formData.get('growthReference'),
   });
   if (!id.success) return back('That child could not be found.');
@@ -51,12 +52,17 @@ export async function updateChild(formData: FormData) {
     supabase.from('sizes').select('id, sort_order'),
   ]);
   const orderOf = new Map(((sizes ?? []) as { id: string; sort_order: number }[]).map((s) => [s.id, s.sort_order]));
+  // A "to" size only means something above the bottom size; anything else is saved as a single size.
+  const fromO = parsed.data.currentSizeId ? orderOf.get(parsed.data.currentSizeId) : undefined;
+  const toO = parsed.data.currentSizeToId ? orderOf.get(parsed.data.currentSizeToId) : undefined;
+  const sizeTo = fromO !== undefined && toO !== undefined && toO > fromO ? parsed.data.currentSizeToId! : null;
   const { error } = await supabase
     .from('children')
     .update({
       name: parsed.data.name,
       birth_date: parsed.data.birthDate ?? null,
       current_size_id: parsed.data.currentSizeId ?? null,
+      current_size_to_id: sizeTo,
       growth_reference: parsed.data.growthReference ?? null,
     })
     .eq('id', id.data);

@@ -78,12 +78,18 @@ export async function editWelcomeChild(formData: FormData) {
   if (!id.success) return to('child', { error: 'That child could not be found.' });
   if (!parsed.success) return to('child', { error: parsed.error.issues[0].message });
   const ctx = await getContext();
+  // This form sets only the bottom size. Keep an "up to" size set on the Account page while it is still above the bottom.
+  const was = ctx.children.find((c) => c.id === id.data);
+  const fromO = parsed.data.currentSizeId ? ctx.orderOf.get(parsed.data.currentSizeId) : undefined;
+  const toO = was?.current_size_to_id ? ctx.orderOf.get(was.current_size_to_id) : undefined;
+  const keepTo = fromO !== undefined && toO !== undefined && toO > fromO;
   const { error } = await ctx.supabase
     .from('children')
     .update({
       name: parsed.data.name,
       birth_date: parsed.data.birthDate ?? null,
       current_size_id: parsed.data.currentSizeId ?? null,
+      ...(keepTo ? {} : { current_size_to_id: null }),
       growth_reference: parsed.data.growthReference ?? null,
     })
     .eq('id', id.data);
