@@ -54,7 +54,14 @@ export function useTurnQueue(save: (quarterTurns: number) => Promise<void>, dela
     timer.current = setTimeout(flush, delay);
   }
 
-  /** The CSS for the picture: rotated by the taps not saved yet. */
-  const style = shown ? { transform: `rotate(${shown * 90}deg)`, transition: 'transform 150ms ease-out' } : undefined;
-  return { turn, shown, saving, error, style };
+  /** The CSS for the picture: rotated by the taps not saved yet. For a picture filling a frame that is not square, pass the
+   * frame's width and height: a sideways turn is then scaled down so the picture stays inside the frame. */
+  const styleIn = (w?: number, h?: number) => {
+    if (!shown) return undefined;
+    const sideways = shown % 2 !== 0;
+    const scale = sideways && w && h ? Math.min(w, h) / Math.max(w, h) : 1;
+    return { transform: `rotate(${shown * 90}deg) scale(${scale})`, transition: 'transform 150ms ease-out' };
+  };
+  const style = styleIn();
+  return { turn, shown, saving, error, style, styleIn };
 }

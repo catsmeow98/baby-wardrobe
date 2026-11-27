@@ -486,6 +486,7 @@ function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onEditor, onTurning,
   });
   const turning = turns.saving || turns.shown !== 0;
   useEffect(() => onTurning(turning), [turning]); // eslint-disable-line react-hooks/exhaustive-deps
+  const frame = useRef<HTMLDivElement>(null);
 
   /** Opens the editor. The stored original (if there is one) is fetched first, so Restore works. */
   async function openEditor() {
@@ -508,8 +509,11 @@ function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onEditor, onTurning,
       {row.photo && (
         <div className="relative flex flex-col items-center gap-1 sm:col-span-6">
           <input type="hidden" name={`photo_${pos}`} value={joinPhotoField(row.photo.path, row.photo.originalPath)} />
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={row.photo.preview} alt={`Photo for item ${pos + 1}`} style={turns.style} className="max-h-72 w-full rounded-xl border border-line bg-surface object-contain" />
+          {/* The frame stays put; only the picture turns inside it (scaled to fit when sideways), so nothing jumps. */}
+          <div ref={frame} className="h-72 w-full overflow-hidden rounded-xl border border-line bg-surface">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={row.photo.preview} alt={`Photo for item ${pos + 1}`} style={turns.styleIn(frame.current?.clientWidth, frame.current?.clientHeight)} className="size-full object-contain" />
+          </div>
           <div className="flex gap-4">
             <button type="button" className="text-sm text-accent underline" disabled={opening} onClick={() => turns.turn(-1)} aria-label="Turn left">↺ Left</button>
             <button type="button" className="text-sm text-accent underline" disabled={opening} onClick={() => turns.turn(1)} aria-label="Turn right">Right ↻</button>

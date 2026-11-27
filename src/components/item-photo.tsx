@@ -25,8 +25,11 @@ export function ItemPhoto({ photoId, url, path, originalPath, alt, userId, child
   const cutout = local ? local.cutout : path.toLowerCase().endsWith('.png');
   return (
     <>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={src} alt={alt} style={turnStyle} className={`aspect-square w-full rounded-lg ${cutout ? 'bg-line object-contain' : 'object-cover'}`} />
+      {/* The square frame stays put; only the picture turns inside it. */}
+      <div className={`aspect-square w-full overflow-hidden rounded-lg ${cutout ? 'bg-line' : ''}`}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={src} alt={alt} style={turnStyle} className={`size-full ${cutout ? 'object-contain' : 'object-cover'}`} />
+      </div>
       <div className="flex flex-wrap items-center gap-3">
         <PhotoEditButton photoId={photoId} url={url} path={path} originalPath={originalPath} userId={userId} childId={childId}
           onSaved={(b) => setLocal({ src: URL.createObjectURL(b), cutout: b.type === 'image/png' })} onTurnStyle={setTurnStyle} />

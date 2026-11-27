@@ -139,8 +139,10 @@ function Thumb({ p, onTurn, onEdit, onRemove, onError, onBusy }: {
   useEffect(() => onBusy(still), [still]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <li className="relative flex flex-col items-start gap-1">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={p.preview} alt="" style={turns.style} className="size-16 rounded-lg bg-line object-contain" />
+      <div className="size-16 overflow-hidden rounded-lg bg-line">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={p.preview} alt="" style={turns.style} className="size-full object-contain" />
+      </div>
       <span className="flex gap-2">
         <button type="button" className="text-xs text-accent underline" onClick={() => turns.turn(-1)} aria-label="Turn left">↺</button>
         <button type="button" className="text-xs text-accent underline" onClick={() => turns.turn(1)} aria-label="Turn right">↻</button>
