@@ -88,7 +88,7 @@ export default async function GoalsPage({ searchParams }: { searchParams: Promis
         </form>
       )}
 
-      <form action={saveGoals} className="rounded-xl border border-line bg-surface p-4">
+      <form key={sizeOrder} action={saveGoals} className="rounded-xl border border-line bg-surface p-4">
         <input type="hidden" name="sizeId" value={size.id} />
         {sp.group && <input type="hidden" name="group" value={sp.group} />}
         {sp.cat && <input type="hidden" name="cat" value={sp.cat} />}
@@ -114,7 +114,9 @@ export default async function GoalsPage({ searchParams }: { searchParams: Promis
               <li key={c.id} className={`grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-2 border-t border-line py-3 first:border-t-0 sm:grid-cols-[minmax(150px,1.2fr)_90px_minmax(180px,1fr)_minmax(90px,1fr)] ${!goal || goal.target === 0 ? 'opacity-60 focus-within:opacity-100' : ''}`}>
                 <span className="font-bold">{c.name}</span>
                 <label className="text-sm text-muted">
-                  <input className={`${inputCls} w-20`} type="number" min={0} max={99} inputMode="numeric" name={`goal_${c.id}`}
+                  {/* Keyed by the size and the saved value: an uncontrolled box keeps whatever it first showed, so without this it
+                      went stale after the survey saved goals or the size changed, and Save goals wrote the stale number back. */}
+                  <input key={`${sizeOrder}:${goal?.target ?? ''}`} className={`${inputCls} w-20`} type="number" min={0} max={99} inputMode="numeric" name={`goal_${c.id}`}
                     defaultValue={goal?.target ?? ''} placeholder="Not set" aria-label={`Goal for ${c.name}`} />
                   <span className="mt-0.5 block">goal</span>
                 </label>
