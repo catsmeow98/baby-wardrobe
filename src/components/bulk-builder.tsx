@@ -9,7 +9,7 @@ import { PhotoPicker } from '@/components/photo-picker';
 import { PhotoEditor } from '@/components/photo-editor';
 import { TagSizeField, type TagValue } from '@/components/tag-size-field';
 import { createClient } from '@/lib/supabase/client';
-import { processPhoto, reasonOf } from '@/lib/photo-client';
+import { processPhoto, reasonOf, turnWithOriginal } from '@/lib/photo-client';
 import { downloadOriginal, uploadPhoto } from '@/lib/photo-upload';
 import { joinPhotoField, pathsOf } from '@/lib/photo-paths';
 import { PHOTO_BUCKET } from '@/lib/photos';
@@ -207,8 +207,18 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
   }
 
   const label = current === PHOTOS ? 'Photos' : `Item ${idx} of ${rows.length}`;
+  // The phone keyboard's Enter (Go) key would submit the form from a text box, which on the last item saves the batch before
+  // it is finished. Enter closes the keyboard instead; only the save button saves.
+  const noEnter = (e: React.KeyboardEvent) => {
+    const t = e.target as HTMLElement;
+    if (e.key === 'Enter' && t instanceof HTMLInputElement && t.type !== 'submit' && t.type !== 'button') {
+      e.preventDefault();
+      t.blur();
+    }
+  };
+
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-bg">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-bg" onKeyDown={noEnter}>
       <div ref={top} className="mx-auto flex max-w-xl flex-col gap-5 px-4 pb-32 pt-3">
         <input type="hidden" name="rows" value={rows.length} />
         {/* Blocks submit while photos upload. Not read-only, because read-only fields skip validation. */}
@@ -305,6 +315,28 @@ function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onEditor, setRef, us
   const [original, setOriginal] = useState<Blob | undefined>();
   const [opening, setOpening] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+  const [turning, setTurning] = useState(false);
+
+  /** A quarter turn clockwise without opening the editor. The stored original is turned too, so Restore lines up. */
+  async function turn() {
+    if (!row.photo) return;
+    setEditError(null);
+    setTurning(true);
+    try {
+      const { path, originalPath, blob } = row.photo;
+      const sameFile = originalPath === path;
+      let original: Blob | undefined;
+      if (originalPath && !sameFile) {
+        original = (await downloadOriginal(createClient(), originalPath)) ?? undefined;
+        if (!original) throw new Error('original');
+      }
+      const done = await turnWithOriginal(blob, original, sameFile);
+      await onSavePhoto(done.result, done.original);
+    } catch {
+      setEditError('The photo could not be turned. Check your connection and try again.');
+    }
+    setTurning(false);
+  }
 
   /** Opens the editor. The stored original (if there is one) is fetched first, so Restore works. */
   async function openEditor() {
@@ -329,7 +361,10 @@ function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onEditor, setRef, us
           <input type="hidden" name={`photo_${pos}`} value={joinPhotoField(row.photo.path, row.photo.originalPath)} />
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={row.photo.preview} alt={`Photo for item ${pos + 1}`} className="max-h-72 w-full rounded-xl border border-line bg-surface object-contain" />
-          <button type="button" className="text-sm text-accent underline" disabled={opening} onClick={openEditor}>{opening ? 'Opening…' : 'Edit photo'}</button>
+          <div className="flex gap-4">
+            <button type="button" className="text-sm text-accent underline" disabled={turning || opening} onClick={turn}>{turning ? 'Turning…' : 'Turn ↻'}</button>
+            <button type="button" className="text-sm text-accent underline" disabled={opening || turning} onClick={openEditor}>{opening ? 'Opening…' : 'Edit photo'}</button>
+          </div>
           {editError && <p role="alert" className="text-sm text-bad">{editError}</p>}
           {editing && <PhotoEditor blob={row.photo.blob} original={original} onSave={async (r, o) => { await onSavePhoto(r, o); setEditing(false); }} onCancel={() => setEditing(false)} />}
         </div>

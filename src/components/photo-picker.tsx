@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { processPhoto } from '@/lib/photo-client';
+import { processPhoto, turnWithOriginal } from '@/lib/photo-client';
 import { uploadPhoto } from '@/lib/photo-upload';
 import { joinPhotoField, pathsOf } from '@/lib/photo-paths';
 import { MAX_PHOTOS_PER_ITEM, PHOTO_BUCKET } from '@/lib/photos';
@@ -85,6 +85,20 @@ export function PhotoPicker({ userId, childId, name, label = 'Add photos', max =
     await supabase.storage.from(PHOTO_BUCKET).remove(pathsOf(old));
   }
 
+  const [turning, setTurning] = useState<string | null>(null);
+  /** A quarter turn clockwise without opening the editor; the kept original turns too. */
+  async function turn(p: Picked) {
+    setError(null);
+    setTurning(p.path);
+    try {
+      const done = await turnWithOriginal(p.blob, p.original, p.originalPath === p.path);
+      await saveEdit(p, done.result, done.original);
+    } catch {
+      setError('The photo could not be turned. Check your connection and try again.');
+    }
+    setTurning(null);
+  }
+
   return (
     <div className="flex flex-col gap-2">
       {picked.map((p) => <input key={p.path} type="hidden" name={name} value={joinPhotoField(p.path, p.originalPath)} />)}
@@ -96,7 +110,10 @@ export function PhotoPicker({ userId, childId, name, label = 'Add photos', max =
             <li key={p.path} className="relative flex flex-col items-start gap-1">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={p.preview} alt="" className="size-16 rounded-lg bg-line object-contain" />
-              <button type="button" className="text-xs text-accent underline" onClick={() => setEditing(p)}>Edit</button>
+              <span className="flex gap-2">
+                <button type="button" className="text-xs text-accent underline" disabled={turning !== null} onClick={() => turn(p)}>{turning === p.path ? 'Turning…' : 'Turn ↻'}</button>
+                <button type="button" className="text-xs text-accent underline" disabled={turning !== null} onClick={() => setEditing(p)}>Edit</button>
+              </span>
               <button type="button" onClick={() => remove(p)} aria-label="Remove photo"
                 className="absolute -right-1.5 -top-1.5 flex size-5 items-center justify-center rounded-full bg-ink text-xs text-surface">×</button>
             </li>
