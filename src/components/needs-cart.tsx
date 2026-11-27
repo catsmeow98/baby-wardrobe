@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { ItemIcon } from '@/components/item-icon';
 import { btnCls, btnGhostCls } from '@/components/ui';
 import { MAX_IN_CART, cartKey, cartLines, cartPieces, cartStorageKey, leftToFind, parseCart, setInCart, splitKey, type Cart } from '@/lib/cart';
-import { markCartBought } from '@/app/(app)/shopping/actions';
+import Link from 'next/link';
+import { closetPieces, markCartBought, type ClosetPiece } from '@/app/(app)/shopping/actions';
 
 export interface NeedsColumn { order: number; sizeId: string; label: string }
 export interface CellInfo { goal: number; owned: number; incoming: number }
@@ -31,6 +32,8 @@ export function NeedsCart({ childId, columns, rows, types, sizeLabels }: {
   const [loaded, setLoaded] = useState(false);
   const [open, setOpen] = useState<{ categoryId: string; sizeId: string; need: number; info?: CellInfo } | null>(null);
   const [showCart, setShowCart] = useState(false);
+  // The closet pieces behind "N in closet", loaded when tapped.
+  const [closet, setCloset] = useState<{ title: string; pieces: ClosetPiece[] | null; error?: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ text: string; bad: boolean } | null>(null);
 
@@ -81,6 +84,17 @@ export function NeedsCart({ childId, columns, rows, types, sizeLabels }: {
       setMessage({ text: 'Could not reach the server. Your cart is still here; try again when you have signal.', bad: true });
     }
     setSaving(false);
+  }
+
+  async function showCloset(categoryId: string, sizeId: string) {
+    const title = `${types[categoryId]?.name ?? 'Item'} · ${sizeLabels[sizeId] ?? ''}`;
+    setCloset({ title, pieces: null });
+    try {
+      const res = await closetPieces(categoryId, sizeId);
+      setCloset({ title, pieces: res.pieces, error: res.error });
+    } catch {
+      setCloset({ title, pieces: [], error: 'Your closet could not be loaded. Check your signal and try again.' });
+    }
   }
 
   function clearCart() {
@@ -163,7 +177,11 @@ export function NeedsCart({ childId, columns, rows, types, sizeLabels }: {
               <p className="text-sm text-muted">{sizeLabels[open.sizeId] ?? ''} · Need {open.need}</p>
               {open.info && (
                 <p className="text-xs text-muted">
-                  Goal {open.info.goal} · {open.info.owned} in closet{open.info.incoming > 0 ? ` · ${open.info.incoming} on order` : ''}
+                  Goal {open.info.goal} ·{' '}
+                  {open.info.owned > 0
+                    ? <button type="button" className="text-accent underline" onClick={() => showCloset(open.categoryId, open.sizeId)}>{open.info.owned} in closet</button>
+                    : '0 in closet'}
+                  {open.info.incoming > 0 ? ` · ${open.info.incoming} on order` : ''}
                 </p>
               )}
             </div>
@@ -187,6 +205,40 @@ export function NeedsCart({ childId, columns, rows, types, sizeLabels }: {
               : <span />}
             <button type="button" className={btnCls} onClick={() => setOpen(null)}>Done</button>
           </div>
+        </Sheet>
+      )}
+
+      {/* What is already in the closet for that item and size. Opens over the cart panel; closing returns to it. */}
+      {closet && (
+        <Sheet onClose={() => setCloset(null)} label="In the closet">
+          <h2 className="font-display text-lg font-bold">In the closet</h2>
+          <p className="-mt-2 text-sm text-muted">{closet.title}</p>
+          {closet.pieces === null ? (
+            <p className="py-4 text-center text-muted">Loading…</p>
+          ) : (
+            <ul className="max-h-[50vh] overflow-y-auto">
+              {closet.pieces.map((p) => (
+                <li key={p.id} className="border-t border-line first:border-t-0">
+                  <Link href={`/closet/${p.id}?back=${encodeURIComponent('/shopping')}`} className="flex items-center gap-3 py-2">
+                    {p.photoUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={p.photoUrl} alt="" className={`size-14 shrink-0 rounded-lg bg-line ${p.cutout ? 'object-contain' : 'object-cover'}`} />
+                    ) : (
+                      <span className="flex size-14 shrink-0 items-center justify-center rounded-lg bg-line/60 text-accent"><ItemIcon itemKey={open ? icon(open.categoryId) : 'g_other'} size={30} /></span>
+                    )}
+                    <span className="min-w-0 flex-1">
+                      <b className="block truncate">{p.name}</b>
+                      <span className="block text-xs text-muted">{[p.brand, `Fits ${p.fits}`].filter(Boolean).join(' · ')}</span>
+                    </span>
+                    {p.quantity > 1 && <span className="rounded-full bg-line px-2 text-xs">×{p.quantity}</span>}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+          {closet.error && <p role="alert" className="text-sm text-bad">{closet.error}</p>}
+          {closet.pieces?.length === 0 && !closet.error && <p className="py-3 text-center text-muted">Nothing in the closet counts toward this size.</p>}
+          <div className="flex justify-end"><button type="button" className={btnCls} onClick={() => setCloset(null)}>Back</button></div>
         </Sheet>
       )}
 

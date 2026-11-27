@@ -3,7 +3,11 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
-import { getContext } from '@/lib/context';
+import { getContext, toInventory } from '@/lib/context';
+import { countsTowardSize } from '@/lib/domain';
+import { signedUrls } from '@/lib/photos';
+import { sizeName } from '@/lib/db';
+import type { ItemRow } from '@/lib/db';
 import { safeBack, withParams } from '@/lib/back';
 
 /** Returns to the shopping list with the filters the person had, plus a message. */
@@ -127,4 +131,52 @@ export async function markCartBought(lines: unknown): Promise<{ saved: string[];
   }
   if (saved.length) refresh();
   return saved.length === parsed.data.length ? { saved } : { saved, error: `${saved.length} of ${parsed.data.length} cart lines were saved. The rest are still in the cart; try again.` };
+}
+
+export interface ClosetPiece { id: string; name: string; brand: string | null; quantity: number; fits: string; photoUrl: string | null; cutout: boolean }
+
+/**
+ * The closet pieces behind "N in closet" for one item type and size: exactly the ones the goal count uses (usable, with a fit
+ * range that includes the size). Loaded when asked for, with a small photo each.
+ */
+export async function closetPieces(categoryId: unknown, sizeId: unknown): Promise<{ pieces: ClosetPiece[]; error?: string }> {
+  const cat = uuid.safeParse(categoryId);
+  const size = uuid.safeParse(sizeId);
+  if (!cat.success || !size.success) return { pieces: [], error: 'That item could not be found.' };
+  const ctx = await getContext();
+  if (!ctx.active) return { pieces: [], error: 'Add a child first.' };
+  const order = ctx.orderOf.get(size.data);
+  if (order === undefined) return { pieces: [], error: 'That size could not be found.' };
+  const { data, error } = await ctx.supabase.from('inventory_items').select('*').eq('child_id', ctx.active.id).eq('category_id', cat.data);
+  if (error) return { pieces: [], error: 'Your closet could not be loaded. Try again.' };
+  const rows = (data ?? []) as ItemRow[];
+  const items = toInventory(rows, ctx);
+  const keep = items.map((i, n) => ({ i, row: rows[n] })).filter(({ i }) => countsTowardSize(i, order));
+  if (keep.length === 0) return { pieces: [] };
+  const ids = keep.map(({ row }) => row.id);
+  const [{ data: photoRows }, { data: brandRows }] = await Promise.all([
+    ctx.supabase.from('inventory_photos').select('inventory_item_id, storage_path, sort_order').in('inventory_item_id', ids).order('sort_order'),
+    ctx.supabase.from('brands').select('id, name'),
+  ]);
+  const cover = new Map<string, string>();
+  for (const p of (photoRows ?? []) as { inventory_item_id: string; storage_path: string }[]) if (!cover.has(p.inventory_item_id)) cover.set(p.inventory_item_id, p.storage_path);
+  const urls = await signedUrls(ctx.supabase, [...cover.values()]);
+  const brandById = new Map(((brandRows ?? []) as { id: string; name: string }[]).map((b) => [b.id, b.name]));
+  const sizeText = (o: number | null) => (o === null ? null : ctx.sizeByOrder.get(o));
+  return {
+    pieces: keep.map(({ i, row }) => {
+      const a = sizeText(i.fitFrom);
+      const b = sizeText(i.fitTo);
+      const path = cover.get(row.id);
+      return {
+        id: row.id,
+        name: row.name,
+        brand: row.brand_id ? (brandById.get(row.brand_id) ?? null) : null,
+        quantity: row.quantity,
+        fits: a && b ? (a.id === b.id ? sizeName(a) : `${sizeName(a)} to ${sizeName(b)}`) : 'Unknown',
+        photoUrl: path ? (urls.get(path) ?? null) : null,
+        cutout: Boolean(path?.endsWith('.png')),
+      };
+    }),
+  };
 }
