@@ -118,7 +118,7 @@ export default async function SurveyPage({ searchParams }: { searchParams: Promi
             </fieldset>
             <div className="flex flex-wrap items-center gap-3">
               <button className={btnCls} type="submit">Use these goals</button>
-              <span className="text-sm text-muted">Sets goals wherever the suggestion is above zero. Other goals stay as they are. Your answers are remembered for next time.</span>
+              <span className="text-sm text-muted">Replaces the goals for the ticked sizes: item types you did not pick are set to 0. Sizes you leave unticked keep their goals. Your answers are remembered for next time.</span>
             </div>
           </form>
         ) : (

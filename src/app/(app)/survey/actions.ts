@@ -9,7 +9,9 @@ import { defaultBirthMonth, surveyAll } from './compute';
 
 /**
  * Saves the suggested goals for the sizes that were ticked. It recomputes from the answers on the server rather than
- * trusting posted numbers. Goals are set wherever the suggestion is above zero. Other goals stay as they are.
+ * trusting posted numbers. For each ticked size the survey's answer is the whole plan: goals are set wherever the suggestion
+ * is above zero, and every other goal for that size (an item type not picked this time) is set to 0. Sizes not ticked are
+ * left alone. Everything goes in one upsert, so either all of it is saved or none of it.
  */
 export async function applySurvey(formData: FormData) {
   const q = String(formData.get('q') ?? '');
@@ -43,10 +45,22 @@ export async function applySurvey(formData: FormData) {
         });
     });
   if (goals.length === 0) return stop('There were no suggestions to save.');
+  // Item types not picked this time: their goals for the ticked sizes drop to 0.
+  const sizeIds = chosen.map((n) => ctx.sizeByOrder.get(n)?.id).filter((id): id is string => Boolean(id));
+  const { data: existing, error: readError } = await ctx.supabase
+    .from('wardrobe_goals')
+    .select('category_id, size_id, target_quantity')
+    .eq('child_id', child.id)
+    .in('size_id', sizeIds);
+  if (readError) return stop('We could not read your current goals. Try again.');
+  const kept = new Set(goals.map((g) => `${g.category_id}|${g.size_id}`));
+  const cleared = (existing ?? [])
+    .filter((g: { category_id: string; size_id: string; target_quantity: number }) => g.target_quantity > 0 && !kept.has(`${g.category_id}|${g.size_id}`))
+    .map((g: { category_id: string; size_id: string }) => ({ child_id: child.id, category_id: g.category_id, size_id: g.size_id, target_quantity: 0 }));
   // Remember the answers for this child, so the next retake opens pre-filled. A failure here never blocks saving goals.
   const remembered = answersToParams(answers).toString();
   if (remembered.length <= 8000) await ctx.supabase.from('children').update({ survey_answers: remembered }).eq('id', child.id);
-  const { error } = await ctx.supabase.from('wardrobe_goals').upsert(goals, { onConflict: 'child_id,category_id,size_id' });
+  const { error } = await ctx.supabase.from('wardrobe_goals').upsert([...goals, ...cleared], { onConflict: 'child_id,category_id,size_id' });
   if (error) return stop('We could not save those goals. Try again.');
   ['/goals', '/shopping', '/dashboard', '/survey'].forEach((path) => revalidatePath(path));
   return redirect(withParams(back, { size: String(chosen[0]), saved: '1' }));
