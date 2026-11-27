@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { BrandSelect } from '@/components/brand-select';
 import { CategoryPicker } from '@/components/category-picker';
@@ -47,6 +48,7 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
   /** The details shared by every item, shown on the first screen. */
   children?: React.ReactNode;
 }) {
+  const router = useRouter();
   const nextId = useRef(0);
   const [rows, setRows] = useState<Row[]>([]);
   const [stepId, setStepId] = useState<string>(PHOTOS);
@@ -193,6 +195,17 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
     await supabase.storage.from(PHOTO_BUCKET).remove(pathsOf(old));
   }
 
+  /** Leaving throws the batch away, so ask first when there is something to lose, and delete its uploaded photos. */
+  async function exit(e: React.MouseEvent) {
+    e.preventDefault();
+    if (busy !== null || rows.length > 0) {
+      if (!window.confirm('Leave bulk add? Your progress will be lost and nothing will be added to the closet.')) return;
+      const paths = rows.flatMap((r) => (r.photo ? pathsOf(r.photo) : []));
+      if (paths.length) await createClient().storage.from(PHOTO_BUCKET).remove(paths).catch(() => undefined);
+    }
+    router.push(back);
+  }
+
   const label = current === PHOTOS ? 'Photos' : `Item ${idx} of ${rows.length}`;
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-bg">
@@ -204,7 +217,7 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between text-sm text-muted">
             <span>Bulk add · {label}</span>
-            <Link href={back} className="underline">Exit</Link>
+            <Link href={back} className="underline" onClick={exit}>Exit</Link>
           </div>
           <div role="progressbar" aria-valuemin={0} aria-valuemax={steps.length} aria-valuenow={idx + 1} aria-label="Bulk add progress" className="h-2 overflow-hidden rounded-full bg-line">
             <span className="block h-full rounded-full bg-accent transition-all" style={{ width: `${((idx + 1) / steps.length) * 100}%` }} />
@@ -253,7 +266,7 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
       {/* Hidden while the photo editor is open, so it does not cover the editor's buttons. */}
       <div hidden={editorOpen} className="fixed inset-x-0 bottom-0 z-[60] border-t border-line bg-bg p-3">
         <div className="mx-auto flex max-w-xl items-center gap-3">
-          {idx > 0 ? <button type="button" className={btnGhostCls} onClick={() => window.history.back()}>Back</button> : <Link className={btnGhostCls} href={back}>Exit</Link>}
+          {idx > 0 ? <button type="button" className={btnGhostCls} onClick={() => window.history.back()}>Back</button> : <Link className={btnGhostCls} href={back} onClick={exit}>Exit</Link>}
           <span className="flex-1" />
           {last ? (
             <button className={btnCls} type="submit" onClick={(e) => { if (!allOk()) e.preventDefault(); }}>Add {rows.length} item{rows.length === 1 ? '' : 's'} to closet</button>
