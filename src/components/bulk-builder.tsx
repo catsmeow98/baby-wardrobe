@@ -8,6 +8,7 @@ import { BrandSelect } from '@/components/brand-select';
 import { CategoryPicker } from '@/components/category-picker';
 import { ItemIcon, TypeIcon } from '@/components/item-icon';
 import { LocalTime } from '@/components/local-time';
+import { CameraCapture } from '@/components/camera-capture';
 import { guessLine, piecesLeft } from '@/lib/trips';
 import { groupCategories } from '@/lib/categories';
 import { PhotoPicker } from '@/components/photo-picker';
@@ -187,12 +188,33 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
     if (screenOk()) go(steps[idx + 1]);
   };
 
-  async function onPhotos(e: React.ChangeEvent<HTMLInputElement>) {
+  // Photos are processed one batch at a time, in order, so camera shots taken quickly queue up instead of overlapping.
+  const queue = useRef<Promise<void>>(Promise.resolve());
+  const [camera, setCamera] = useState(false);
+  const camShots = useRef(0);
+  const addFiles = (files: File[], quiet = false) => {
+    queue.current = queue.current.then(() => processFiles(files, quiet)).catch((err) => console.error('Photo batch failed', err));
+  };
+  function onPhotos(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
     e.target.value = '';
+    if (files.length) addFiles(files);
+  }
+  /** Camera closed: once its photos have all been processed, say so (as after choosing photos). */
+  function closeCamera() {
+    setCamera(false);
+    const n = camShots.current;
+    camShots.current = 0;
+    if (n) queue.current = queue.current.then(() => {
+      setBusy(null);
+      setDone(`${n === 1 ? 'Your photo is uploaded.' : `All ${n} photos are uploaded.`} Tap Next to ${trip ? 'match each one to what you bought' : 'fill in the details'}.`);
+    });
+  }
+
+  async function processFiles(files: File[], quiet: boolean) {
     if (files.length === 0) return;
+    if (!quiet) setDone(null);
     setError(null);
-    setDone(null);
     const supabase = createClient();
     let skipped = 0;
     const problems: string[] = [];
@@ -236,6 +258,7 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
     }
     setBusy(null);
     if (skipped) setError(`${skipped} photo${skipped > 1 ? 's' : ''} could not be added. ${problems.join(' · ')}`);
+    else if (quiet) return;
     // Say they are all in and wait for Next, rather than jumping ahead.
     else if (added) setDone(`${added === 1 ? 'Your photo is uploaded.' : `All ${added} photos are uploaded.`} Tap Next to ${trip ? 'match each one to what you bought' : added === 1 ? 'fill in its details' : 'fill in the details'}.`);
   }
@@ -340,6 +363,7 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
             <button type="button" className={btnCls} disabled={busy !== null || rows.length >= MAX_ROWS} onClick={() => file.current?.click()}>
               {busy ?? (rows.length ? 'Choose more photos' : 'Choose photos')}
             </button>
+            <button type="button" className={btnGhostCls} disabled={rows.length >= MAX_ROWS} onClick={() => { setDone(null); setCamera(true); }}>Take photos</button>
             {busy === null && rows.length < MAX_ROWS && <button type="button" className="text-sm text-accent underline" onClick={addBlank}>Add an item without a photo</button>}
           </div>
           {error && <p role="alert" className="text-sm text-bad">{error}</p>}
@@ -402,6 +426,12 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
           </section>
         )}
       </div>
+
+      {camera && (
+        <CameraCapture status={busy}
+          onShot={(f) => { camShots.current += 1; addFiles([f], true); }}
+          onClose={closeCamera} />
+      )}
 
       {/* Hidden while the photo editor is open, so it does not cover the editor's buttons. */}
       <div hidden={editorOpen} className="fixed inset-x-0 bottom-0 z-[60] border-t border-line bg-bg px-3 pt-3 pb-[calc(0.75rem+var(--safe-bottom))]">

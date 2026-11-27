@@ -19,4 +19,10 @@ grep -q "com.google.mlkit.vision.DEPENDENCIES" "$MANIFEST" || \
   perl -0pi -e 's/(<application[^>]*>)/$1\n        <meta-data android:name="com.google.mlkit.vision.DEPENDENCIES" android:value="subject_segment" \/>/' "$MANIFEST"
 grep -q "com.google.mlkit.vision.DEPENDENCIES" "$MANIFEST" || { echo "::error::could not add the ML Kit meta-data to $MANIFEST"; exit 1; }
 
+# The camera: for the in-app camera (live view) and the phone camera from a photo button. Not required, so the app still
+# installs on a device without one.
+grep -q "android.permission.CAMERA" "$MANIFEST" || \
+  perl -0pi -e 's/(<application)/<uses-permission android:name="android.permission.CAMERA" \/>\n    <uses-feature android:name="android.hardware.camera" android:required="false" \/>\n    $1/' "$MANIFEST"
+grep -q "android.permission.CAMERA" "$MANIFEST" || { echo "::error::could not add the camera permission to $MANIFEST"; exit 1; }
+
 echo "Native code added:"; ls "$SRC"; grep -n "mlkit" "$GRADLE" "$MANIFEST"

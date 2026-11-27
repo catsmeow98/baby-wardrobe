@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { processPhoto, turnWithOriginal } from '@/lib/photo-client';
 import { useTurnQueue } from '@/components/use-turn-queue';
+import { CameraCapture } from '@/components/camera-capture';
 import { uploadPhoto } from '@/lib/photo-upload';
 import { joinPhotoField, pathsOf } from '@/lib/photo-paths';
 import { MAX_PHOTOS_PER_ITEM, PHOTO_BUCKET } from '@/lib/photos';
@@ -45,9 +46,22 @@ export function PhotoPicker({ userId, childId, name, label = 'Add photos', max =
     guard.current?.setCustomValidity(busy || turningUids.length ? 'Photos are still uploading. Wait a moment, then try again.' : '');
   }, [busy, turningUids.length]);
 
-  async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
-    const chosen = Array.from(e.target.files ?? []).slice(0, max - picked.length);
+  // Photos are processed in order, so camera shots taken quickly queue up instead of overlapping.
+  const queue = useRef<Promise<void>>(Promise.resolve());
+  const [camera, setCamera] = useState(false);
+  const count = useRef(0);
+  count.current = picked.length;
+  const addFiles = (files: File[]) => {
+    queue.current = queue.current.then(() => processFiles(files)).catch((err) => console.error('Photo batch failed', err));
+  };
+  function onPick(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
     e.target.value = '';
+    if (files.length) addFiles(files);
+  }
+
+  async function processFiles(files: File[]) {
+    const chosen = files.slice(0, Math.max(0, max - count.current));
     if (chosen.length === 0) return;
     setBusy(true);
     setError(null);
@@ -70,6 +84,7 @@ export function PhotoPicker({ userId, childId, name, label = 'Add photos', max =
       }
       added.push({ ...ref, uid: nextUid.current++, preview: URL.createObjectURL(done.blob), blob: done.blob, original });
     }
+    count.current += added.length;
     setPicked((p) => [...p, ...added]);
     setBusy(false);
     setStatus(null);
@@ -111,9 +126,13 @@ export function PhotoPicker({ userId, childId, name, label = 'Add photos', max =
       {picked.length < max && (
         <div>
           <input ref={file} type="file" accept="image/*" multiple={max > 1} className="sr-only" onChange={onPick} aria-label="Choose photos" />
-          <button type="button" className={btnGhostCls} disabled={busy} onClick={() => file.current?.click()}>
-            {busy ? (removeBg ? (status ?? 'Processing…') : 'Uploading…') : picked.length ? 'Add more photos' : label}
-          </button>
+          <span className="flex flex-wrap gap-2">
+            <button type="button" className={btnGhostCls} disabled={busy} onClick={() => file.current?.click()}>
+              {busy ? (removeBg ? (status ?? 'Processing…') : 'Uploading…') : picked.length ? 'Add more photos' : label}
+            </button>
+            <button type="button" className={btnGhostCls} onClick={() => setCamera(true)}>{max > 1 ? 'Take photos' : 'Take photo'}</button>
+          </span>
+          {camera && <CameraCapture multiple={max - picked.length > 1} status={busy ? (status ?? 'Processing…') : null} onShot={(f) => addFiles([f])} onClose={() => setCamera(false)} />}
         </div>
       )}
       {error && <p role="alert" className="text-sm text-bad">{error}</p>}
