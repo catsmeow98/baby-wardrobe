@@ -101,6 +101,23 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
   const usesOf = (rs: readonly Row[], m: Record<number, Meta>) => rs.map((r) => ({ itemId: m[r.id]?.match ?? '', qty: m[r.id]?.qty ?? 1 }));
   const left = piecesLeft(lines, usesOf(rows, meta));
   const [noPhoto, setNoPhoto] = useState<Record<string, boolean>>({});
+  /**
+   * "Which one is this?" for an item, as one piece. When that line has no pieces left, it is swapped: the latest other item
+   * on it takes this item's old answer (or Something else), so a wrong guess can always be fixed in one tap.
+   */
+  function choose(rowId: number, lineId: string) {
+    setMeta((all) => {
+      const mine = all[rowId] ?? NO_META;
+      if (mine.match === lineId) return all;
+      const next = { ...all, [rowId]: { match: lineId, qty: 1 } };
+      const after = piecesLeft(lines, usesOf(rowsRef.current, next));
+      if ((after.get(lineId) ?? 0) < 0) {
+        const other = [...rowsRef.current].reverse().find((r) => r.id !== rowId && (all[r.id]?.match ?? '') === lineId);
+        if (other) next[other.id] = { match: mine.match, qty: 1 };
+      }
+      return next;
+    });
+  }
   const [reviewError, setReviewError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -349,7 +366,8 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
           <BulkRow key={row.id} row={row} pos={pos} hidden={current !== String(row.id)} onRemove={() => removeRow(row)} onSavePhoto={(r, o) => savePhoto(row, r, o)}
             onEditor={setEditorOpen} onTurning={(on) => setTurningRows((l) => (on ? (l.includes(row.id) ? l : [...l, row.id]) : l.filter((x) => x !== row.id)))} setRef={(el) => (el ? sets.current.set(row.id, el) : sets.current.delete(row.id))} userId={userId} childId={childId}
             categories={categories} labels={labels} sizes={sizes} defaultTagId={defaultTagId} brands={brands} removeBg={removeBg}
-            tripLines={trip ? lines : undefined} left={left} meta={meta[row.id] ?? NO_META} onMeta={(m) => setMeta((all) => ({ ...all, [row.id]: m }))} />
+            tripLines={trip ? lines : undefined} left={left} meta={meta[row.id] ?? NO_META} onMeta={(m) => setMeta((all) => ({ ...all, [row.id]: m }))}
+            onChoose={(lineId) => choose(row.id, lineId)} />
         ))}
 
         {trip && (
@@ -403,7 +421,7 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
   );
 }
 
-function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onEditor, onTurning, setRef, userId, childId, categories, labels, sizes, defaultTagId, brands, removeBg, tripLines, left, meta, onMeta }: {
+function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onEditor, onTurning, setRef, userId, childId, categories, labels, sizes, defaultTagId, brands, removeBg, tripLines, left, meta, onMeta, onChoose }: {
   row: Row;
   pos: number;
   hidden: boolean;
@@ -425,6 +443,7 @@ function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onEditor, onTurning,
   left: ReadonlyMap<string, number>;
   meta: Meta;
   onMeta: (m: Meta) => void;
+  onChoose: (lineId: string) => void;
 }) {
   const line = tripLines?.find((l) => l.itemId === meta.match);
   const [tag, setTag] = useState<TagValue>(() => ({ tagId: line?.labelId ?? defaultTagId, custom: false, text: '' }));
@@ -438,12 +457,17 @@ function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onEditor, onTurning,
   const [editError, setEditError] = useState<string | null>(null);
   // The chosen item type, for the placeholder icon of an item without a photo. Starts where the picker starts.
   const [type, setType] = useState<CategoryRow | undefined>(() => (line && categories.find((c) => c.id === line.categoryId)) || groupCategories(categories)[0]?.items[0]);
-  /** "Which one is this?": fills in the item type and the tag size bought, as one piece. */
-  const choose = (l: TripLineView) => {
-    onMeta({ match: l.itemId, qty: 1 });
-    setTag({ tagId: l.labelId ?? defaultTagId, custom: false, text: '' });
-    setType(categories.find((c) => c.id === l.categoryId));
-  };
+  // Whenever this item's trip line changes (its own tap, or a swap from another item), fill in that type and tag size.
+  const firstMatch = useRef(true);
+  useEffect(() => {
+    if (firstMatch.current) {
+      firstMatch.current = false;
+      return;
+    }
+    if (!line) return;
+    setTag({ tagId: line.labelId ?? defaultTagId, custom: false, text: '' });
+    setType(categories.find((c) => c.id === line.categoryId));
+  }, [meta.match]); // eslint-disable-line react-hooks/exhaustive-deps
   // Pieces this item could take on its line: what is left there plus what it already holds.
   const avail = line ? (left.get(line.itemId) ?? 0) + meta.qty : 0;
 
@@ -505,11 +529,11 @@ function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onEditor, onTurning,
               const on = meta.match === l.itemId;
               const free = (left.get(l.itemId) ?? 0) + (on ? meta.qty : 0);
               return (
-                <button key={l.itemId} type="button" aria-pressed={on} disabled={!on && free <= 0} onClick={() => choose(l)}
-                  className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm disabled:opacity-40 ${on ? 'border-accent bg-accent text-accent-ink' : 'border-line bg-surface'}`}>
+                <button key={l.itemId} type="button" aria-pressed={on} onClick={() => onChoose(l.itemId)}
+                  className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm ${on ? 'border-accent bg-accent text-accent-ink' : 'border-line bg-surface'}`}>
                   <ItemIcon itemKey={l.icon} size={18} />
                   {l.typeName} {l.sizeLabel}
-                  <span className="text-xs opacity-80">· {on ? Math.max(0, left.get(l.itemId) ?? 0) : free} left</span>
+                  <span className="text-xs opacity-80">· {on ? `${Math.max(0, left.get(l.itemId) ?? 0)} left` : free > 0 ? `${free} left` : 'swap'}</span>
                 </button>
               );
             })}
