@@ -177,6 +177,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
           </label>
           <div><button className={btnGhostCls} type="submit">Save</button></div>
         </form>
+        <p className="text-sm"><Link className="text-accent underline" href="/cutout-lab">Test background removal (Cutout lab)</Link></p>
       </section>
 
       <section id="location" className="flex scroll-mt-4 flex-col gap-3 rounded-xl border border-line bg-surface p-4">
