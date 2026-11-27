@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { BrandSelect } from '@/components/brand-select';
 import { CategoryPicker } from '@/components/category-picker';
@@ -16,7 +17,7 @@ import { COLORS, sizeName } from '@/lib/db';
 import type { CategoryRow, SizeLabelRow, SizeRow } from '@/lib/db';
 
 const MAX_ROWS = 50;
-const START_ROWS = 5;
+const PHOTOS = 'photos';
 
 interface Row {
   id: number;
@@ -24,11 +25,13 @@ interface Row {
 }
 
 /**
- * Rows for the bulk add form. Choose a batch of photos and a row is made for each one, with its photo already attached.
- * Or add blank rows and type them in, each with an optional photo of its own. Photos upload as soon as they are chosen.
- * Field names carry the row's position (cat_0, name_1 and so on), which is what the server action reads.
+ * Bulk add as a step-by-step wizard, like the goal survey. The first screen picks photos (and holds the details shared by every
+ * item); when they have loaded, it moves on to one screen per photo, where the photo can be edited and the item filled in.
+ * Every item stays in the one form (screens that are not showing are hidden, not removed), so the last screen's button sends
+ * them all to bulkCreate as before. Field names carry the item's position (cat_0, name_1 and so on). The browser's Back button
+ * steps back one screen.
  */
-export function BulkBuilder({ userId, childId, categories, labels, sizes, brands, defaultTagId, removeBg = false }: {
+export function BulkBuilder({ userId, childId, categories, labels, sizes, brands, defaultTagId, removeBg = false, back, error: serverError, children }: {
   userId: string;
   childId: string;
   categories: CategoryRow[];
@@ -37,19 +40,78 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
   brands: string[];
   defaultTagId: string;
   removeBg?: boolean;
+  /** Where Exit goes. */
+  back: string;
+  /** A message from a failed save. */
+  error?: string;
+  /** The details shared by every item, shown on the first screen. */
+  children?: React.ReactNode;
 }) {
-  const nextId = useRef(START_ROWS);
-  const [rows, setRows] = useState<Row[]>(() => Array.from({ length: START_ROWS }, (_, id) => ({ id, photo: null })));
+  const nextId = useRef(0);
+  const [rows, setRows] = useState<Row[]>([]);
+  const [stepId, setStepId] = useState<string>(PHOTOS);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const rowCount = useRef(START_ROWS);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const rowCount = useRef(0);
   rowCount.current = rows.length;
   const file = useRef<HTMLInputElement>(null);
   const guard = useRef<HTMLInputElement>(null);
+  const top = useRef<HTMLDivElement>(null);
+  const sets = useRef(new Map<number, HTMLFieldSetElement>());
 
   useEffect(() => {
     guard.current?.setCustomValidity(busy ? 'Photos are still uploading. Wait a moment, then try again.' : '');
   }, [busy]);
+
+  // Screens: the photo screen, then one per item. A screen for an item that was removed falls back to the photo screen.
+  const steps = [PHOTOS, ...rows.map((r) => String(r.id))];
+  const idx = Math.max(0, steps.indexOf(stepId));
+  const current = steps[idx];
+  const last = idx === steps.length - 1 && idx > 0;
+
+  // The browser's Back button steps back through the screens.
+  useEffect(() => {
+    window.history.replaceState({ ...window.history.state, b: PHOTOS }, '');
+    const onPop = (e: PopStateEvent) => {
+      const b = (e.state as { b?: string } | null)?.b;
+      if (b) {
+        setStepId(b);
+        top.current?.parentElement?.scrollTo(0, 0);
+      }
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+
+  const go = (id: string) => {
+    setStepId(id);
+    window.history.pushState({ ...window.history.state, b: id }, '');
+    top.current?.parentElement?.scrollTo(0, 0);
+  };
+
+  const firstInvalid = (fs: HTMLFieldSetElement | undefined) =>
+    fs ? Array.from(fs.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>('input, select, textarea')).find((el) => !el.checkValidity()) : undefined;
+  /** Checks the fields on the screen showing now. Hidden screens cannot show the browser's message, so each is checked on Next. */
+  const screenOk = () => {
+    const bad = current === PHOTOS ? undefined : firstInvalid(sets.current.get(Number(current)));
+    bad?.reportValidity();
+    return !bad;
+  };
+  /** Before saving, finds any item still missing something (one reached by a thumbnail skips the checks) and shows it. */
+  const allOk = () => {
+    for (const r of rows) {
+      const bad = firstInvalid(sets.current.get(r.id));
+      if (!bad) continue;
+      if (String(r.id) !== current) go(String(r.id));
+      setTimeout(() => bad.reportValidity(), 50);
+      return false;
+    }
+    return true;
+  };
+  const next = () => {
+    if (screenOk()) go(steps[idx + 1]);
+  };
 
   async function onPhotos(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
@@ -59,11 +121,11 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
     const supabase = createClient();
     let skipped = 0;
     let added = 0;
+    let firstNew: number | null = null;
     const startRows = rowCount.current;
     for (let k = 0; k < files.length; k++) {
       if (startRows + added >= MAX_ROWS) {
-        setError(`A bulk add holds up to ${MAX_ROWS} rows, so the rest of the photos were skipped.`);
-        skipped = 0;
+        setError(`A bulk add holds up to ${MAX_ROWS} items, so the rest of the photos were skipped.`);
         break;
       }
       setBusy(`${removeBg ? 'Processing' : 'Uploading'} photo ${k + 1} of ${files.length}…`);
@@ -83,27 +145,39 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
         skipped++;
         continue;
       }
-      const photo = { ...ref, preview: URL.createObjectURL(blob), blob };
+      const id = nextId.current++;
+      firstNew ??= id;
       added++;
-      setRows((list) => {
-        // New photo rows go after the last row that already has a photo, ahead of the blank rows.
-        const at = list.reduce((last, r, i) => (r.photo ? i : last), -1) + 1;
-        return [...list.slice(0, at), { id: nextId.current++, photo }, ...list.slice(at)];
-      });
+      setRows((list) => [...list, { id, photo: { ...ref, preview: URL.createObjectURL(blob), blob } }]);
     }
-    if (skipped) setError(`${skipped} photo${skipped > 1 ? 's' : ''} could not be added. Check your connection or try a JPEG or PNG.`);
     setBusy(null);
+    if (skipped) setError(`${skipped} photo${skipped > 1 ? 's' : ''} could not be added. Check your connection or try a JPEG or PNG.`);
+    // Once the photos are in, move on to the first new one (unless some failed, so the message can be read first).
+    else if (firstNew !== null) go(String(firstNew));
   }
 
+  const addBlank = () => {
+    if (rowCount.current >= MAX_ROWS) return;
+    const id = nextId.current++;
+    setRows((list) => [...list, { id, photo: null }]);
+    go(String(id));
+  };
+
   async function removeRow(row: Row) {
-    setRows((list) => list.filter((r) => r.id !== row.id));
+    const at = rows.findIndex((r) => r.id === row.id);
+    const rest = rows.filter((r) => r.id !== row.id);
+    setRows(rest);
+    // Stay in place: show the item that takes its spot, or the one before it, or the photo screen.
+    const stay = rest[at] ?? rest[at - 1];
+    setStepId(stay ? String(stay.id) : PHOTOS);
+    window.history.replaceState({ ...window.history.state, b: stay ? String(stay.id) : PHOTOS }, '');
     if (row.photo) {
       URL.revokeObjectURL(row.photo.preview);
       await createClient().storage.from(PHOTO_BUCKET).remove(pathsOf(row.photo));
     }
   }
 
-  /** Uploads the edited photo for a row (and its matching original), swaps it in, and deletes the files it replaces. */
+  /** Uploads the edited photo for an item (and its matching original), swaps it in, and deletes the files it replaces. */
   async function savePhoto(row: Row, result: Blob, original?: Blob) {
     if (!row.photo) return;
     const supabase = createClient();
@@ -115,44 +189,86 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
     await supabase.storage.from(PHOTO_BUCKET).remove(pathsOf(old));
   }
 
-  const addBlank = () => setRows((list) => (list.length >= MAX_ROWS ? list : [...list, { id: nextId.current++, photo: null }]));
-
+  const label = current === PHOTOS ? 'Photos' : `Item ${idx} of ${rows.length}`;
   return (
-    <>
-      <input type="hidden" name="rows" value={rows.length} />
-      {/* Blocks submit while photos upload. Not read-only, because read-only fields skip validation. */}
-      <input ref={guard} className="sr-only" tabIndex={-1} aria-hidden="true" value="ok" onChange={() => undefined} required />
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-bg">
+      <div ref={top} className="mx-auto flex max-w-xl flex-col gap-5 px-4 pb-32 pt-3">
+        <input type="hidden" name="rows" value={rows.length} />
+        {/* Blocks submit while photos upload. Not read-only, because read-only fields skip validation. */}
+        <input ref={guard} className="sr-only" tabIndex={-1} aria-hidden="true" value="ok" onChange={() => undefined} required />
 
-      <section className="flex flex-col gap-2 rounded-xl border border-accent bg-accent-soft p-4">
-        <h2 className="font-display text-lg font-bold">Start with photos</h2>
-        <p className="text-sm text-muted">Choose photos of your items, one photo per item. A row is made for each photo, and you fill in the details below.</p>
-        <div className="flex flex-wrap items-center gap-3">
-          <input ref={file} type="file" accept="image/*" multiple className="sr-only" onChange={onPhotos} aria-label="Choose photos, one per item" />
-          <button type="button" className={btnCls} disabled={busy !== null || rows.length >= MAX_ROWS} onClick={() => file.current?.click()}>
-            {busy ?? 'Choose photos'}
-          </button>
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between text-sm text-muted">
+            <span>Bulk add · {label}</span>
+            <Link href={back} className="underline">Exit</Link>
+          </div>
+          <div role="progressbar" aria-valuemin={0} aria-valuemax={steps.length} aria-valuenow={idx + 1} aria-label="Bulk add progress" className="h-2 overflow-hidden rounded-full bg-line">
+            <span className="block h-full rounded-full bg-accent transition-all" style={{ width: `${((idx + 1) / steps.length) * 100}%` }} />
+          </div>
         </div>
-        {error && <p role="alert" className="text-sm text-bad">{error}</p>}
-      </section>
 
-      {rows.map((row, pos) => (
-        <BulkRow key={row.id} row={row} pos={pos} onRemove={() => removeRow(row)} onSavePhoto={(r, o) => savePhoto(row, r, o)} userId={userId} childId={childId}
-          categories={categories} labels={labels} sizes={sizes} defaultTagId={defaultTagId} brands={brands} removeBg={removeBg} />
-      ))}
+        <section hidden={current !== PHOTOS} className="flex flex-col gap-4">
+          <div>
+            <h1 className="font-display text-2xl font-bold">Add photos</h1>
+            <p className="text-muted">Choose photos of your items, one photo per item. When they have loaded you go through them one at a time to fill in the details. Quantity above 1 makes a group, like a 5-pack.</p>
+          </div>
+          {serverError && <p role="alert" className="text-sm font-medium text-bad">{serverError}</p>}
+          <div className="flex flex-wrap items-center gap-3">
+            <input ref={file} type="file" accept="image/*" multiple className="sr-only" onChange={onPhotos} aria-label="Choose photos, one per item" />
+            <button type="button" className={btnCls} disabled={busy !== null || rows.length >= MAX_ROWS} onClick={() => file.current?.click()}>
+              {busy ?? (rows.length ? 'Choose more photos' : 'Choose photos')}
+            </button>
+            {busy === null && rows.length < MAX_ROWS && <button type="button" className="text-sm text-accent underline" onClick={addBlank}>Add an item without a photo</button>}
+          </div>
+          {error && <p role="alert" className="text-sm text-bad">{error}</p>}
+          {rows.length > 0 && (
+            <ul className="flex flex-wrap gap-2" aria-label="Items so far">
+              {rows.map((r, pos) => (
+                <li key={r.id}>
+                  <button type="button" className="flex size-16 items-center justify-center overflow-hidden rounded-lg border border-line bg-surface text-xs text-muted" onClick={() => go(String(r.id))} aria-label={`Go to item ${pos + 1}`}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    {r.photo ? <img src={r.photo.preview} alt="" className="size-full object-cover" /> : `Item ${pos + 1}`}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <details className="rounded-xl border border-line bg-surface p-4">
+            <summary className="cursor-pointer font-medium">Details for every item <span className="text-sm font-normal text-muted">(condition, season, status, gender)</span></summary>
+            <div className="mt-3">{children}</div>
+          </details>
+        </section>
 
-      <div className="flex flex-wrap items-center gap-4">
-        <button className={btnCls} type="submit">Add to closet</button>
-        {rows.length < MAX_ROWS && <button type="button" className={btnGhostCls} onClick={addBlank}>Add a blank row</button>}
-        <span className="text-sm text-muted">{rows.length} row{rows.length === 1 ? '' : 's'}</span>
+        {rows.map((row, pos) => (
+          <BulkRow key={row.id} row={row} pos={pos} hidden={current !== String(row.id)} onRemove={() => removeRow(row)} onSavePhoto={(r, o) => savePhoto(row, r, o)}
+            onEditor={setEditorOpen} setRef={(el) => (el ? sets.current.set(row.id, el) : sets.current.delete(row.id))} userId={userId} childId={childId}
+            categories={categories} labels={labels} sizes={sizes} defaultTagId={defaultTagId} brands={brands} removeBg={removeBg} />
+        ))}
       </div>
-    </>
+
+      {/* Hidden while the photo editor is open, so it does not cover the editor's buttons. */}
+      <div hidden={editorOpen} className="fixed inset-x-0 bottom-0 z-[60] border-t border-line bg-bg p-3">
+        <div className="mx-auto flex max-w-xl items-center gap-3">
+          {idx > 0 ? <button type="button" className={btnGhostCls} onClick={() => window.history.back()}>Back</button> : <Link className={btnGhostCls} href={back}>Exit</Link>}
+          <span className="flex-1" />
+          {last ? (
+            <button className={btnCls} type="submit" onClick={(e) => { if (!allOk()) e.preventDefault(); }}>Add {rows.length} item{rows.length === 1 ? '' : 's'} to closet</button>
+          ) : (
+            <button type="button" className={btnCls} onClick={next} disabled={rows.length === 0 || busy !== null}>Next</button>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
-function BulkRow({ row, pos, onRemove, onSavePhoto, userId, childId, categories, labels, sizes, defaultTagId, brands, removeBg }: {
+function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onEditor, setRef, userId, childId, categories, labels, sizes, defaultTagId, brands, removeBg }: {
   row: Row;
   pos: number;
+  hidden: boolean;
   onRemove: () => void;
+  onEditor: (open: boolean) => void;
+  setRef: (el: HTMLFieldSetElement | null) => void;
   onSavePhoto: (result: Blob, original?: Blob) => Promise<void>;
   userId: string;
   childId: string;
@@ -164,7 +280,11 @@ function BulkRow({ row, pos, onRemove, onSavePhoto, userId, childId, categories,
   removeBg: boolean;
 }) {
   const [tag, setTag] = useState<TagValue>({ tagId: defaultTagId, custom: false, text: '' });
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditingState] = useState(false);
+  const setEditing = (open: boolean) => {
+    setEditingState(open);
+    onEditor(open);
+  };
   const [original, setOriginal] = useState<Blob | undefined>();
   const [opening, setOpening] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
@@ -185,14 +305,14 @@ function BulkRow({ row, pos, onRemove, onSavePhoto, userId, childId, categories,
     setEditing(true);
   }
   return (
-    <fieldset className="grid gap-3 rounded-xl border border-line bg-surface p-4 sm:grid-cols-6">
-      <legend className="px-1 text-xs text-muted">Row {pos + 1}</legend>
+    <fieldset ref={setRef} hidden={hidden} className="grid gap-3 sm:grid-cols-6">
+      <legend className="mb-1 font-display text-2xl font-bold">Item {pos + 1}</legend>
       {row.photo && (
-        <div className="relative sm:col-span-6">
+        <div className="relative flex flex-col items-center gap-1 sm:col-span-6">
           <input type="hidden" name={`photo_${pos}`} value={joinPhotoField(row.photo.path, row.photo.originalPath)} />
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={row.photo.preview} alt={`Photo for row ${pos + 1}`} className="size-24 rounded-lg object-cover" />
-          <button type="button" className="mt-1 text-sm text-accent underline" disabled={opening} onClick={openEditor}>{opening ? 'Opening…' : 'Edit photo'}</button>
+          <img src={row.photo.preview} alt={`Photo for item ${pos + 1}`} className="max-h-72 w-full rounded-xl border border-line bg-surface object-contain" />
+          <button type="button" className="text-sm text-accent underline" disabled={opening} onClick={openEditor}>{opening ? 'Opening…' : 'Edit photo'}</button>
           {editError && <p role="alert" className="text-sm text-bad">{editError}</p>}
           {editing && <PhotoEditor blob={row.photo.blob} original={original} onSave={async (r, o) => { await onSavePhoto(r, o); setEditing(false); }} onCancel={() => setEditing(false)} />}
         </div>
@@ -227,7 +347,7 @@ function BulkRow({ row, pos, onRemove, onSavePhoto, userId, childId, categories,
         </div>
       )}
       <div className="sm:col-span-6">
-        <button type="button" className="text-sm text-bad underline" onClick={onRemove}>Remove this row</button>
+        <button type="button" className="text-sm text-bad underline" onClick={onRemove}>Remove this item</button>
       </div>
     </fieldset>
   );

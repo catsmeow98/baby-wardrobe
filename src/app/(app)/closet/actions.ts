@@ -185,7 +185,7 @@ export async function bulkCreate(formData: FormData) {
     const brand = text('brand');
     const photo = formData.getAll(`photo_${i}`).map(String).filter(Boolean);
     if (!name && !brand && photo.length === 0) continue; // an untouched row. A row with a photo is kept, even with no name.
-    const n = `Row ${i + 1}`;
+    const n = `Item ${i + 1}`;
     const cat = z.string().uuid().safeParse(text('cat') === '__new' ? await typeFor(ctx, formData, `cat_${i}`, path, `${n}: `) : text('cat'));
     if (!cat.success) return fail(path, `${n}: choose an item type.`);
     const qty = z.coerce.number().int().min(1).max(999).safeParse(text('qty') || '1');
@@ -230,7 +230,7 @@ export async function bulkCreate(formData: FormData) {
   const unused: string[] = [];
   for (let i = 0; i < count; i++) if (!sourceRow.includes(i)) unused.push(...formData.getAll(`photo_${i}`).map(String));
   if (unused.length) await discardPhotos(ctx.supabase, ctx.user.id, ctx.active.id, unused);
-  if (!rows.length) return fail(path, 'Fill in at least one row. Add a name or a brand.');
+  if (!rows.length) return fail(path, 'Add at least one item: a photo, a name or a brand.');
   // One insert, so either every row is saved or none is.
   const { data: made, error } = await ctx.supabase.from('inventory_items').insert(rows).select('id');
   if (error) return fail(path, 'We could not save those items. Nothing was added. Try again.');

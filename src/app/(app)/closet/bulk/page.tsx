@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
 import { getContext } from '@/lib/context';
-import { FormMessage } from '@/components/form-message';
 import { NoChild } from '@/components/no-child';
 import { BulkBuilder } from '@/components/bulk-builder';
 import { inputCls, labelCls } from '@/components/ui';
@@ -26,18 +25,21 @@ export default async function BulkPage({ searchParams }: { searchParams: Promise
   const defaultTag = ctx.active.current_size_id ? labels.filter((l) => l.size_id === ctx.active!.current_size_id).sort((a, b) => b.sort_order - a.sort_order)[0]?.id : '';
 
   return (
-    <>
-      <div>
-        <h1 className="font-display text-2xl font-bold">Bulk add for {ctx.active.name}</h1>
-        <p className="text-muted">
-          Start with photos to get a row for each one, or type rows in by hand. Quantity above 1 makes a group, like a 5-pack.
-          Rows with no name, no brand and no photo are skipped.
-        </p>
-      </div>
-      <FormMessage error={error} />
-      <form action={bulkCreate} className="flex flex-col gap-4">
-        <input type="hidden" name="back" value={back} />
-        <div className="grid gap-3 rounded-xl border border-line bg-surface p-4 sm:grid-cols-2">
+    <form action={bulkCreate}>
+      <input type="hidden" name="back" value={back} />
+      <BulkBuilder
+        userId={ctx.user.id}
+        childId={ctx.active.id}
+        categories={ctx.categories}
+        labels={labels}
+        sizes={ctx.sizes}
+        brands={(brands ?? []).map((b: { name: string }) => b.name)}
+        defaultTagId={defaultTag ?? ''}
+        removeBg={ctx.settings.removeBackground}
+        back={back}
+        error={error}
+      >
+        <div className="grid gap-3 sm:grid-cols-2">
           <label className={labelCls}>Condition
             <select className={inputCls} name="condition" defaultValue="good">{CONDITIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
           </label>
@@ -51,17 +53,7 @@ export default async function BulkPage({ searchParams }: { searchParams: Promise
             <select className={inputCls} name="gender" defaultValue=""><option value="">Not set</option>{GENDERS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
           </label>
         </div>
-        <BulkBuilder
-          userId={ctx.user.id}
-          childId={ctx.active.id}
-          categories={ctx.categories}
-          labels={labels}
-          sizes={ctx.sizes}
-          brands={(brands ?? []).map((b: { name: string }) => b.name)}
-          defaultTagId={defaultTag ?? ''}
-          removeBg={ctx.settings.removeBackground}
-        />
-      </form>
-    </>
+      </BulkBuilder>
+    </form>
   );
 }
