@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
+import { useTurnQueue } from '@/components/use-turn-queue';
 import { BrandSelect } from '@/components/brand-select';
 import { CategoryPicker } from '@/components/category-picker';
 import { TypeIcon } from '@/components/item-icon';
@@ -58,6 +59,8 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
+  // Items with a photo turn not saved yet: saving the batch waits for them, since a turn replaces the photo's file.
+  const [turningRows, setTurningRows] = useState<number[]>([]);
   const rowCount = useRef(0);
   rowCount.current = rows.length;
   const file = useRef<HTMLInputElement>(null);
@@ -66,8 +69,8 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
   const sets = useRef(new Map<number, HTMLFieldSetElement>());
 
   useEffect(() => {
-    guard.current?.setCustomValidity(busy ? 'Photos are still uploading. Wait a moment, then try again.' : '');
-  }, [busy]);
+    guard.current?.setCustomValidity(busy || turningRows.length ? 'Photos are still uploading. Wait a moment, then try again.' : '');
+  }, [busy, turningRows.length]);
 
   // Screens: the photo screen, then one per item. A screen for an item that was removed falls back to the photo screen.
   const steps = [PHOTOS, ...rows.map((r) => String(r.id))];
@@ -270,7 +273,7 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
 
         {rows.map((row, pos) => (
           <BulkRow key={row.id} row={row} pos={pos} hidden={current !== String(row.id)} onRemove={() => removeRow(row)} onSavePhoto={(r, o) => savePhoto(row, r, o)}
-            onEditor={setEditorOpen} setRef={(el) => (el ? sets.current.set(row.id, el) : sets.current.delete(row.id))} userId={userId} childId={childId}
+            onEditor={setEditorOpen} onTurning={(on) => setTurningRows((l) => (on ? (l.includes(row.id) ? l : [...l, row.id]) : l.filter((x) => x !== row.id)))} setRef={(el) => (el ? sets.current.set(row.id, el) : sets.current.delete(row.id))} userId={userId} childId={childId}
             categories={categories} labels={labels} sizes={sizes} defaultTagId={defaultTagId} brands={brands} removeBg={removeBg} />
         ))}
       </div>
@@ -293,12 +296,13 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
   );
 }
 
-function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onEditor, setRef, userId, childId, categories, labels, sizes, defaultTagId, brands, removeBg }: {
+function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onEditor, onTurning, setRef, userId, childId, categories, labels, sizes, defaultTagId, brands, removeBg }: {
   row: Row;
   pos: number;
   hidden: boolean;
   onRemove: () => void;
   onEditor: (open: boolean) => void;
+  onTurning: (on: boolean) => void;
   setRef: (el: HTMLFieldSetElement | null) => void;
   onSavePhoto: (result: Blob, original?: Blob) => Promise<void>;
   userId: string;
@@ -319,30 +323,24 @@ function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onEditor, setRef, us
   const [original, setOriginal] = useState<Blob | undefined>();
   const [opening, setOpening] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
-  const [turning, setTurning] = useState(false);
   // The chosen item type, for the placeholder icon of an item without a photo. Starts where the picker starts.
   const [type, setType] = useState<CategoryRow | undefined>(() => groupCategories(categories)[0]?.items[0]);
 
-  /** A quarter turn (1 clockwise, -1 counterclockwise) without opening the editor. The stored original is turned too, so Restore lines up. */
-  async function turn(dir: 1 | -1) {
+  // Turns show at once; quick taps are saved together once they stop. The stored original turns too, so Restore lines up.
+  const turns = useTurnQueue(async (q) => {
     if (!row.photo) return;
-    setEditError(null);
-    setTurning(true);
-    try {
-      const { path, originalPath, blob } = row.photo;
-      const sameFile = originalPath === path;
-      let original: Blob | undefined;
-      if (originalPath && !sameFile) {
-        original = (await downloadOriginal(createClient(), originalPath)) ?? undefined;
-        if (!original) throw new Error('original');
-      }
-      const done = await turnWithOriginal(blob, original, sameFile, dir);
-      await onSavePhoto(done.result, done.original);
-    } catch {
-      setEditError('The photo could not be turned. Check your connection and try again.');
+    const { path, originalPath, blob } = row.photo;
+    const sameFile = originalPath === path;
+    let original: Blob | undefined;
+    if (originalPath && !sameFile) {
+      original = (await downloadOriginal(createClient(), originalPath)) ?? undefined;
+      if (!original) throw new Error('original');
     }
-    setTurning(false);
-  }
+    const done = await turnWithOriginal(blob, original, sameFile, q);
+    await onSavePhoto(done.result, done.original);
+  });
+  const turning = turns.saving || turns.shown !== 0;
+  useEffect(() => onTurning(turning), [turning]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Opens the editor. The stored original (if there is one) is fetched first, so Restore works. */
   async function openEditor() {
@@ -366,13 +364,14 @@ function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onEditor, setRef, us
         <div className="relative flex flex-col items-center gap-1 sm:col-span-6">
           <input type="hidden" name={`photo_${pos}`} value={joinPhotoField(row.photo.path, row.photo.originalPath)} />
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={row.photo.preview} alt={`Photo for item ${pos + 1}`} className="max-h-72 w-full rounded-xl border border-line bg-surface object-contain" />
+          <img src={row.photo.preview} alt={`Photo for item ${pos + 1}`} style={turns.style} className="max-h-72 w-full rounded-xl border border-line bg-surface object-contain" />
           <div className="flex gap-4">
-            <button type="button" className="text-sm text-accent underline" disabled={turning || opening} onClick={() => turn(-1)} aria-label="Turn left">{turning ? 'Turning…' : '↺ Left'}</button>
-            <button type="button" className="text-sm text-accent underline" disabled={turning || opening} onClick={() => turn(1)} aria-label="Turn right">{turning ? 'Turning…' : 'Right ↻'}</button>
+            <button type="button" className="text-sm text-accent underline" disabled={opening} onClick={() => turns.turn(-1)} aria-label="Turn left">↺ Left</button>
+            <button type="button" className="text-sm text-accent underline" disabled={opening} onClick={() => turns.turn(1)} aria-label="Turn right">Right ↻</button>
             <button type="button" className="text-sm text-accent underline" disabled={opening || turning} onClick={openEditor}>{opening ? 'Opening…' : 'Edit photo'}</button>
           </div>
-          {editError && <p role="alert" className="text-sm text-bad">{editError}</p>}
+          {turns.saving && <p role="status" className="text-xs text-muted">Saving the turn…</p>}
+          {(editError ?? turns.error) && <p role="alert" className="text-sm text-bad">{editError ?? turns.error}</p>}
           {editing && <PhotoEditor blob={row.photo.blob} original={original} onSave={async (r, o) => { await onSavePhoto(r, o); setEditing(false); }} onCancel={() => setEditing(false)} />}
         </div>
       )}

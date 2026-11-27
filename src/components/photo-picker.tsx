@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { processPhoto, turnWithOriginal } from '@/lib/photo-client';
+import { useTurnQueue } from '@/components/use-turn-queue';
 import { uploadPhoto } from '@/lib/photo-upload';
 import { joinPhotoField, pathsOf } from '@/lib/photo-paths';
 import { MAX_PHOTOS_PER_ITEM, PHOTO_BUCKET } from '@/lib/photos';
@@ -13,6 +14,8 @@ interface Picked {
   path: string;
   /** Where the original (with its background) is stored, when it was kept. */
   originalPath?: string;
+  /** Stays the same when the photo is edited or turned (its paths change), so a turn waiting to be saved is kept. */
+  uid: number;
   preview: string;
   blob: Blob;
   /** The photo with its background, when blob is a cutout. */
@@ -29,14 +32,18 @@ export function PhotoPicker({ userId, childId, name, label = 'Add photos', max =
   const file = useRef<HTMLInputElement>(null);
   const guard = useRef<HTMLInputElement>(null);
   const [picked, setPicked] = useState<Picked[]>([]);
+  const nextUid = useRef(0);
+  // Photos with a turn not saved yet: the form waits for them, since saving replaces the photo's file.
+  const [turningUids, setTurningUids] = useState<number[]>([]);
+  const setTurning = (uid: number, on: boolean) => setTurningUids((l) => (on ? (l.includes(uid) ? l : [...l, uid]) : l.filter((x) => x !== uid)));
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<Picked | null>(null);
 
   useEffect(() => {
-    guard.current?.setCustomValidity(busy ? 'Photos are still uploading. Wait a moment, then try again.' : '');
-  }, [busy]);
+    guard.current?.setCustomValidity(busy || turningUids.length ? 'Photos are still uploading. Wait a moment, then try again.' : '');
+  }, [busy, turningUids.length]);
 
   async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
     const chosen = Array.from(e.target.files ?? []).slice(0, max - picked.length);
@@ -61,7 +68,7 @@ export function PhotoPicker({ userId, childId, name, label = 'Add photos', max =
         setError('The upload failed. Check your connection and try again.');
         continue;
       }
-      added.push({ ...ref, preview: URL.createObjectURL(done.blob), blob: done.blob, original });
+      added.push({ ...ref, uid: nextUid.current++, preview: URL.createObjectURL(done.blob), blob: done.blob, original });
     }
     setPicked((p) => [...p, ...added]);
     setBusy(false);
@@ -80,23 +87,9 @@ export function PhotoPicker({ userId, childId, name, label = 'Add photos', max =
     const ref = await uploadPhoto(supabase, userId, childId, result, original);
     if (!ref) throw new Error('upload');
     URL.revokeObjectURL(old.preview);
-    setPicked((list) => list.map((x) => (x.path === old.path ? { ...ref, preview: URL.createObjectURL(result), blob: result, original } : x)));
+    setPicked((list) => list.map((x) => (x.path === old.path ? { ...ref, uid: x.uid, preview: URL.createObjectURL(result), blob: result, original } : x)));
     setEditing(null);
     await supabase.storage.from(PHOTO_BUCKET).remove(pathsOf(old));
-  }
-
-  const [turning, setTurning] = useState<string | null>(null);
-  /** A quarter turn either way without opening the editor; the kept original turns too. */
-  async function turn(p: Picked, dir: 1 | -1) {
-    setError(null);
-    setTurning(p.path);
-    try {
-      const done = await turnWithOriginal(p.blob, p.original, p.originalPath === p.path, dir);
-      await saveEdit(p, done.result, done.original);
-    } catch {
-      setError('The photo could not be turned. Check your connection and try again.');
-    }
-    setTurning(null);
   }
 
   return (
@@ -107,17 +100,11 @@ export function PhotoPicker({ userId, childId, name, label = 'Add photos', max =
       {picked.length > 0 && (
         <ul className="flex flex-wrap gap-2">
           {picked.map((p) => (
-            <li key={p.path} className="relative flex flex-col items-start gap-1">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={p.preview} alt="" className="size-16 rounded-lg bg-line object-contain" />
-              <span className="flex gap-2">
-                <button type="button" className="text-xs text-accent underline" disabled={turning !== null} onClick={() => turn(p, -1)} aria-label="Turn left">{turning === p.path ? '…' : '↺'}</button>
-                <button type="button" className="text-xs text-accent underline" disabled={turning !== null} onClick={() => turn(p, 1)} aria-label="Turn right">{turning === p.path ? '…' : '↻'}</button>
-                <button type="button" className="text-xs text-accent underline" disabled={turning !== null} onClick={() => setEditing(p)}>Edit</button>
-              </span>
-              <button type="button" onClick={() => remove(p)} aria-label="Remove photo"
-                className="absolute -right-1.5 -top-1.5 flex size-5 items-center justify-center rounded-full bg-ink text-xs text-surface">×</button>
-            </li>
+            <Thumb key={p.uid} p={p} onEdit={() => setEditing(p)} onRemove={() => remove(p)} onError={setError} onBusy={(on) => setTurning(p.uid, on)}
+              onTurn={async (q) => {
+                const done = await turnWithOriginal(p.blob, p.original, p.originalPath === p.path, q);
+                await saveEdit(p, done.result, done.original);
+              }} />
           ))}
         </ul>
       )}
@@ -132,5 +119,36 @@ export function PhotoPicker({ userId, childId, name, label = 'Add photos', max =
       {error && <p role="alert" className="text-sm text-bad">{error}</p>}
       {editing && <PhotoEditor blob={editing.blob} original={editing.original} onSave={(r, o) => saveEdit(editing, r, o)} onCancel={() => setEditing(null)} />}
     </div>
+  );
+}
+
+/** One picked photo: turns show at once and quick taps are saved together (see useTurnQueue). */
+function Thumb({ p, onTurn, onEdit, onRemove, onError, onBusy }: {
+  p: Picked;
+  onBusy: (on: boolean) => void;
+  onTurn: (quarterTurns: number) => Promise<void>;
+  onEdit: () => void;
+  onRemove: () => void;
+  onError: (message: string | null) => void;
+}) {
+  const turns = useTurnQueue(onTurn);
+  useEffect(() => {
+    if (turns.error) onError(turns.error);
+  }, [turns.error]); // eslint-disable-line react-hooks/exhaustive-deps
+  const still = turns.saving || turns.shown !== 0;
+  useEffect(() => onBusy(still), [still]); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <li className="relative flex flex-col items-start gap-1">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={p.preview} alt="" style={turns.style} className="size-16 rounded-lg bg-line object-contain" />
+      <span className="flex gap-2">
+        <button type="button" className="text-xs text-accent underline" onClick={() => turns.turn(-1)} aria-label="Turn left">↺</button>
+        <button type="button" className="text-xs text-accent underline" onClick={() => turns.turn(1)} aria-label="Turn right">↻</button>
+        <button type="button" className="text-xs text-accent underline" disabled={still} onClick={onEdit}>Edit</button>
+      </span>
+      {turns.saving && <span className="text-[11px] text-muted" role="status">Saving…</span>}
+      <button type="button" onClick={onRemove} aria-label="Remove photo" disabled={still}
+        className="absolute -right-1.5 -top-1.5 flex size-5 items-center justify-center rounded-full bg-ink text-xs text-surface">×</button>
+    </li>
   );
 }

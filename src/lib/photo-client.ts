@@ -74,10 +74,10 @@ export async function rotateBlob(blob: Blob, quarterTurns: number): Promise<Blob
 }
 
 /**
- * One quarter turn (dir 1 clockwise, -1 counterclockwise) for a photo and its original, so Restore keeps lining up. An original that is the photo itself
+ * Quarter turns (positive clockwise, negative counterclockwise) for a photo and its original, so Restore keeps lining up. An original that is the photo itself
  * (sameFile) stays the same file. No original gives none back.
  */
-export async function turnWithOriginal(blob: Blob, original?: Blob, sameFile = false, dir: 1 | -1 = 1): Promise<{ result: Blob; original?: Blob }> {
+export async function turnWithOriginal(blob: Blob, original?: Blob, sameFile = false, dir = 1): Promise<{ result: Blob; original?: Blob }> {
   const result = await rotateBlob(blob, dir);
   if (sameFile) return { result, original: result };
   return { result, original: original ? await rotateBlob(original, dir) : undefined };
