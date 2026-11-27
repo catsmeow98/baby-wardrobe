@@ -66,7 +66,7 @@ export default async function EditItemPage({
                   <div className="flex aspect-square items-center justify-center rounded-lg bg-line text-sm text-muted">Unavailable</div>
                 )}
                 <div className="flex flex-wrap items-center gap-3">
-                  {urls.get(p.storage_path) && <PhotoEditButton photoId={p.id} url={urls.get(p.storage_path)!} originalPath={p.original_path ?? undefined} userId={ctx.user.id} childId={item.child_id} />}
+                  {urls.get(p.storage_path) && <PhotoEditButton photoId={p.id} url={urls.get(p.storage_path)!} path={p.storage_path} originalPath={p.original_path ?? undefined} userId={ctx.user.id} childId={item.child_id} />}
                   <form action={deletePhoto}>
                     <input type="hidden" name="photoId" value={p.id} />
                     <button type="submit" className="text-sm text-bad underline">Delete photo</button>
