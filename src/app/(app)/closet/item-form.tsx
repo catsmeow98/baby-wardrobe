@@ -6,6 +6,7 @@ import { btnCls, inputCls, labelCls } from '@/components/ui';
 import { FitFields } from '@/components/fit-fields';
 import { COLORS, CONDITIONS, FIT_LABELS, GENDERS, SEASONS, STATUSES } from '@/lib/db';
 import type { CategoryRow, SizeLabelRow, SizeRow } from '@/lib/db';
+import { StickyActions } from '@/components/sticky-actions';
 
 export interface ItemDefaults {
   id?: string;
@@ -123,10 +124,10 @@ export function ItemForm({ action, categories, sizes, labels, brands, defaults: 
           </div>
         )}
       </div>
-      <div className="sticky bottom-[4.5rem] z-10 -mx-4 -mb-4 flex items-center gap-3 rounded-b-xl border-t border-line bg-surface/95 px-4 py-3 backdrop-blur md:static md:m-0 md:border-0 md:bg-transparent md:p-0">
+      <StickyActions className="-mx-4 -mb-4 rounded-b-xl px-4">
         <button className={btnCls} type="submit">{submitLabel}</button>
         {back && <Link className="text-sm text-accent underline" href={back}>Cancel</Link>}
-      </div>
+      </StickyActions>
     </form>
   );
 }

@@ -11,6 +11,7 @@ import { SIZE_KINDS, sizeStepId } from '@/lib/survey-flow';
 import { applySurvey } from './actions';
 import { safeBackAny } from '@/lib/back';
 import { defaultBirthMonth, surveyAll } from './compute';
+import { StickyActions } from '@/components/sticky-actions';
 
 export const metadata: Metadata = { title: 'Goal survey' };
 
@@ -102,7 +103,7 @@ export default async function SurveyPage({ searchParams }: { searchParams: Promi
 
       <section className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-4">
         {child ? (
-          <form action={applySurvey} className="flex flex-col gap-3">
+          <form id="survey-save" action={applySurvey} className="flex flex-col gap-3">
             <input type="hidden" name="q" value={qs} />
             <input type="hidden" name="back" value={back} />
             <fieldset className="flex flex-wrap gap-2">
@@ -116,10 +117,7 @@ export default async function SurveyPage({ searchParams }: { searchParams: Promi
                 </label>
               ))}
             </fieldset>
-            <div className="flex flex-wrap items-center gap-3">
-              <button className={btnCls} type="submit">Use these goals</button>
-              <span className="text-sm text-muted">Replaces the goals for the ticked sizes: item types you did not pick are set to 0. Sizes you leave unticked keep their goals. Your answers are remembered for next time.</span>
-            </div>
+            <p className="text-sm text-muted">Replaces the goals for the ticked sizes: item types you did not pick are set to 0. Sizes you leave unticked keep their goals. Your answers are remembered for next time.</p>
           </form>
         ) : (
           <div className="flex flex-col gap-2 rounded-lg bg-accent-soft p-4">
@@ -128,6 +126,11 @@ export default async function SurveyPage({ searchParams }: { searchParams: Promi
           </div>
         )}
       </section>
+      {child && (
+        <StickyActions full>
+          <button className={btnCls} type="submit" form="survey-save">Use these goals</button>
+        </StickyActions>
+      )}
     </FocusShell>
   );
 }

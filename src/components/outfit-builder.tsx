@@ -8,6 +8,7 @@ import { ItemIcon } from '@/components/item-icon';
 import { btnCls, btnGhostCls, inputCls, labelCls } from '@/components/ui';
 import { COLORS } from '@/lib/db';
 import type { PickItem } from '@/lib/outfit-data';
+import { StickyActions } from '@/components/sticky-actions';
 
 const MAX_ITEMS = 12;
 
@@ -109,10 +110,10 @@ export function OutfitBuilder({ action, items, groups, types, initial }: {
         </ul>
       )}
 
-      <div className="flex flex-wrap gap-2">
+      <StickyActions className="-mx-4 -mb-4 rounded-b-xl px-4">
         <button className={btnCls} type="submit">{initial ? 'Save outfit' : 'Create outfit'}</button>
         <Link className={btnGhostCls} href="/outfits">Cancel</Link>
-      </div>
+      </StickyActions>
     </form>
   );
 }

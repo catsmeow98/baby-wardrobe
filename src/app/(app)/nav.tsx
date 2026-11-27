@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 /** [path, label, other paths that keep this tab highlighted]. The survey lives under Goals, and brands under Forecast. */
 type Entry = readonly [string, string, readonly string[]];
@@ -53,6 +53,21 @@ export function Nav({ children }: { children?: React.ReactNode }) {
   }, [open]);
   const moreOn = MORE.some((e) => isOn(path, e));
 
+  // Publish the bottom menu's height (0 when it is hidden on wide screens) for bars that sit just above it.
+  const bottomNav = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const el = bottomNav.current;
+    if (!el) return;
+    const set = () => document.documentElement.style.setProperty('--nav-h', `${el.offsetHeight}px`);
+    set();
+    const ro = new ResizeObserver(set);
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      document.documentElement.style.removeProperty('--nav-h');
+    };
+  }, []);
+
   const tab = 'flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[11px]';
   return (
     <>
@@ -69,7 +84,7 @@ export function Nav({ children }: { children?: React.ReactNode }) {
         ))}
       </nav>
 
-      <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-30 flex border-t border-line bg-surface pb-[var(--safe-bottom)] md:hidden">
+      <nav ref={bottomNav} aria-label="Main" className="fixed inset-x-0 bottom-0 z-30 flex border-t border-line bg-surface pb-[var(--safe-bottom)] md:hidden">
         {MAIN.map((e) => (
           <Link key={e[0]} href={e[0]} aria-current={isOn(path, e) ? 'page' : undefined} className={`${tab} ${isOn(path, e) ? 'font-bold text-accent' : 'text-muted'}`}>
             <Icon name={e[1]} />

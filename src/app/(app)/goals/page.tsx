@@ -14,6 +14,7 @@ import type { GoalRow, ItemRow, ShoppingRow } from '@/lib/db';
 import { goalProgress, incomingFor, ownedFor, sizeProgress } from '@/lib/domain';
 import { copyGoals, saveGoals } from './actions';
 import { currentUrl } from '@/lib/back';
+import { StickyActions } from '@/components/sticky-actions';
 
 export const metadata: Metadata = { title: 'Goals' };
 
@@ -143,7 +144,9 @@ export default async function GoalsPage({ searchParams }: { searchParams: Promis
           An item counts toward every size in its fit range, so a 6-9M to 9-12M piece counts for both. Stored items count. Outgrown, donated,
           sold and unusable items do not, and neither do items with an unknown fit. Leave a box empty to stop tracking an item type. A goal of 0 greys the row out.
         </p>
-        <button className={btnCls} type="submit">Save goals</button>
+        <StickyActions className="-mx-4 -mb-4 rounded-b-xl px-4">
+          <button className={btnCls} type="submit">Save goals</button>
+        </StickyActions>
       </form>
     </>
   );
