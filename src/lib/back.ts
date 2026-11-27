@@ -4,7 +4,8 @@
  * path are accepted, so the value cannot be used to send anyone to another site or section.
  */
 const ONE_SHOT = new Set(['error', 'ok', 'saved', 'added', 'photos', 'back']);
-const MAX = 600;
+// Room for many repeated filters (?cat=<id>&cat=<id>…); an id is 36 characters.
+const MAX = 4000;
 
 type Params = Record<string, string | string[] | undefined>;
 
@@ -23,7 +24,10 @@ export function currentUrl(base: string, sp: Params): string {
 export function safeBack(raw: unknown, base: string): string {
   if (typeof raw !== 'string' || raw.length > MAX || /[\u0000-\u001f\\]/.test(raw)) return base;
   if (raw !== base && !raw.startsWith(`${base}?`)) return base;
-  return currentUrl(base, Object.fromEntries([...new URLSearchParams(raw.slice(base.length + 1))].map(([k, v]) => [k, v])));
+  // Keep every value of a repeated filter (?cat=a&cat=b), not just one of them.
+  const sp: Record<string, string[]> = {};
+  for (const [k, v] of new URLSearchParams(raw.slice(base.length + 1))) (sp[k] ??= []).push(v);
+  return currentUrl(base, sp);
 }
 
 /** The address with these query values set, replacing any it already has. */

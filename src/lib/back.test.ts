@@ -35,3 +35,11 @@ test('safeBackAny accepts an address under any listed section and nothing else',
   assert.equal(safeBackAny('/welcome?x=\\y', B, '/goals'), '/welcome'); // malformed, but still inside the section: the section's own page
   for (const bad of ['/welcomeevil', '//evil.example', 'https://evil.example', '/closet', undefined, 5]) assert.equal(safeBackAny(bad, B, '/goals'), '/goals', String(bad));
 });
+
+test('safeBack keeps every value of a repeated filter', () => {
+  const back = '/closet?cat=a&cat=b&size=3&ok=Saved';
+  assert.equal(safeBack(back, '/closet'), '/closet?cat=a&cat=b&size=3');
+  assert.equal(withParams(safeBack(back, '/closet'), { added: '2' }), '/closet?cat=a&cat=b&size=3&added=2');
+  const many = `/closet?${Array.from({ length: 30 }, (_, i) => `cat=${'0'.repeat(28)}${String(i).padStart(8, '0')}`).join('&')}`;
+  assert.equal(safeBack(many, '/closet'), many, 'many item types still fit');
+});
