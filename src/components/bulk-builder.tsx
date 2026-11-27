@@ -27,7 +27,7 @@ interface Row {
 
 /**
  * Bulk add as a step-by-step wizard, like the goal survey. The first screen picks photos (and holds the details shared by every
- * item); when they have loaded, it moves on to one screen per photo, where the photo can be edited and the item filled in.
+ * item) and says when they have all loaded; Next then goes through one screen per photo, where the photo can be edited and the item filled in.
  * Every item stays in the one form (screens that are not showing are hidden, not removed), so the last screen's button sends
  * them all to bulkCreate as before. Field names carry the item's position (cat_0, name_1 and so on). The browser's Back button
  * steps back one screen.
@@ -54,6 +54,7 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
   const [stepId, setStepId] = useState<string>(PHOTOS);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const rowCount = useRef(0);
   rowCount.current = rows.length;
@@ -120,11 +121,11 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
     e.target.value = '';
     if (files.length === 0) return;
     setError(null);
+    setDone(null);
     const supabase = createClient();
     let skipped = 0;
     const problems: string[] = [];
     let added = 0;
-    let firstNew: number | null = null;
     const startRows = rowCount.current;
     for (let k = 0; k < files.length; k++) {
       if (startRows + added >= MAX_ROWS) {
@@ -152,14 +153,13 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
         continue;
       }
       const id = nextId.current++;
-      firstNew ??= id;
       added++;
       setRows((list) => [...list, { id, photo: { ...ref, preview: URL.createObjectURL(blob), blob } }]);
     }
     setBusy(null);
     if (skipped) setError(`${skipped} photo${skipped > 1 ? 's' : ''} could not be added. ${problems.join(' · ')}`);
-    // Once the photos are in, move on to the first new one (unless some failed, so the message can be read first).
-    else if (firstNew !== null) go(String(firstNew));
+    // Say they are all in and wait for Next, rather than jumping ahead.
+    else if (added) setDone(added === 1 ? 'Your photo is uploaded. Tap Next to fill in its details.' : `All ${added} photos are uploaded. Tap Next to fill in the details.`);
   }
 
   const addBlank = () => {
@@ -247,6 +247,7 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
             {busy === null && rows.length < MAX_ROWS && <button type="button" className="text-sm text-accent underline" onClick={addBlank}>Add an item without a photo</button>}
           </div>
           {error && <p role="alert" className="text-sm text-bad">{error}</p>}
+          {done && !busy && <p role="status" className="rounded-lg bg-good-soft p-3 text-sm font-medium text-good">✓ {done}</p>}
           {rows.length > 0 && (
             <ul className="flex flex-wrap gap-2" aria-label="Items so far">
               {rows.map((r, pos) => (
