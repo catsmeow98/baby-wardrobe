@@ -30,6 +30,7 @@ export function PhotoPicker({ userId, childId, name, label = 'Add photos', max =
   const guard = useRef<HTMLInputElement>(null);
   const [picked, setPicked] = useState<Picked[]>([]);
   const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<Picked | null>(null);
 
@@ -48,7 +49,7 @@ export function PhotoPicker({ userId, childId, name, label = 'Add photos', max =
     for (const f of chosen) {
       let done;
       try {
-        done = await processPhoto(f, removeBg);
+        done = await processPhoto(f, removeBg, setStatus);
       } catch {
         setError('That image could not be read. Try a JPEG or PNG photo.');
         continue;
@@ -64,6 +65,7 @@ export function PhotoPicker({ userId, childId, name, label = 'Add photos', max =
     }
     setPicked((p) => [...p, ...added]);
     setBusy(false);
+    setStatus(null);
   }
 
   async function remove(p: Picked) {
@@ -105,7 +107,7 @@ export function PhotoPicker({ userId, childId, name, label = 'Add photos', max =
         <div>
           <input ref={file} type="file" accept="image/*" multiple={max > 1} className="sr-only" onChange={onPick} aria-label="Choose photos" />
           <button type="button" className={btnGhostCls} disabled={busy} onClick={() => file.current?.click()}>
-            {busy ? (removeBg ? 'Processing…' : 'Uploading…') : picked.length ? 'Add more photos' : label}
+            {busy ? (removeBg ? (status ?? 'Processing…') : 'Uploading…') : picked.length ? 'Add more photos' : label}
           </button>
         </div>
       )}

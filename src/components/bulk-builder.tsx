@@ -70,7 +70,7 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
       let blob: Blob;
       let original: Blob | undefined;
       try {
-        const done = await processPhoto(files[k], removeBg);
+        const done = await processPhoto(files[k], removeBg, (text) => setBusy(`Photo ${k + 1} of ${files.length}: ${text}`));
         blob = done.blob;
         if (done.cutout) original = done.original;
       } catch {

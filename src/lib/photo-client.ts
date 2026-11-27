@@ -43,13 +43,14 @@ const reasonOf = (e: unknown): string => {
   return /^\d+$/.test(m.trim()) ? `the browser ran out of memory (code ${m.trim()})` : m;
 };
 
-export async function processPhoto(file: File, removeBackground: boolean): Promise<ProcessedPhoto> {
+/** onStatus gets short progress text (the first cutout downloads the model), for showing on the busy button. */
+export async function processPhoto(file: File, removeBackground: boolean, onStatus?: (text: string) => void): Promise<ProcessedPhoto> {
   const original = await shrinkImage(file);
   if (!removeBackground) return { blob: original, original, cutout: false, failed: false };
   try {
     const small = await shrinkImage(original, CUTOUT_SIDE);
     const { removeBackgroundFrom } = await import('@/lib/bg-remove');
-    return { blob: await removeBackgroundFrom(small), original, cutout: true, failed: false };
+    return { blob: await removeBackgroundFrom(small, onStatus), original, cutout: true, failed: false };
   } catch (e) {
     console.error('Background removal failed', e);
     return { blob: original, original, cutout: false, failed: true, reason: reasonOf(e) };

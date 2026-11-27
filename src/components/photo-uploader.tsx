@@ -12,6 +12,7 @@ export function PhotoUploader({ itemId, userId, childId, remaining, removeBg = f
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
@@ -25,7 +26,7 @@ export function PhotoUploader({ itemId, userId, childId, remaining, removeBg = f
       let blob: Blob;
       let original: Blob | undefined;
       try {
-        const done = await processPhoto(file, removeBg);
+        const done = await processPhoto(file, removeBg, setStatus);
         blob = done.blob;
         if (done.cutout) original = done.original;
         if (done.failed) setError(`The background could not be removed, so the original photo was used.${done.reason ? ` (${done.reason.slice(0, 160)})` : ''}`);
@@ -42,6 +43,7 @@ export function PhotoUploader({ itemId, userId, childId, remaining, removeBg = f
       if (!res.ok) setError(res.error);
     }
     setBusy(false);
+    setStatus(null);
     router.refresh();
   }
 
@@ -51,7 +53,7 @@ export function PhotoUploader({ itemId, userId, childId, remaining, removeBg = f
       <input ref={input} type="file" accept="image/*" multiple className="sr-only" onChange={onPick} aria-label="Choose photos" />
       <div>
         <button type="button" className={btnGhostCls} disabled={busy} onClick={() => input.current?.click()}>
-          {busy ? (removeBg ? 'Processing…' : 'Uploading…') : 'Add photos'}
+          {busy ? (removeBg ? (status ?? 'Processing…') : 'Uploading…') : 'Add photos'}
         </button>
       </div>
       {error && <p role="alert" className="text-sm text-bad">{error}</p>}

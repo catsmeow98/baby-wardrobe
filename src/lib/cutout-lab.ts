@@ -22,7 +22,7 @@ export interface LabModel {
 export const LAB_MODELS: LabModel[] = [
   {
     id: 'isnet-q8',
-    label: 'IS-Net, small (what the app uses now)',
+    label: 'IS-Net, small (what the app used before)',
     note: '8-bit version of IS-Net general use.',
     sizeMB: 44,
     url: 'https://huggingface.co/SacredNoir/isnet-general-use-onnx/resolve/main/isnet-general-use-q8.onnx',
@@ -44,7 +44,7 @@ export const LAB_MODELS: LabModel[] = [
   },
   {
     id: 'birefnet-lite',
-    label: 'BiRefNet lite',
+    label: 'BiRefNet lite (what the app uses now)',
     note: 'A newer, more detailed model. A browser-ready export (CoderViking/birefnet-lite-onnx).',
     sizeMB: 200,
     url: 'https://huggingface.co/CoderViking/birefnet-lite-onnx/resolve/main/birefnet-lite-1024.onnx',
