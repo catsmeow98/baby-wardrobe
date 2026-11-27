@@ -17,6 +17,8 @@ import { currentUrl } from '@/lib/back';
 import { buildNeedsTable } from '@/lib/needs-table';
 import { addShoppingItem, cancelItem, markOrdered, orderFromGap, receiveDelivery } from './actions';
 import { TypeIcon } from '@/components/item-icon';
+import { NeedsCart } from '@/components/needs-cart';
+import { iconForType } from '@/lib/item-icons';
 
 export const metadata: Metadata = { title: 'Shopping' };
 
@@ -119,39 +121,13 @@ export default async function ShoppingPage({ searchParams }: { searchParams: Pro
         {needs.rows.length === 0 ? (
           <p className="py-4 text-center text-muted">{filtering ? 'Nothing is needed for these filters.' : 'Nothing is needed right now.'}</p>
         ) : (
-          <div className="mt-3 overflow-x-auto">
-            <table className="w-full min-w-max border-collapse text-sm">
-              <thead>
-                <tr>
-                  <th scope="col" className="sticky left-0 bg-surface py-2 pr-3 text-left font-medium text-muted">Item</th>
-                  {needs.sizes.map((n) => {
-                    const size = ctx.sizeByOrder.get(n);
-                    return <th key={n} scope="col" className="px-3 py-2 text-center font-medium text-muted">{size ? sizeName(size) : '?'}</th>;
-                  })}
-                  <th scope="col" className="px-3 py-2 text-center font-semibold">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {needs.rows.map((r) => (
-                  <tr key={r.categoryId} className="border-t border-line">
-                    <th scope="row" className="sticky left-0 bg-surface py-2 pr-3 text-left font-medium"><span className="flex items-center gap-1.5"><TypeIcon type={ctx.catById.get(r.categoryId)} size={18} className="shrink-0 text-accent" />{ctx.catById.get(r.categoryId)?.name ?? 'Item'}</span></th>
-                    {needs.sizes.map((n) => {
-                      const v = r.cells.get(n);
-                      return <td key={n} className={`px-3 py-2 text-center tabular-nums ${v ? 'font-semibold' : 'text-muted'}`}>{v ?? '–'}</td>;
-                    })}
-                    <td className="px-3 py-2 text-center font-semibold tabular-nums">{r.total}</td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="border-t-2 border-line">
-                  <th scope="row" className="sticky left-0 bg-surface py-2 pr-3 text-left font-semibold">Total</th>
-                  {needs.sizes.map((n) => <td key={n} className="px-3 py-2 text-center font-semibold tabular-nums">{needs.columnTotals.get(n) ?? 0}</td>)}
-                  <td className="px-3 py-2 text-center font-bold tabular-nums">{needs.grandTotal}</td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
+          <NeedsCart
+            childId={child.id}
+            columns={needs.sizes.flatMap((n) => { const z = ctx.sizeByOrder.get(n); return z ? [{ order: n, sizeId: z.id, label: sizeName(z) }] : []; })}
+            rows={needs.rows.map((r) => ({ categoryId: r.categoryId, cells: Object.fromEntries(r.cells) }))}
+            types={Object.fromEntries(ctx.categories.map((c) => [c.id, { name: c.name, icon: iconForType(c) }]))}
+            sizeLabels={Object.fromEntries(ctx.sizes.map((z) => [z.id, sizeName(z)]))}
+          />
         )}
       </section>
 

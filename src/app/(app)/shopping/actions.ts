@@ -95,3 +95,36 @@ export async function cancelItem(formData: FormData) {
   refresh();
   return back(undefined, 'Cancelled.');
 }
+
+const cartLineSchema = z.object({ categoryId: uuid, sizeId: uuid, qty: z.number().int().min(1).max(99) });
+
+/**
+ * "Mark bought" for the in-store cart: each line goes on the shopping list as ordered (the same path as Order on a gap), so it
+ * counts as incoming until it is received. Returns which lines were saved, so the page clears only those from the cart.
+ */
+export async function markCartBought(lines: unknown): Promise<{ saved: string[]; error?: string }> {
+  const parsed = z.array(cartLineSchema).min(1).max(100).safeParse(lines);
+  if (!parsed.success) return { saved: [], error: 'The cart could not be read. Try again.' };
+  const ctx = await getContext();
+  if (!ctx.active) return { saved: [], error: 'Add a child first.' };
+  const known = new Set(ctx.sizes.map((s) => s.id));
+  const saved: string[] = [];
+  for (const l of parsed.data) {
+    const key = `${l.categoryId}|${l.sizeId}`;
+    if (!known.has(l.sizeId) || !ctx.catById.has(l.categoryId)) continue;
+    const { data, error } = await ctx.supabase
+      .from('shopping_items')
+      .insert({ child_id: ctx.active.id, category_id: l.categoryId, size_id: l.sizeId, quantity_needed: l.qty, notes: 'Bought in store' })
+      .select('id')
+      .single();
+    if (error || !data) break;
+    const { error: e2 } = await ctx.supabase.rpc('order_shopping_item', { p_shopping_item: data.id, p_quantity: l.qty });
+    if (e2) {
+      await ctx.supabase.from('shopping_items').delete().eq('id', data.id);
+      break;
+    }
+    saved.push(key);
+  }
+  if (saved.length) refresh();
+  return saved.length === parsed.data.length ? { saved } : { saved, error: `${saved.length} of ${parsed.data.length} cart lines were saved. The rest are still in the cart; try again.` };
+}

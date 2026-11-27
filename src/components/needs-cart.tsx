@@ -1,0 +1,241 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { ItemIcon } from '@/components/item-icon';
+import { btnCls, btnGhostCls } from '@/components/ui';
+import { MAX_IN_CART, cartKey, cartLines, cartPieces, cartStorageKey, leftToFind, parseCart, setInCart, splitKey, type Cart } from '@/lib/cart';
+import { markCartBought } from '@/app/(app)/shopping/actions';
+
+export interface NeedsColumn { order: number; sizeId: string; label: string }
+export interface NeedsRow { categoryId: string; cells: Record<number, number> }
+export interface TypeInfo { name: string; icon: string }
+
+/**
+ * The "Needs by item and size" table, made for shopping in a store. Tap a number to say how many of that item and size are in
+ * the cart; the cell then shows what is still to find. A bar at the bottom shows the cart, where lines can be changed, the
+ * cart cleared, or everything marked bought (it goes on the shopping list as ordered, so it counts as incoming).
+ * The cart is kept on this device only, one per child.
+ */
+export function NeedsCart({ childId, columns, rows, types, sizeLabels }: {
+  childId: string;
+  columns: NeedsColumn[];
+  rows: NeedsRow[];
+  types: Record<string, TypeInfo>;
+  /** Every size's label by id, for cart lines whose column is not in the table any more. */
+  sizeLabels: Record<string, string>;
+}) {
+  const router = useRouter();
+  const [cart, setCart] = useState<Cart>({});
+  const [loaded, setLoaded] = useState(false);
+  const [open, setOpen] = useState<{ categoryId: string; sizeId: string; need: number } | null>(null);
+  const [showCart, setShowCart] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<{ text: string; bad: boolean } | null>(null);
+
+  // Read the stored cart after the first render (the server cannot see it), and keep it saved on every change.
+  useEffect(() => {
+    try {
+      setCart(parseCart(window.localStorage.getItem(cartStorageKey(childId))));
+    } catch {
+      // Storage can be unavailable (private mode); the cart then lasts as long as the page.
+    }
+    setLoaded(true);
+  }, [childId]);
+  useEffect(() => {
+    if (!loaded) return;
+    try {
+      const key = cartStorageKey(childId);
+      if (Object.keys(cart).length) window.localStorage.setItem(key, JSON.stringify(cart));
+      else window.localStorage.removeItem(key);
+    } catch {
+      // See above.
+    }
+  }, [cart, childId, loaded]);
+
+  const inCart = (categoryId: string, sizeId: string) => cart[cartKey(categoryId, sizeId)] ?? 0;
+  const set = (categoryId: string, sizeId: string, n: number) => setCart((c) => setInCart(c, cartKey(categoryId, sizeId), n));
+  const needOf = (categoryId: string, sizeId: string) => {
+    const col = columns.find((c) => c.sizeId === sizeId);
+    return col ? (rows.find((r) => r.categoryId === categoryId)?.cells[col.order] ?? 0) : 0;
+  };
+
+  const left = (r: NeedsRow, col: NeedsColumn) => leftToFind(r.cells[col.order] ?? 0, inCart(r.categoryId, col.sizeId));
+  const rowLeft = (r: NeedsRow) => columns.reduce((t, col) => t + left(r, col), 0);
+  const colLeft = (col: NeedsColumn) => rows.reduce((t, r) => t + left(r, col), 0);
+  const allLeft = rows.reduce((t, r) => t + rowLeft(r), 0);
+  const lines = cartLines(cart);
+  const pieces = cartPieces(cart);
+
+  async function bought() {
+    setSaving(true);
+    setMessage(null);
+    try {
+      const res = await markCartBought(lines);
+      if (res.saved.length) setCart((c) => res.saved.reduce((acc, k) => setInCart(acc, k, 0), c));
+      setMessage(res.error ? { text: res.error, bad: true } : { text: 'Marked as bought. Those pieces now count as incoming until you receive them.', bad: false });
+      if (!res.error) setShowCart(false);
+      router.refresh();
+    } catch {
+      setMessage({ text: 'Could not reach the server. Your cart is still here; try again when you have signal.', bad: true });
+    }
+    setSaving(false);
+  }
+
+  function clearCart() {
+    if (!window.confirm('Clear the cart? Nothing will be marked as bought.')) return;
+    setCart({});
+    setShowCart(false);
+  }
+
+  const name = (categoryId: string) => types[categoryId]?.name ?? 'Item';
+  const icon = (categoryId: string) => types[categoryId]?.icon ?? 'g_other';
+  const stepBtn = 'flex size-11 items-center justify-center rounded-full border border-line bg-surface text-xl font-bold disabled:opacity-40';
+
+  return (
+    <>
+      {message && <p role={message.bad ? 'alert' : 'status'} className={`mt-2 text-sm ${message.bad ? 'text-bad' : 'text-good'}`}>{message.text}</p>}
+      <p className="mt-1 text-sm text-muted">In the store? Tap a number to put pieces in your cart.</p>
+      <div className="mt-3 overflow-x-auto">
+        <table className="w-full min-w-max border-collapse text-sm">
+          <thead>
+            <tr>
+              <th scope="col" className="sticky left-0 bg-surface py-2 pr-3 text-left font-medium text-muted">Item</th>
+              {columns.map((col) => <th key={col.order} scope="col" className="px-2 py-2 text-center font-medium text-muted">{col.label}</th>)}
+              <th scope="col" className="px-3 py-2 text-center font-semibold">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.categoryId} className="border-t border-line">
+                <th scope="row" className="sticky left-0 bg-surface py-2 pr-3 text-left font-medium">
+                  <span className="flex items-center gap-1.5"><ItemIcon itemKey={icon(r.categoryId)} size={18} className="shrink-0 text-accent" />{name(r.categoryId)}</span>
+                </th>
+                {columns.map((col) => {
+                  const need = r.cells[col.order];
+                  if (!need) return <td key={col.order} className="px-2 py-2 text-center text-muted">–</td>;
+                  const got = inCart(r.categoryId, col.sizeId);
+                  const rest = leftToFind(need, got);
+                  return (
+                    <td key={col.order} className="px-1 py-1 text-center">
+                      <button type="button" onClick={() => setOpen({ categoryId: r.categoryId, sizeId: col.sizeId, need })}
+                        aria-label={`${name(r.categoryId)}, ${col.label}: need ${need}${got ? `, ${got} in cart` : ''}`}
+                        className={`min-w-11 rounded-lg px-2 py-1.5 tabular-nums ${got ? (rest === 0 ? 'bg-good-soft text-good' : 'bg-accent-soft') : 'hover:bg-line/60'}`}>
+                        <span className="block font-semibold">{rest === 0 ? '✓' : rest}</span>
+                        {got > 0 && <span className="block text-[11px] leading-tight">🛒 {got}</span>}
+                      </button>
+                    </td>
+                  );
+                })}
+                <td className="px-3 py-2 text-center font-semibold tabular-nums">{rowLeft(r)}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="border-t-2 border-line">
+              <th scope="row" className="sticky left-0 bg-surface py-2 pr-3 text-left font-semibold">{pieces ? 'Left to find' : 'Total'}</th>
+              {columns.map((col) => <td key={col.order} className="px-2 py-2 text-center font-semibold tabular-nums">{colLeft(col)}</td>)}
+              <td className="px-3 py-2 text-center font-bold tabular-nums">{allLeft}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      {/* Room at the end of the page so the cart bar never covers the last lines. */}
+      {pieces > 0 && <div aria-hidden="true" className="h-16" />}
+      {/* The cart bar, above the phone's bottom navigation. */}
+      {pieces > 0 && !open && !showCart && (
+        <button type="button" onClick={() => setShowCart(true)}
+          className="fixed inset-x-3 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-30 mx-auto flex max-w-md items-center justify-between rounded-full bg-accent px-5 py-3 text-accent-ink shadow-lg md:bottom-6">
+          <span>🛒 Cart: <b>{pieces}</b> piece{pieces === 1 ? '' : 's'}, {lines.length} item{lines.length === 1 ? '' : 's'}</span>
+          <span className="font-bold underline">View</span>
+        </button>
+      )}
+
+      {/* One item and size: how many are in the cart. */}
+      {open && (
+        <Sheet onClose={() => setOpen(null)} label={`${name(open.categoryId)} in the cart`}>
+          <div className="flex items-center gap-3">
+            <span className="text-accent"><ItemIcon itemKey={icon(open.categoryId)} size={40} /></span>
+            <div>
+              <p className="font-display text-lg font-bold">{name(open.categoryId)}</p>
+              <p className="text-sm text-muted">{sizeLabels[open.sizeId] ?? ''} · Need {open.need}</p>
+            </div>
+          </div>
+          <div className="flex items-center justify-center gap-5 py-2">
+            <button type="button" className={stepBtn} aria-label="One fewer" disabled={inCart(open.categoryId, open.sizeId) === 0}
+              onClick={() => set(open.categoryId, open.sizeId, inCart(open.categoryId, open.sizeId) - 1)}>−</button>
+            <div className="text-center">
+              <span className="block font-display text-4xl font-bold tabular-nums" aria-live="polite">{inCart(open.categoryId, open.sizeId)}</span>
+              <span className="text-sm text-muted">in cart</span>
+            </div>
+            <button type="button" className={stepBtn} aria-label="One more" disabled={inCart(open.categoryId, open.sizeId) >= MAX_IN_CART}
+              onClick={() => set(open.categoryId, open.sizeId, inCart(open.categoryId, open.sizeId) + 1)}>+</button>
+          </div>
+          <p className="text-center text-sm text-muted">
+            {leftToFind(open.need, inCart(open.categoryId, open.sizeId)) === 0 ? 'That covers it.' : `${leftToFind(open.need, inCart(open.categoryId, open.sizeId))} still to find.`}
+          </p>
+          <div className="flex items-center justify-between gap-3 pt-1">
+            {inCart(open.categoryId, open.sizeId) > 0
+              ? <button type="button" className="text-sm text-bad underline" onClick={() => { set(open.categoryId, open.sizeId, 0); setOpen(null); }}>Remove from cart</button>
+              : <span />}
+            <button type="button" className={btnCls} onClick={() => setOpen(null)}>Done</button>
+          </div>
+        </Sheet>
+      )}
+
+      {/* The whole cart. */}
+      {showCart && (
+        <Sheet onClose={() => setShowCart(false)} label="Cart">
+          <h2 className="font-display text-lg font-bold">Cart · {pieces} piece{pieces === 1 ? '' : 's'}</h2>
+          <ul className="max-h-[45vh] overflow-y-auto">
+            {lines.map((l) => {
+              const need = needOf(l.categoryId, l.sizeId);
+              return (
+                <li key={cartKey(l.categoryId, l.sizeId)} className="flex items-center gap-2 border-t border-line py-2 first:border-t-0">
+                  <span className="shrink-0 text-accent"><ItemIcon itemKey={icon(l.categoryId)} size={24} /></span>
+                  <span className="min-w-0 flex-1">
+                    <b className="block truncate">{name(l.categoryId)}</b>
+                    <span className="text-xs text-muted">{sizeLabels[l.sizeId] ?? ''}{need ? ` · need ${need}` : ''}</span>
+                  </span>
+                  <button type="button" className="flex size-9 items-center justify-center rounded-full border border-line" aria-label="One fewer" onClick={() => set(l.categoryId, l.sizeId, l.qty - 1)}>−</button>
+                  <b className="w-6 text-center tabular-nums">{l.qty}</b>
+                  <button type="button" className="flex size-9 items-center justify-center rounded-full border border-line" aria-label="One more" disabled={l.qty >= MAX_IN_CART} onClick={() => set(l.categoryId, l.sizeId, l.qty + 1)}>+</button>
+                  <button type="button" className="ml-1 text-sm text-bad underline" onClick={() => set(l.categoryId, l.sizeId, 0)} aria-label={`Remove ${name(l.categoryId)} from cart`}>Remove</button>
+                </li>
+              );
+            })}
+          </ul>
+          {lines.length === 0 && <p className="py-3 text-center text-muted">The cart is empty.</p>}
+          {lines.length > 0 && (
+            <div className="flex flex-col gap-2 pt-2">
+              <button type="button" className={btnCls} disabled={saving} onClick={bought}>{saving ? 'Saving…' : 'Mark bought & clear'}</button>
+              <p className="text-xs text-muted">Adds these to your shopping list as ordered, so they count as incoming. Mark them received when you add them to the closet.</p>
+              <div className="flex justify-between">
+                <button type="button" className="text-sm text-bad underline" onClick={clearCart}>Clear cart</button>
+                <button type="button" className={btnGhostCls} onClick={() => setShowCart(false)}>Close</button>
+              </div>
+            </div>
+          )}
+        </Sheet>
+      )}
+    </>
+  );
+}
+
+/** A panel that slides up from the bottom, over the page and its navigation. Tapping outside closes it. */
+function Sheet({ children, onClose, label }: { children: React.ReactNode; onClose: () => void; label: string }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40" onClick={onClose}>
+      <div role="dialog" aria-modal="true" aria-label={label} onClick={(e) => e.stopPropagation()}
+        className="flex w-full max-w-md flex-col gap-3 rounded-t-2xl bg-bg p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-xl">
+        {children}
+      </div>
+    </div>
+  );
+}
