@@ -182,7 +182,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
             <input type="checkbox" name="removeBackground" defaultChecked={ctx.settings.removeBackground} className="mt-1" />
             <span>
               Remove the background from new photos
-              <span className="block text-muted">Done on your device when you add a photo, so the item stands out. The first photo downloads about 200 MB of tools, once (best on Wi-Fi). You can still go back to the original while editing a photo.</span>
+              <span className="block text-muted">Done on your device when you add a photo, so the item stands out. In the Android app this uses Android&apos;s built-in cutout, with nothing to download. In a browser, the first photo downloads about 200 MB of tools, once (best on Wi-Fi). You can still go back to the original while editing a photo.</span>
             </span>
           </label>
           <div><button className={btnGhostCls} type="submit">Save</button></div>

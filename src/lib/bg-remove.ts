@@ -1,10 +1,13 @@
 import { refineMask } from '@/lib/mask-clean';
+import { hasNativeSegmenter, nativeMaskSquare } from '@/lib/native-cutout';
 
 /**
  * The one place that knows how backgrounds are removed. Runs in the browser, loaded only when a photo is picked with the
  * setting on. Engine: BiRefNet lite (MIT, by Peng Zheng et al.), a browser-ready ONNX export from CoderViking/birefnet-lite-onnx
  * on Hugging Face (about 200 MB, downloaded once and cached by the browser), run by onnxruntime-web (MIT). It won the Cutout
  * lab test against IS-Net: it kept sleeves and a second garment that IS-Net dropped. Nothing is sent to a server.
+ *
+ * Inside the Android app the native ML Kit cutout (src/lib/native-cutout.ts) is used instead; see removeBackgroundFrom.
  *
  * Model facts (the same as the lab's): input float32[1,3,1024,1024], RGB scaled to 0..1 then ImageNet-normalised
  * ((value - mean) / std); the first output is a 1 x 1 x 1024 x 1024 map of logits, squashed with a sigmoid.
@@ -95,14 +98,19 @@ const canvasOf = (w: number, h: number) => {
 
 /** The cutout keeps the photo's full frame (transparent where the background was), so it always lines up with the original. */
 export async function removeBackgroundFrom(image: Blob, onStatus?: OnStatus): Promise<Blob> {
+  const bmp = await createImageBitmap(image);
+  const small = canvasOf(SIDE, SIDE);
+  // Inside the Android app, Android's own cutout (ML Kit): nothing to download, and it won the Cutout lab test.
+  // In a browser, BiRefNet lite below. Both end in the same cleanup, so cutouts look alike either way.
+  if (hasNativeSegmenter()) {
+    onStatus?.('Removing the background…');
+    const { soft } = await nativeMaskSquare(bmp, SIDE);
+    return finish(bmp, small, soft, 0, 1);
+  }
   const { ort, session } = await load(ready ? undefined : onStatus);
   onStatus?.('Removing the background…');
-  const bmp = await createImageBitmap(image);
-  const w = bmp.width;
-  const h = bmp.height;
 
   // Input: the photo squashed to 1024 x 1024, as planar RGB.
-  const small = canvasOf(SIDE, SIDE);
   small.ctx.drawImage(bmp, 0, 0, SIDE, SIDE);
   const rgba = small.ctx.getImageData(0, 0, SIDE, SIDE).data;
   const plane = SIDE * SIDE;
@@ -121,6 +129,14 @@ export async function removeBackgroundFrom(image: Blob, onStatus?: OnStatus): Pr
     if (sal[i] > hi) hi = sal[i];
     soft[i] = Math.round(255 / (1 + Math.exp(-sal[i])));
   }
+  return finish(bmp, small, soft, lo, hi);
+}
+
+/** From a soft mask (SIDE x SIDE, 0..255) to the cutout: cleanup, scaled to the photo, checked, and applied as transparency. */
+async function finish(bmp: ImageBitmap, small: ReturnType<typeof canvasOf>, soft: Uint8Array, lo: number, hi: number): Promise<Blob> {
+  const w = bmp.width;
+  const h = bmp.height;
+  const plane = SIDE * SIDE;
   // Shape: keep the main piece (and a second item), drop specks, fill holes; edge: a soft two-pixel fade.
   const clean = refineMask(soft, SIDE, SIDE);
   const m = small.ctx.createImageData(SIDE, SIDE);

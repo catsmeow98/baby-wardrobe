@@ -1,4 +1,5 @@
 import { refineMask } from '@/lib/mask-clean';
+import { nativeMaskSquare } from '@/lib/native-cutout';
 
 /**
  * A test bench for background removal models. It is not used by the app's photo flow: the Cutout lab page runs one model at
@@ -71,32 +72,7 @@ export const NATIVE_MODEL: LabModel = {
   native: true,
 };
 
-interface NativeBridge {
-  isNativePlatform?: () => boolean;
-  registerPlugin?: (name: string) => Record<string, (opts: unknown) => Promise<unknown>>;
-  Plugins?: Record<string, Record<string, (opts: unknown) => Promise<unknown>> | undefined>;
-}
-const bridge = (): NativeBridge | undefined => (globalThis as { Capacitor?: NativeBridge }).Capacitor;
-
-/** True inside the Android app, where the native ML Kit plugin is there to call. */
-export const hasNativeSegmenter = () => Boolean(bridge()?.isNativePlatform?.());
-
-/** The photo (longest side at most 1024) through ML Kit: a confidence mask, one byte (0..255) per pixel, at the photo's shape. */
-async function nativeMask(bmp: ImageBitmap): Promise<{ mask: Uint8Array; w: number; h: number; ms: number }> {
-  const cap = bridge();
-  const plugin = cap?.Plugins?.SubjectSegmenter ?? cap?.registerPlugin?.('SubjectSegmenter');
-  if (!plugin?.segment) throw new Error('The native cutout is only in the Android app (update the app if it is missing).');
-  const scale = Math.min(1, SIDE / Math.max(bmp.width, bmp.height));
-  const c = canvasOf(Math.max(1, Math.round(bmp.width * scale)), Math.max(1, Math.round(bmp.height * scale)));
-  c.ctx.drawImage(bmp, 0, 0, c.c.width, c.c.height);
-  const jpeg = c.c.toDataURL('image/jpeg', 0.92).split(',')[1];
-  const res = (await plugin.segment({ image: jpeg })) as { mask: string; width: number; height: number; ms: number };
-  const bin = atob(res.mask);
-  const mask = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) mask[i] = bin.charCodeAt(i);
-  if (mask.length !== res.width * res.height) throw new Error(`unexpected mask size (${mask.length})`);
-  return { mask, w: res.width, h: res.height, ms: res.ms };
-}
+export { hasNativeSegmenter } from '@/lib/native-cutout';
 
 export interface LabResult {
   /** Object URLs for PNGs. The page revokes them when a new result replaces these. */
@@ -252,25 +228,10 @@ async function runNative(image: Blob, onStatus: (text: string) => void): Promise
   onStatus('Cutting out on the phone (ML Kit)…');
   const t0 = performance.now();
   const bmp = await createImageBitmap(image);
-  const native = await nativeMask(bmp);
+  const native = await nativeMaskSquare(bmp, SIDE);
   const t1 = performance.now();
-  // The mask, squashed to the lab's 1024 square, so refineMask and the pictures work exactly as for the other models.
-  const m = canvasOf(native.w, native.h);
-  const md = m.ctx.createImageData(native.w, native.h);
-  for (let i = 0; i < native.mask.length; i++) {
-    md.data[i * 4] = native.mask[i];
-    md.data[i * 4 + 1] = native.mask[i];
-    md.data[i * 4 + 2] = native.mask[i];
-    md.data[i * 4 + 3] = 255;
-  }
-  m.ctx.putImageData(md, 0, 0);
-  const sq = canvasOf(SIDE, SIDE);
-  sq.ctx.imageSmoothingQuality = 'high';
-  sq.ctx.drawImage(m.c, 0, 0, SIDE, SIDE);
-  const sqd = sq.ctx.getImageData(0, 0, SIDE, SIDE).data;
+  const soft = native.soft;
   const plane = SIDE * SIDE;
-  const soft = new Uint8Array(plane);
-  for (let i = 0; i < plane; i++) soft[i] = sqd[i * 4];
   const clean = refineMask(soft, SIDE, SIDE);
 
   const scale = Math.min(1, SHOW_MAX / Math.max(bmp.width, bmp.height));
