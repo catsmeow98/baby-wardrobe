@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { ColorDot } from '@/components/color-dot';
+import { MultiSelect } from '@/components/multi-select';
 import { ItemIcon } from '@/components/item-icon';
 import { btnCls, btnGhostCls, inputCls, labelCls } from '@/components/ui';
 import { COLORS } from '@/lib/db';
@@ -23,13 +24,14 @@ export function OutfitBuilder({ action, items, groups, types, initial }: {
 }) {
   const [selected, setSelected] = useState<string[]>(initial?.itemIds ?? []);
   const [q, setQ] = useState('');
-  const [group, setGroup] = useState('');
-  const [type, setType] = useState('');
-  const [color, setColor] = useState('');
+  // Each filter takes several choices (any of them); empty means any.
+  const [groups_, setGroups] = useState<string[]>([]);
+  const [types_, setTypes] = useState<string[]>([]);
+  const [colors, setColors] = useState<string[]>([]);
   const byId = useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
   const needle = q.trim().toLowerCase();
   const shown = items.filter((i) =>
-    (!group || i.groupId === group) && (!type || i.typeId === type) && (!color || i.color === color) && (!needle || i.name.toLowerCase().includes(needle) || i.typeName.toLowerCase().includes(needle)));
+    (!groups_.length || groups_.includes(i.groupId)) && (!types_.length || types_.includes(i.typeId)) && (!colors.length || colors.includes(i.color ?? '')) && (!needle || i.name.toLowerCase().includes(needle) || i.typeName.toLowerCase().includes(needle)));
   const toggle = (id: string) => setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : s.length < MAX_ITEMS ? [...s, id] : s));
 
   return (
@@ -71,18 +73,11 @@ export function OutfitBuilder({ action, items, groups, types, initial }: {
 
       <div className="flex flex-wrap gap-2" role="search">
         <input className={`${inputCls} min-w-40 flex-1`} type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search items" aria-label="Search items" />
-        <select className={`${inputCls} w-auto`} value={group} onChange={(e) => { setGroup(e.target.value); setType(''); }} aria-label="Item category">
-          <option value="">All item categories</option>
-          {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
-        </select>
-        <select className={`${inputCls} w-auto`} value={type} onChange={(e) => setType(e.target.value)} aria-label="Item type">
-          <option value="">All item types</option>
-          {types.filter((t) => !group || t.groupId === group).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-        </select>
-        <select className={`${inputCls} w-auto`} value={color} onChange={(e) => setColor(e.target.value)} aria-label="Color">
-          <option value="">Any color</option>
-          {COLORS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-        </select>
+        <MultiSelect label="Item category" value={groups_} options={groups.map((g) => ({ value: g.id, label: g.name }))}
+          onChange={(next) => { setGroups(next); setTypes((t) => t.filter((id) => !next.length || next.includes(types.find((x) => x.id === id)?.groupId ?? ''))); }} />
+        <MultiSelect label="Item type" value={types_} onChange={setTypes}
+          options={types.filter((t) => !groups_.length || groups_.includes(t.groupId)).map((t) => ({ value: t.id, label: t.name, section: groups.find((g) => g.id === t.groupId)?.name }))} />
+        <MultiSelect label="Color" value={colors} onChange={setColors} options={COLORS.map(([v, l]) => ({ value: v, label: l }))} />
       </div>
 
       {items.length === 0 ? (

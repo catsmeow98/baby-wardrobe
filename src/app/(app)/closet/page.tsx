@@ -8,6 +8,8 @@ import { COLORS, CONDITIONS, FIT_FEEDBACK, FIT_LABELS, GENDERS, SEASONS, STATUSE
 import type { ItemRow, SizeLabelRow } from '@/lib/db';
 import { ColorDot } from '@/components/color-dot';
 import { TypeFilters } from '@/components/type-filters';
+import { MultiSelect } from '@/components/multi-select';
+import { listOf } from '@/lib/multi';
 import { TypeIcon } from '@/components/item-icon';
 import { matchesCategory } from '@/lib/categories';
 import { signedUrls } from '@/lib/photos';
@@ -17,7 +19,9 @@ import { filterItems, fitStateFor, type FitState } from '@/lib/domain';
 
 export const metadata: Metadata = { title: 'Closet' };
 
-type SP = { q?: string; fit?: string; cat?: string; group?: string; gender?: string; color?: string; sort?: string; size?: string; status?: string; season?: string; added?: string; photos?: string };
+// Filters can repeat (?cat=a&cat=b). f=1 marks a submitted filter form, so ticking no status means any status, not the default.
+type Many = string | string[];
+type SP = { q?: string; fit?: Many; cat?: Many; group?: Many; gender?: Many; color?: Many; sort?: string; size?: Many; status?: Many; season?: Many; f?: string; added?: string; photos?: string };
 
 export default async function ClosetPage({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
@@ -50,24 +54,33 @@ export default async function ClosetPage({ searchParams }: { searchParams: Promi
 
   const genderOf = new Map(rows.map((r) => [r.id, r.gender]));
   const colorOf = new Map(rows.map((r) => [r.id, r.color]));
-  const status = sp.status ?? 'active';
+  const fits = listOf(sp.fit).filter((v): v is FitState => v in FIT_LABELS);
+  const cats = listOf(sp.cat);
+  const groupIds = listOf(sp.group);
+  const tagSizes = listOf(sp.size);
+  const genders = listOf(sp.gender);
+  const colors = listOf(sp.color);
+  const seasons = listOf(sp.season);
+  // Active pieces by default. Once the filters are submitted, no status ticked means any ("all" is from older links).
+  const statusPicked = listOf(sp.status).filter((v) => v !== 'all');
+  const statuses = statusPicked.length || sp.f === '1' || listOf(sp.status).includes('all') ? statusPicked : ['active'];
   const shown = filterItems(
     items,
     {
       q: sp.q,
-      fit: (sp.fit as FitState | undefined) ?? '',
-      categoryId: sp.cat,
-      tagGroup: sp.size !== undefined && sp.size !== '' ? Number(sp.size) : undefined,
-      status: status === 'all' ? '' : status,
-      season: sp.season,
+      fits,
+      categoryIds: cats,
+      tagGroups: tagSizes.map(Number).filter(Number.isFinite),
+      statuses,
+      seasons,
     },
     ctx.currentSize,
     ctx.currentSizeTo,
   );
   const filtered = shown
-    .filter((i) => matchesCategory(ctx.catById.get(i.categoryId), { group: sp.group }))
-    .filter((i) => !sp.color || (sp.color === 'none' ? !colorOf.get(i.id) : colorOf.get(i.id) === sp.color))
-    .filter((i) => !sp.gender || (sp.gender === 'none' ? !genderOf.get(i.id) : genderOf.get(i.id) === sp.gender));
+    .filter((i) => matchesCategory(ctx.catById.get(i.categoryId), { group: groupIds }))
+    .filter((i) => !colors.length || colors.includes(colorOf.get(i.id) ?? 'none'))
+    .filter((i) => !genders.length || genders.includes(genderOf.get(i.id) ?? 'none'));
   const sort = sp.sort ?? 'new';
   const typeName = (id: string) => ctx.catById.get(id)?.name ?? '';
   const ordered = sort === 'new' ? filtered : [...filtered].sort((a, b) =>
@@ -82,7 +95,8 @@ export default async function ClosetPage({ searchParams }: { searchParams: Promi
     if (!a || !b) return 'Unknown';
     return from === to ? sizeName(a) : `${sizeName(a)} to ${sizeName(b)}`;
   };
-  const activeFilters = [sp.fit, sp.group, sp.cat, sp.size, sp.gender, sp.season, sp.color, status !== 'active' ? status : '', sort !== 'new' ? sort : ''].filter(Boolean).length;
+  const isDefaultStatus = statuses.length === 1 && statuses[0] === 'active';
+  const activeFilters = [fits, groupIds, cats, tagSizes, genders, seasons, colors].filter((l) => l.length > 0).length + (isDefaultStatus ? 0 : 1) + (sort !== 'new' ? 1 : 0);
   const rowOf = new Map(rows.map((r) => [r.id, r]));
   const fbLabel = (v: number | null | undefined) => FIT_FEEDBACK.find(([k]) => Number(k) === v)?.[1];
 
@@ -105,43 +119,31 @@ export default async function ClosetPage({ searchParams }: { searchParams: Promi
 
       <form className="flex flex-wrap items-start gap-2" method="get" role="search">
         <input className={`${inputCls} min-w-48 flex-1`} type="search" name="q" defaultValue={sp.q ?? ''} placeholder="Search name, brand, or notes" aria-label="Search" />
+        <input type="hidden" name="f" value="1" />
         <FilterPanel count={activeFilters}>
-        <select className={`${inputCls} w-auto`} name="fit" defaultValue={sp.fit ?? ''} aria-label="Fit">
-          <option value="">Any fit</option>
-          {Object.entries(FIT_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-        </select>
-        <TypeFilters categories={ctx.categories} groups={ctx.groups} sizes={ctx.sizes} group={sp.group} cat={sp.cat} size={sp.size} sizeLabel="Tag size" />
-        <select className={`${inputCls} w-auto`} name="gender" defaultValue={sp.gender ?? ''} aria-label="Gender">
-          <option value="">Any gender</option>
-          {GENDERS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-          <option value="none">Not set</option>
-        </select>
-        <select className={`${inputCls} w-auto`} name="status" defaultValue={status} aria-label="Status">
-          <option value="all">Any status</option>
-          {STATUSES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-        </select>
-        <select className={`${inputCls} w-auto`} name="season" defaultValue={sp.season ?? ''} aria-label="Season">
-          <option value="">Any season</option>
-          {SEASONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-        </select>
- <select className={`${inputCls} w-auto`} name="color" defaultValue={sp.color ?? ''} aria-label="Color">
-          <option value="">Any color</option>
-          {COLORS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-          <option value="none">Not set</option>
-        </select>
-        <select className={`${inputCls} w-auto`} name="sort" defaultValue={sort} aria-label="Sort by">
-          <option value="new">Newest first</option>
-          <option value="name">Name</option>
-          <option value="type">Item type</option>
-          <option value="size">Size</option>
-        </select>
+          <MultiSelect label="Fit" name="fit" defaultSelected={fits} options={Object.entries(FIT_LABELS).map(([v, l]) => ({ value: v, label: l }))} />
+          <TypeFilters categories={ctx.categories} groups={ctx.groups} sizes={ctx.sizes} group={groupIds} cat={cats} size={tagSizes} sizeLabel="Tag size" />
+          <MultiSelect label="Gender" name="gender" defaultSelected={genders} options={[...GENDERS.map(([v, l]) => ({ value: v, label: l })), { value: 'none', label: 'Not set' }]} />
+          <MultiSelect label="Status" name="status" defaultSelected={statuses} options={STATUSES.map(([v, l]) => ({ value: v, label: l }))} />
+          <MultiSelect label="Season" name="season" defaultSelected={seasons} options={SEASONS.map(([v, l]) => ({ value: v, label: l }))} />
+          <MultiSelect label="Color" name="color" defaultSelected={colors} options={[...COLORS.map(([v, l]) => ({ value: v, label: l })), { value: 'none', label: 'Not set' }]} />
+          <select className={`${inputCls} w-auto`} name="sort" defaultValue={sort} aria-label="Sort by">
+            <option value="new">Newest first</option>
+            <option value="name">Name</option>
+            <option value="type">Item type</option>
+            <option value="size">Size</option>
+          </select>
+          <button className={`${btnCls} col-span-2 md:col-span-1`} type="submit">Apply filters</button>
         </FilterPanel>
-        <button className={btnGhostCls} type="submit">Filter</button>
-        <Link className={btnGhostCls} href="/closet">Clear</Link>
+        {(activeFilters > 0 || sp.q) && <Link className={btnGhostCls} href="/closet">Clear filters</Link>}
       </form>
-      {sp.cat && ctx.catById.get(sp.cat) && (
-        <p className="flex items-center gap-1.5 text-sm text-muted">
-          Showing <TypeIcon type={ctx.catById.get(sp.cat)} size={20} className="text-accent" /><b className="text-ink">{ctx.catById.get(sp.cat)!.name}</b>
+      {cats.some((id) => ctx.catById.get(id)) && (
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted">
+          Showing
+          {cats.flatMap((id) => {
+            const c = ctx.catById.get(id);
+            return c ? [<span key={id} className="flex items-center gap-1"><TypeIcon type={c} size={20} className="text-accent" /><b className="text-ink">{c.name}</b></span>] : [];
+          })}
         </p>
       )}
 

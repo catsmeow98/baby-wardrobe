@@ -34,12 +34,14 @@ test('filters combine', () => {
   const names = (f: Parameters<typeof filterItems>[1], cur: number | null = 2) => filterItems(items, f, cur).map((x) => x.name);
   assert.deepEqual(names({}), ['White bodysuits', 'Snowsuit', 'Old sleeper']);
   assert.deepEqual(names({ q: 'carter' }), ['White bodysuits']);
-  assert.deepEqual(names({ fit: 'notyet' }), ['Snowsuit']);
-  assert.deepEqual(names({ fit: 'outgrown' }), ['Old sleeper']);
-  assert.deepEqual(names({ status: 'outgrown' }), ['Old sleeper']);
-  assert.deepEqual(names({ season: 'winter', categoryId: 'b' }), ['Snowsuit']);
-  assert.deepEqual(names({ tagGroup: 3 }), ['Snowsuit']);
-  assert.deepEqual(names({ fit: 'unknown' }, null), ['White bodysuits', 'Snowsuit', 'Old sleeper'], 'no current size means unknown fit');
+  assert.deepEqual(names({ fits: ['notyet'] }), ['Snowsuit']);
+  assert.deepEqual(names({ fits: ['outgrown'] }), ['Old sleeper']);
+  assert.deepEqual(names({ statuses: ['outgrown'] }), ['Old sleeper']);
+  assert.deepEqual(names({ seasons: ['winter'], categoryIds: ['b'] }), ['Snowsuit']);
+  assert.deepEqual(names({ tagGroups: [3] }), ['Snowsuit']);
+  assert.deepEqual(names({ fits: ['notyet', 'outgrown'] }), ['Snowsuit', 'Old sleeper'], 'several fits: any of them');
+  assert.deepEqual(names({ statuses: ['active', 'outgrown'], tagGroups: [0, 3] }), ['Snowsuit', 'Old sleeper']);
+  assert.deepEqual(names({ fits: ['unknown'] }, null), ['White bodysuits', 'Snowsuit', 'Old sleeper'], 'no current size means unknown fit');
   assert.equal(fitStateFor(it({ fitOverride: 'fits' }), null), 'fits');
 });
 

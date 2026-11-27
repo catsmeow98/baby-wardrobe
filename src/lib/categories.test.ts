@@ -24,3 +24,13 @@ test('withCurrent: keeps a deleted item type pickable only for the record that u
   assert.deepEqual(withCurrent([a], all, 'a').map((c) => c.id), ['a']);
   assert.deepEqual(withCurrent([a], all, undefined).map((c) => c.id), ['a']);
 });
+
+test('matchesCategory takes several item types or categories (any of them)', () => {
+  const a = { id: 'a', group_id: 'g1' } as CategoryRow;
+  const b = { id: 'b', group_id: 'g2' } as CategoryRow;
+  assert.equal(matchesCategory(a, { cat: ['a', 'b'] }), true);
+  assert.equal(matchesCategory(b, { cat: ['a'] }), false);
+  assert.equal(matchesCategory(b, { group: ['g1', 'g2'] }), true);
+  assert.equal(matchesCategory(a, { group: [], cat: [] }), true);
+  assert.equal(matchesCategory(undefined, { cat: ['a'] }), false);
+});

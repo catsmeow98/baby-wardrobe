@@ -11,7 +11,8 @@ export async function saveGoals(formData: FormData) {
   if (!sizeId.success) return redirect('/goals?error=' + encodeURIComponent('Choose a size first.'));
   const ctx = await getContext();
   const order = ctx.orderOf.get(sizeId.data);
-  const keepQs = ['group', 'cat'].map((k) => { const v = z.string().uuid().safeParse(formData.get(k)); return v.success ? `&${k}=${v.data}` : ''; }).join('');
+  // The filters the page was showing, kept on the way back: each may hold several ids.
+  const keepQs = ['group', 'cat'].map((k) => formData.getAll(k).map(String).filter((v) => z.string().uuid().safeParse(v).success).map((v) => `&${k}=${v}`).join('')).join('');
   const back = (error?: string): never => redirect(`/goals?size=${order ?? 0}${keepQs}${error ? `&error=${encodeURIComponent(error)}` : '&saved=1'}`);
   if (!ctx.active) return back('Add a child first.');
   if (order === undefined) return back('That size could not be found.');

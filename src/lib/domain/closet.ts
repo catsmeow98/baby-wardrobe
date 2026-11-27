@@ -38,24 +38,25 @@ export interface ClosetItem extends InventoryItem {
   tagGroup: number | null;
 }
 
+/** Closet filters. Each list keeps items matching any of its values; an empty or missing list means any. */
 export interface ClosetFilters {
   q?: string;
-  fit?: FitState | '';
-  categoryId?: string;
-  tagGroup?: number | null;
-  status?: string;
-  season?: string;
+  fits?: readonly FitState[];
+  categoryIds?: readonly string[];
+  tagGroups?: readonly number[];
+  statuses?: readonly string[];
+  seasons?: readonly string[];
 }
 
 export function filterItems(items: readonly ClosetItem[], f: ClosetFilters, currentSize: number | null, currentTo?: number | null): ClosetItem[] {
   const q = f.q?.trim().toLowerCase();
   return items.filter((i) => {
     if (q && !`${i.name} ${i.brand ?? ''} ${i.notes ?? ''}`.toLowerCase().includes(q)) return false;
-    if (f.fit && fitStateFor(i, currentSize, currentTo) !== f.fit) return false;
-    if (f.categoryId && i.categoryId !== f.categoryId) return false;
-    if (f.tagGroup !== undefined && f.tagGroup !== null && i.tagGroup !== f.tagGroup) return false;
-    if (f.status && i.status !== f.status) return false;
-    if (f.season && i.season !== f.season) return false;
+    if (f.fits?.length && !f.fits.includes(fitStateFor(i, currentSize, currentTo))) return false;
+    if (f.categoryIds?.length && !f.categoryIds.includes(i.categoryId)) return false;
+    if (f.tagGroups?.length && (i.tagGroup === null || !f.tagGroups.includes(i.tagGroup))) return false;
+    if (f.statuses?.length && !f.statuses.includes(i.status)) return false;
+    if (f.seasons?.length && !f.seasons.includes(i.season)) return false;
     return true;
   });
 }

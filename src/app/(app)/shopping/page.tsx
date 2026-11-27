@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { getContext, toGoals, toInventory, toShopping } from '@/lib/context';
 import { CopyButton } from '@/components/copy-button';
 import { TypeFilters } from '@/components/type-filters';
+import { listOf } from '@/lib/multi';
 import { matchesCategory } from '@/lib/categories';
 import { CategoryPicker } from '@/components/category-picker';
 import { FormMessage } from '@/components/form-message';
@@ -22,7 +23,7 @@ import { iconForType } from '@/lib/item-icons';
 
 export const metadata: Metadata = { title: 'Shopping' };
 
-export default async function ShoppingPage({ searchParams }: { searchParams: Promise<{ error?: string; ok?: string; group?: string; cat?: string; size?: string }> }) {
+export default async function ShoppingPage({ searchParams }: { searchParams: Promise<{ error?: string; ok?: string; group?: string | string[]; cat?: string | string[]; size?: string | string[] }> }) {
   const sp = await searchParams;
   const ctx = await getContext();
   if (!ctx.active) return <NoChild />;
@@ -37,15 +38,18 @@ export default async function ShoppingPage({ searchParams }: { searchParams: Pro
   const shopRowsT = (shopRows ?? []) as ShoppingRow[];
   const progress = goalProgress(toGoals((goalRows ?? []) as GoalRow[], ctx), toInventory((itemRows ?? []) as ItemRow[], ctx), toShopping(shopRowsT, ctx));
   const visibleIds = new Set(ctx.categories.map((c) => c.id));
-  const sizeFilter = sp.size !== undefined && sp.size !== '' ? Number(sp.size) : undefined;
-  const typeOk = (categoryId: string) => visibleIds.has(categoryId) && matchesCategory(ctx.catById.get(categoryId), { group: sp.group, cat: sp.cat });
-  const sizeOk = (order: number | undefined) => sizeFilter === undefined || order === sizeFilter;
-  const filtering = Boolean(sp.group || sp.cat || sizeFilter !== undefined);
+  const groupIds = listOf(sp.group);
+  const cats = listOf(sp.cat);
+  const sizeList = listOf(sp.size);
+  const sizeOrders = sizeList.map(Number).filter(Number.isFinite);
+  const typeOk = (categoryId: string) => visibleIds.has(categoryId) && matchesCategory(ctx.catById.get(categoryId), { group: groupIds, cat: cats });
+  const sizeOk = (order: number | undefined) => sizeOrders.length === 0 || (order !== undefined && sizeOrders.includes(order));
+  const filtering = groupIds.length > 0 || cats.length > 0 || sizeOrders.length > 0;
   const gaps = progress
     .filter((p) => p.remaining > 0 && (ctx.currentSize === null || p.size >= ctx.currentSize) && typeOk(p.categoryId) && sizeOk(p.size))
     .sort((a, b) => a.size - b.size || b.remaining - a.remaining);
 
-  const passes = (s: ShoppingRow) => typeOk(s.category_id) || (!visibleIds.has(s.category_id) && !sp.group && !sp.cat) ? sizeOk(ctx.orderOf.get(s.size_id)) : false;
+  const passes = (s: ShoppingRow) => typeOk(s.category_id) || (!visibleIds.has(s.category_id) && !groupIds.length && !cats.length) ? sizeOk(ctx.orderOf.get(s.size_id)) : false;
   const open = shopRowsT.filter((s) => !['received', 'cancelled'].includes(s.status) && passes(s));
   const done = shopRowsT.filter((s) => ['received', 'cancelled'].includes(s.status) && passes(s));
   // Plain text for pasting into a note or message: what is still to buy, from the gaps and from entries not yet ordered.
@@ -109,7 +113,7 @@ export default async function ShoppingPage({ searchParams }: { searchParams: Pro
       <FormMessage error={sp.error} message={sp.ok} />
 
       <form className="flex flex-wrap items-center gap-2" method="get" role="search">
-        <TypeFilters categories={ctx.categories} groups={ctx.groups} sizes={ctx.sizes} group={sp.group} cat={sp.cat} size={sp.size} />
+        <TypeFilters categories={ctx.categories} groups={ctx.groups} sizes={ctx.sizes} group={groupIds} cat={cats} size={sizeList} />
         <button className={btnGhostCls} type="submit">Filter</button>
         {filtering && <Link className={btnGhostCls} href="/shopping">Clear</Link>}
         <CopyButton text={listText} label="Copy list" />

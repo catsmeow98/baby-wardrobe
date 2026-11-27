@@ -23,10 +23,13 @@ export function groupCategories(categories: readonly CategoryRow[]): CategoryGro
 }
 
 /** Does an item type pass the item category and item type filters? An empty filter passes everything. */
-export function matchesCategory(c: CategoryRow | undefined, f: { group?: string; cat?: string }): boolean {
-  if (!c) return !f.group && !f.cat;
-  if (f.cat && c.id !== f.cat) return false;
-  if (f.group && c.group_id !== f.group) return false;
+/** Whether an item type passes the item category and item type filters. Each takes one id or several (any of them); empty means any. */
+export function matchesCategory(c: CategoryRow | undefined, f: { group?: string | readonly string[]; cat?: string | readonly string[] }): boolean {
+  const groups = typeof f.group === 'string' ? (f.group ? [f.group] : []) : (f.group ?? []);
+  const cats = typeof f.cat === 'string' ? (f.cat ? [f.cat] : []) : (f.cat ?? []);
+  if (!c) return groups.length === 0 && cats.length === 0;
+  if (cats.length && !cats.includes(c.id)) return false;
+  if (groups.length && !groups.includes(c.group_id)) return false;
   return true;
 }
 

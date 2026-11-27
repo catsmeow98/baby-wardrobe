@@ -6,6 +6,7 @@ import { NoChild } from '@/components/no-child';
 import { ProgressBar } from '@/components/progress-bar';
 import { btnCls, btnGhostCls, inputCls, labelCls } from '@/components/ui';
 import { TypeFilters } from '@/components/type-filters';
+import { listOf, listQs } from '@/lib/multi';
 import { TypeIcon } from '@/components/item-icon';
 import { groupCategories, matchesCategory } from '@/lib/categories';
 import { sizeName } from '@/lib/db';
@@ -16,7 +17,7 @@ import { currentUrl } from '@/lib/back';
 
 export const metadata: Metadata = { title: 'Goals' };
 
-export default async function GoalsPage({ searchParams }: { searchParams: Promise<{ size?: string; error?: string; saved?: string; group?: string; cat?: string }> }) {
+export default async function GoalsPage({ searchParams }: { searchParams: Promise<{ size?: string; error?: string; saved?: string; group?: string | string[]; cat?: string | string[] }> }) {
   const sp = await searchParams;
   const ctx = await getContext();
   if (!ctx.active) return <NoChild />;
@@ -36,13 +37,15 @@ export default async function GoalsPage({ searchParams }: { searchParams: Promis
   const size = ctx.sizeByOrder.get(sizeOrder);
   if (!size) return <p className="text-muted">Sizes are missing. Run the seed migration in Supabase.</p>;
   const completion = sizeProgress(progress, child.id, sizeOrder);
-  const shownTypes = ctx.categories.filter((c) => matchesCategory(c, { group: sp.group, cat: sp.cat }));
+  const groupIds = listOf(sp.group);
+  const cats = listOf(sp.cat);
+  const shownTypes = ctx.categories.filter((c) => matchesCategory(c, { group: groupIds, cat: cats }));
   const shownIds = new Set(shownTypes.map((c) => c.id));
-  const filtering = Boolean(sp.group || sp.cat);
+  const filtering = groupIds.length > 0 || cats.length > 0;
   // Items with a goal come first within each item category. Items with no goal or a goal of zero follow, greyed out.
   const targetOf = (id: string) => goals.find((x) => x.categoryId === id && x.size === sizeOrder)?.target ?? 0;
-  const here = currentUrl('/goals', { size: String(sizeOrder), group: sp.group, cat: sp.cat });
-  const keepQs = `${sp.group ? `&group=${sp.group}` : ''}${sp.cat ? `&cat=${sp.cat}` : ''}`;
+  const here = currentUrl('/goals', { size: String(sizeOrder), group: groupIds, cat: cats });
+  const keepQs = `${listQs('group', groupIds)}${listQs('cat', cats)}`;
   // Sizes other than this one that already have goals: the choices for "copy goals from".
   const copyFrom = ctx.sizes.filter((s) => s.sort_order !== sizeOrder && goals.some((g) => g.size === s.sort_order && g.target > 0));
 
@@ -72,7 +75,7 @@ export default async function GoalsPage({ searchParams }: { searchParams: Promis
 
       <form className="flex flex-wrap items-center gap-2" method="get" role="search">
         <input type="hidden" name="size" value={sizeOrder} />
-        <TypeFilters categories={ctx.categories} groups={ctx.groups} sizes={ctx.sizes} group={sp.group} cat={sp.cat} showSize={false} />
+        <TypeFilters categories={ctx.categories} groups={ctx.groups} sizes={ctx.sizes} group={groupIds} cat={cats} showSize={false} />
         <button className={btnGhostCls} type="submit">Filter</button>
         {filtering && <Link className={btnGhostCls} href={`/goals?size=${sizeOrder}`}>Clear</Link>}
       </form>
@@ -91,8 +94,8 @@ export default async function GoalsPage({ searchParams }: { searchParams: Promis
 
       <form key={sizeOrder} action={saveGoals} className="rounded-xl border border-line bg-surface p-4">
         <input type="hidden" name="sizeId" value={size.id} />
-        {sp.group && <input type="hidden" name="group" value={sp.group} />}
-        {sp.cat && <input type="hidden" name="cat" value={sp.cat} />}
+        {groupIds.map((g) => <input key={`g${g}`} type="hidden" name="group" value={g} />)}
+        {cats.map((c) => <input key={`c${c}`} type="hidden" name="cat" value={c} />)}
         {/* Rows hidden by a filter still post their value, so saving never clears them. */}
         {ctx.categories.filter((c) => !shownIds.has(c.id)).map((c) => (
           <input key={c.id} type="hidden" name={`goal_${c.id}`} value={goals.find((x) => x.categoryId === c.id && x.size === sizeOrder)?.target ?? ''} />
