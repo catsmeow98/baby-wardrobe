@@ -131,15 +131,18 @@ export default async function ShoppingPage({ searchParams }: { searchParams: Pro
       <section className="rounded-xl border border-line bg-surface p-4">
         <h2 className="font-display text-lg font-bold">Needs by item and size</h2>
         <p className="text-sm text-muted">What is still to buy: each goal minus what you own and what is already on order. Sizes start at {child.name}&apos;s current size.</p>
-        {needs.rows.length === 0 ? (
+        {needs.rows.length === 0 && (
           <p className="py-4 text-center text-muted">{filtering ? 'Nothing is needed for these filters.' : 'Nothing is needed right now.'}</p>
-        ) : (
+        )}
+        {/* Always there, so extras can go in the cart even when nothing is needed. */}
+        {(
           <NeedsCart
             childId={child.id}
             columns={needs.sizes.flatMap((n) => { const z = ctx.sizeByOrder.get(n); return z ? [{ order: n, sizeId: z.id, label: sizeName(z) }] : []; })}
             rows={needs.rows.map((r) => ({ categoryId: r.categoryId, cells: Object.fromEntries(r.cells), info: Object.fromEntries(gaps.filter((g) => g.categoryId === r.categoryId).map((g) => [g.size, { goal: g.target, owned: g.owned, incoming: g.incoming }])) }))}
             types={Object.fromEntries(ctx.categories.map((c) => [c.id, { name: c.name, icon: iconForType(c) }]))}
             sizeLabels={Object.fromEntries(ctx.sizes.map((z) => [z.id, sizeName(z)]))}
+            allSizes={ctx.sizes.map((z) => ({ sizeId: z.id, label: sizeName(z) }))}
           />
         )}
       </section>

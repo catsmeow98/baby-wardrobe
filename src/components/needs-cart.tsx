@@ -19,13 +19,15 @@ export interface TypeInfo { name: string; icon: string }
  * cart cleared, or everything marked bought (it goes on the shopping list as ordered, so it counts as incoming).
  * The cart is kept on this device only, one per child.
  */
-export function NeedsCart({ childId, columns, rows, types, sizeLabels }: {
+export function NeedsCart({ childId, columns, rows, types, sizeLabels, allSizes }: {
   childId: string;
   columns: NeedsColumn[];
   rows: NeedsRow[];
   types: Record<string, TypeInfo>;
   /** Every size's label by id, for cart lines whose column is not in the table any more. */
   sizeLabels: Record<string, string>;
+  /** Every size in order, for adding something not in the table. */
+  allSizes: { sizeId: string; label: string }[];
 }) {
   const router = useRouter();
   const [cart, setCart] = useState<Cart>({});
@@ -127,8 +129,8 @@ export function NeedsCart({ childId, columns, rows, types, sizeLabels }: {
   return (
     <>
       {message && <p role={message.bad ? 'alert' : 'status'} className={`mt-2 text-sm ${message.bad ? 'text-bad' : 'text-good'}`}>{message.text}</p>}
-      <p className="mt-1 text-sm text-muted">In the store? Tap a number to put pieces in your cart.</p>
-      <div className="mt-3 overflow-x-auto">
+      {rows.length > 0 && <p className="mt-1 text-sm text-muted">In the store? Tap a number (or a –, for extras) to put pieces in your cart.</p>}
+      {rows.length > 0 && <div className="mt-3 overflow-x-auto">
         <table className="w-full min-w-max border-collapse text-sm">
           <thead>
             <tr>
@@ -145,8 +147,20 @@ export function NeedsCart({ childId, columns, rows, types, sizeLabels }: {
                 </th>
                 {columns.map((col) => {
                   const need = r.cells[col.order];
-                  if (!need) return <td key={col.order} className="px-2 py-2 text-center text-muted">–</td>;
                   const got = inCart(r.categoryId, col.sizeId);
+                  // Nothing needed here (goal met or no goal): still tappable, for buying extra.
+                  if (!need) {
+                    return (
+                      <td key={col.order} className="px-1 py-1 text-center">
+                        <button type="button" onClick={() => setOpen({ categoryId: r.categoryId, sizeId: col.sizeId, need: 0, info: r.info?.[col.order] })}
+                          aria-label={`${name(r.categoryId)}, ${col.label}: nothing needed${got ? `, ${got} in cart` : ''}`}
+                          className={`min-w-11 rounded-lg px-2 py-1.5 text-muted tabular-nums ${got ? 'bg-accent-soft text-ink' : 'hover:bg-line/60'}`}>
+                          <span className="block">–</span>
+                          {got > 0 && <span className="block text-[11px] leading-tight">🛒 {got}</span>}
+                        </button>
+                      </td>
+                    );
+                  }
                   const rest = leftToFind(need, got);
                   return (
                     <td key={col.order} className="px-1 py-1 text-center">
@@ -171,7 +185,9 @@ export function NeedsCart({ childId, columns, rows, types, sizeLabels }: {
             </tr>
           </tfoot>
         </table>
-      </div>
+      </div>}
+
+      <AddOther types={types} sizes={allSizes} onPick={(categoryId, sizeId) => setOpen({ categoryId, sizeId, need: needOf(categoryId, sizeId) })} />
 
       {/* Room at the end of the page so the cart bar never covers the last lines. */}
       {pieces > 0 && <div aria-hidden="true" className="h-16" />}
@@ -191,7 +207,7 @@ export function NeedsCart({ childId, columns, rows, types, sizeLabels }: {
             <span className="text-accent"><ItemIcon itemKey={icon(open.categoryId)} size={40} /></span>
             <div>
               <p className="font-display text-lg font-bold">{name(open.categoryId)}</p>
-              <p className="text-sm text-muted">{sizeLabels[open.sizeId] ?? ''} · Need {open.need}</p>
+              <p className="text-sm text-muted">{sizeLabels[open.sizeId] ?? ''} · {open.need ? `Need ${open.need}` : 'Not needed for your goals'}</p>
               {open.info && (
                 <p className="text-xs text-muted">
                   Goal {open.info.goal} ·{' '}
@@ -214,7 +230,8 @@ export function NeedsCart({ childId, columns, rows, types, sizeLabels }: {
               onClick={() => set(open.categoryId, open.sizeId, inCart(open.categoryId, open.sizeId) + 1)}>+</button>
           </div>
           <p className="text-center text-sm text-muted">
-            {leftToFind(open.need, inCart(open.categoryId, open.sizeId)) === 0 ? 'That covers it.' : `${leftToFind(open.need, inCart(open.categoryId, open.sizeId))} still to find.`}
+            {open.need === 0 ? 'Extra: this is beyond your goals, and that is fine.'
+              : leftToFind(open.need, inCart(open.categoryId, open.sizeId)) === 0 ? 'That covers it.' : `${leftToFind(open.need, inCart(open.categoryId, open.sizeId))} still to find.`}
           </p>
           <div className="flex items-center justify-between gap-3 pt-1">
             {inCart(open.categoryId, open.sizeId) > 0
@@ -296,6 +313,27 @@ export function NeedsCart({ childId, columns, rows, types, sizeLabels }: {
         </Sheet>
       )}
     </>
+  );
+}
+
+/** For anything not in the table (no goal for that item type): pick an item type and size, then set how many are in the cart. */
+function AddOther({ types, sizes, onPick }: { types: Record<string, TypeInfo>; sizes: { sizeId: string; label: string }[]; onPick: (categoryId: string, sizeId: string) => void }) {
+  const [cat, setCat] = useState('');
+  const [size, setSize] = useState('');
+  const sorted = Object.entries(types).sort((a, b) => a[1].name.localeCompare(b[1].name));
+  return (
+    <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-line pt-3">
+      <p className="w-full text-sm text-muted">Buying something not in the table?</p>
+      <select className="rounded-lg border border-line bg-surface px-3 py-2 text-sm" value={cat} onChange={(e) => setCat(e.target.value)} aria-label="Item type">
+        <option value="">Item type…</option>
+        {sorted.map(([id, t]) => <option key={id} value={id}>{t.name}</option>)}
+      </select>
+      <select className="rounded-lg border border-line bg-surface px-3 py-2 text-sm" value={size} onChange={(e) => setSize(e.target.value)} aria-label="Size">
+        <option value="">Size…</option>
+        {sizes.map((z) => <option key={z.sizeId} value={z.sizeId}>{z.label}</option>)}
+      </select>
+      <button type="button" className={btnGhostCls} disabled={!cat || !size} onClick={() => onPick(cat, size)}>Add to cart</button>
+    </div>
   );
 }
 
