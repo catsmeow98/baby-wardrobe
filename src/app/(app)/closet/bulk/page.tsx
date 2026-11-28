@@ -41,6 +41,10 @@ export default async function BulkPage({ searchParams }: { searchParams: Promise
     loadTags(ctx, []),
   ]);
   const tagNames = tags.map((t) => t.name);
+  // A trip's name becomes a tag on everything added from it ("Old Navy sale", the same for every part of an order). A name
+  // that is only the date and time it was made (nothing was typed) is skipped.
+  const tripName = found?.name?.replace(/\s*[–-]\s*part \d+$/i, '').trim();
+  const tripTag = tripName && !/\d{1,2}:\d{2}/.test(tripName) ? tripName.slice(0, 30).trim() : undefined;
   // "Add another like this": one item filled in from an existing one (row-level security hides anyone else's).
   const fromId = !trip && from && /^[0-9a-f-]{36}$/i.test(from) ? from : undefined;
   const src = fromId ? ((await ctx.supabase.from('inventory_items').select('*').eq('id', fromId).maybeSingle()).data as ItemRow | null) : null;
@@ -78,9 +82,12 @@ export default async function BulkPage({ searchParams }: { searchParams: Promise
         error={error}
         tagNames={tagNames}
         seed={seed}
+        sharedNote={tripTag ? `Every item gets the tag ${tripTag}.` : undefined}
       >
         <div className="grid gap-3 sm:grid-cols-2">
-          <TagInput name="tags_shared" suggestions={tagNames} label="Tags for every item" hint="Added to each item, on top of its own tags." className={`${labelCls} sm:col-span-2`} />
+          <TagInput name="tags_shared" suggestions={tagNames} label="Tags for every item" defaultTags={tripTag ? [tripTag] : []}
+            hint={tripTag ? 'Added to each item, on top of its own tags. The trip’s name is here so you can find these later.' : 'Added to each item, on top of its own tags.'}
+            className={`${labelCls} sm:col-span-2`} />
           <label className={labelCls}>Status
             <select className={inputCls} name="status" defaultValue="active">{STATUSES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
           </label>

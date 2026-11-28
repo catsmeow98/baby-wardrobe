@@ -4,7 +4,7 @@ import { getContext, toInventory } from '@/lib/context';
 import { NoChild } from '@/components/no-child';
 import { Pill } from '@/components/pill';
 import { btnCls, btnGhostCls, inputCls } from '@/components/ui';
-import { COLORS, FIT_FEEDBACK, FIT_LABELS, GENDERS, STATUSES, sizeName } from '@/lib/db';
+import { COLORS, FIT_FEEDBACK, FIT_LABELS, GENDERS, STATUSES } from '@/lib/db';
 import { loadTags } from '@/lib/tags';
 import type { ItemRow, SizeLabelRow } from '@/lib/db';
 import { ColorDot } from '@/components/color-dot';
@@ -16,7 +16,8 @@ import { matchesCategory } from '@/lib/categories';
 import { signedUrls } from '@/lib/photos';
 import { FilterPanel } from '@/components/filter-panel';
 import { currentUrl } from '@/lib/back';
-import { filterItems, fitStateFor, type FitState } from '@/lib/domain';
+import { filterItems, fitStateFor, parseTagRange, type FitState } from '@/lib/domain';
+import { tagFitText } from '@/lib/fit-text';
 
 export const metadata: Metadata = { title: 'Closet' };
 
@@ -93,12 +94,17 @@ export default async function ClosetPage({ searchParams }: { searchParams: Promi
     : sort === 'type' ? typeName(a.categoryId).localeCompare(typeName(b.categoryId)) || a.name.localeCompare(b.name)
     : (a.fitFrom ?? 99) - (b.fitFrom ?? 99) || a.name.localeCompare(b.name));
   const pieces = filtered.reduce((s, i) => s + i.quantity, 0);
-  const rangeText = (from: number | null, to: number | null) => {
-    if (from === null || to === null) return 'Unknown';
-    const a = ctx.sizeByOrder.get(from);
-    const b = ctx.sizeByOrder.get(to);
-    if (!a || !b) return 'Unknown';
-    return from === to ? sizeName(a) : `${sizeName(a)} to ${sizeName(b)}`;
+  // The sizes a tag covers: one size for a listed tag, the covered sizes for a custom range such as 6-12M.
+  const tagRangeOf = (r: ItemRow): { from: number | null; to: number | null } => {
+    if (r.label_id) {
+      const o = tagGroupOf.get(r.label_id) ?? null;
+      return { from: o, to: o };
+    }
+    if (r.custom_tag) {
+      const c = parseTagRange(r.custom_tag.replace(/M$/i, ''));
+      if (!('error' in c)) return { from: c.fitFrom, to: c.fitTo };
+    }
+    return { from: null, to: null };
   };
   const isDefaultStatus = statuses.length === 1 && statuses[0] === 'active';
   const activeFilters = [fits, groupIds, cats, tagSizes, genders, tagPicks, colors].filter((l) => l.length > 0).length + (isDefaultStatus ? 0 : 1) + (sort !== 'new' ? 1 : 0);
@@ -186,7 +192,7 @@ export default async function ClosetPage({ searchParams }: { searchParams: Promi
                   <span className="text-sm text-muted">
                     <ColorDot color={raw.color} className="mr-1.5" />{ctx.catById.get(i.categoryId)?.name}{i.brand ? ` · ${i.brand}` : ''}{raw.gender ? ` · ${GENDERS.find(([v]) => v === raw.gender)?.[1]}` : ''}
                   </span>
-                  <span className="text-sm text-muted">Tag size {tag ?? 'not set'} · Fits {rangeText(i.fitFrom, i.fitTo)}</span>
+                  <span className="text-sm text-muted">{tagFitText(tag, tagRangeOf(raw), { from: i.fitFrom, to: i.fitTo }, (o) => ctx.sizeByOrder.get(o)?.label)}</span>
                   {(tagInfo.byItem.get(i.id)?.length ?? 0) > 0 && (
                     <span className="flex flex-wrap gap-1">
                       {tagInfo.byItem.get(i.id)!.map((t) => <span key={t} className="rounded-full bg-accent-soft px-2 py-0.5 text-xs text-accent">{t}</span>)}

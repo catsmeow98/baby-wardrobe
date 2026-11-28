@@ -23,35 +23,54 @@ function hsl(r: number, g: number, b: number): [number, number, number] {
   return [h, s, l];
 }
 
-/** Names one pixel as one of the app's colors (never multicolor). */
+/**
+ * Names one pixel as one of the app's colors (never multicolor). Grayness goes by chroma (the spread between the strongest and
+ * weakest channel), not HSL saturation, which reads dim colours (a blue in shade) as gray. Photos are usually darker than
+ * the clothes, so a pale neutral counts as white well below pure white.
+ */
 export function colorOfPixel(r: number, g: number, b: number): Exclude<ColorValue, 'multicolor'> {
-  const [h, s, l] = hsl(r, g, b);
-  if (l < 0.13) return 'black';
-  if (l > 0.9 && s < 0.5) return 'white';
-  // Warm, pale and not very colourful: cream (ivory, beige, oatmeal).
-  if (l > 0.72 && s < 0.6 && h >= 25 && h <= 65) return 'cream';
-  if (s < 0.14 || (l > 0.8 && s < 0.2)) return l > 0.82 ? 'white' : l < 0.2 ? 'black' : 'gray';
+  const [h, , l] = hsl(r, g, b);
+  const chroma = Math.max(r, g, b) - Math.min(r, g, b);
+  if (l < 0.12) return 'black';
+  // Warm, pale and only a little colour: cream (ivory, beige, oatmeal).
+  if (l > 0.68 && chroma >= 10 && chroma < 70 && h >= 25 && h <= 65) return 'cream';
+  if (chroma < 16 || (l > 0.85 && chroma < 24)) return l > 0.62 ? 'white' : l < 0.2 ? 'black' : 'gray';
+  if (l < 0.18 && chroma < 30) return 'black';
   if (h < 15 || h >= 335) {
-    if (l > 0.7) return 'pink';
-    return l < 0.3 && s < 0.6 ? 'brown' : 'red';
+    if (l > 0.68) return 'pink';
+    return l < 0.28 && chroma < 90 ? 'brown' : 'red';
   }
   if (h < 45) {
-    if (l < 0.42 || s < 0.35) return l > 0.7 ? 'cream' : 'brown';
+    if (l < 0.42 || chroma < 70) return l > 0.68 ? 'cream' : 'brown';
     return l > 0.75 ? 'pink' : 'orange';
   }
-  if (h < 68) return l < 0.32 ? 'brown' : s < 0.3 && l > 0.6 ? 'cream' : 'yellow';
+  if (h < 68) return l < 0.3 ? 'brown' : chroma < 45 && l > 0.6 ? 'cream' : 'yellow';
   if (h < 170) return 'green';
-  if (h < 255) return l < 0.3 || (h > 215 && l < 0.36) ? 'navy' : 'blue';
+  if (h < 255) return l < 0.28 || (h > 215 && l < 0.34) ? 'navy' : 'blue';
   if (h < 290) return 'purple';
   return l < 0.35 ? 'purple' : 'pink';
 }
 
-/** Picks the main color from named pixels. Exported for tests. */
-export function pickColor(counts: ReadonlyMap<string, number>): ColorValue | null {
+const NEUTRAL = new Set(['gray', 'white', 'black']);
+
+/**
+ * Picks the main color from named pixels. Exported for tests. Shadows and folds turn part of any item gray, so gray only wins
+ * when it is most of the item and no real colour covers a good share of it.
+ */
+export function pickColor(counts: ReadonlyMap<string, number>, minPixels = 50): ColorValue | null {
   const total = [...counts.values()].reduce((a, b) => a + b, 0);
-  if (total < 50) return null;
+  if (total < minPixels || total === 0) return null;
   const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  const topColour = sorted.find(([k]) => !NEUTRAL.has(k));
+  if (sorted[0][0] === 'gray' && topColour && topColour[1] / total >= 0.2) {
+    const rest = sorted.filter(([k]) => k !== 'gray');
+    return pickColor(new Map(rest), 1);
+  }
   const [top, n] = sorted[0];
+  if (top === 'gray' && n / total < 0.55) {
+    const white = counts.get('white') ?? 0;
+    if (white / total >= 0.25) return 'white';
+  }
   if (n / total >= 0.45) return top as ColorValue;
   // Neighbouring names of one colour (navy and blue, pink and red, cream and white) count together.
   const kin: Record<string, string[]> = { navy: ['blue'], blue: ['navy'], pink: ['red', 'purple'], red: ['pink', 'orange'], cream: ['white', 'yellow'], white: ['cream', 'gray'], gray: ['white', 'black'], brown: ['orange'], orange: ['brown', 'red'] };
@@ -60,7 +79,7 @@ export function pickColor(counts: ReadonlyMap<string, number>): ColorValue | nul
   return 'multicolor';
 }
 
-const SIDE = 72;
+const SIDE = 96;
 
 /** Reads a photo and guesses its main color. Never throws: a photo it cannot read gives null. */
 export async function detectColor(blob: Blob): Promise<ColorValue | null> {
@@ -99,6 +118,9 @@ export async function detectColor(blob: Blob): Promise<ColorValue | null> {
       const i = (y * w + x) * 4;
       if (cutout) {
         if (px[i + 3] < 200) continue;
+        // The cutout's edge picks up the old background and shadow, so only pixels inside the item count.
+        const solid = (xx: number, yy: number) => xx >= 0 && yy >= 0 && xx < w && yy < h && px[(yy * w + xx) * 4 + 3] >= 200;
+        if (!solid(x - 1, y) || !solid(x + 1, y) || !solid(x, y - 1) || !solid(x, y + 1)) continue;
       } else {
         if (x < w * 0.2 || x > w * 0.8 || y < h * 0.2 || y > h * 0.8) continue;
         const d = Math.abs(px[i] - bg![0]) + Math.abs(px[i + 1] - bg![1]) + Math.abs(px[i + 2] - bg![2]);

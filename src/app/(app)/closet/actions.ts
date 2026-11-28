@@ -224,6 +224,9 @@ export async function bulkCreate(formData: FormData) {
     if (trip.success && match.success) consume.push({ item: match.data, qty: qty.data });
     sourceRow.push(i);
     rowTags.push(parseTags(formData.get(`tags_${i}`), sharedTags));
+    // This item's own status and gender win over the ones for every item ("none" is an explicit Not set).
+    const ownStatus = z.enum(STATUS_VALUES).safeParse(text('status'));
+    const ownGender = text('gender') === 'none' ? null : (z.enum(GENDER_VALUES).safeParse(text('gender')).data ?? shared.data.gender);
     rows.push({
       child_id: ctx.active.id,
       name: autoName(name, brand, ctx.catById.get(cat.data)?.name ?? 'Item'),
@@ -235,9 +238,9 @@ export async function bulkCreate(formData: FormData) {
       custom_tag: customTag,
       fit_from_size_id: range.fitFrom === null ? null : (ctx.sizeByOrder.get(range.fitFrom)?.id ?? null),
       fit_to_size_id: range.fitTo === null ? null : (ctx.sizeByOrder.get(range.fitTo)?.id ?? null),
-      gender: shared.data.gender,
+      gender: ownGender,
       color: z.enum(COLOR_VALUES).safeParse(text('color')).data ?? null,
-      status: shared.data.status,
+      status: ownStatus.success ? ownStatus.data : shared.data.status,
     });
   }
   // Photos picked on rows that were left blank will never be used, so delete them.

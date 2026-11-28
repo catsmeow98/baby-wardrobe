@@ -21,7 +21,7 @@ import { PHOTO_BUCKET } from '@/lib/photos';
 import { detectColor } from '@/lib/color-detect';
 import { TagInput } from '@/components/tag-input';
 import { btnCls, btnGhostCls, inputCls, labelCls } from '@/components/ui';
-import { COLORS, sizeName } from '@/lib/db';
+import { COLORS, GENDERS, STATUSES, sizeName } from '@/lib/db';
 import type { CategoryRow, SizeLabelRow, SizeRow } from '@/lib/db';
 
 const MAX_ROWS = 50;
@@ -68,7 +68,7 @@ interface Row {
  * them all to bulkCreate as before. Field names carry the item's position (cat_0, name_1 and so on). The browser's Back button
  * steps back one screen.
  */
-export function BulkBuilder({ userId, childId, categories, labels, sizes, brands, defaultTagId, removeBg = false, back, error: serverError, trip, tripGone = false, tagNames = [], seed, children }: {
+export function BulkBuilder({ userId, childId, categories, labels, sizes, brands, defaultTagId, removeBg = false, back, error: serverError, trip, tripGone = false, tagNames = [], seed, sharedNote, children }: {
   userId: string;
   childId: string;
   categories: CategoryRow[];
@@ -92,6 +92,8 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
   tagNames?: string[];
   /** Starts with one item filled in from this, on its own screen. */
   seed?: BulkSeed;
+  /** A line shown under "Details for every item", so a preset there (such as the trip's tag) is not missed. */
+  sharedNote?: string;
   /** The details shared by every item, shown on the first screen. */
   children?: React.ReactNode;
 }) {
@@ -465,7 +467,9 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
             </ul>
           )}
           <details className="rounded-xl border border-line bg-surface p-4">
-            <summary className="cursor-pointer font-medium">Details for every item <span className="text-sm font-normal text-muted">(tags, status, gender)</span></summary>
+            <summary className="cursor-pointer font-medium">Details for every item <span className="text-sm font-normal text-muted">(tags, status, gender)</span>
+              {sharedNote && <span className="mt-0.5 block text-sm font-normal text-muted">{sharedNote}</span>}
+            </summary>
             <div className="mt-3">{children}</div>
           </details>
         </section>
@@ -811,7 +815,22 @@ function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onReplace, onRemoveP
         <input className={inputCls} type="number" name={`qty_${pos}`} min={1} max={999} value={meta.qty || ''}
           onChange={(e) => onMeta({ match: meta.match, qty: Math.max(0, Math.min(999, Math.round(Number(e.target.value) || 0))) })} />
       </label>
-      <TagInput name={`tags_${pos}`} suggestions={tagNames} defaultTags={seed?.tags} className={`${labelCls} sm:col-span-6`} />
+      <TagInput name={`tags_${pos}`} suggestions={tagNames} defaultTags={seed?.tags} className={`${labelCls} sm:col-span-6`}
+        hint="Tags for every item (on the first screen) are added too." />
+      {/* Blank follows the choice for every item on the first screen; anything picked here wins for this item. */}
+      <label className={`${labelCls} sm:col-span-3`}>Status
+        <select className={inputCls} name={`status_${pos}`} defaultValue="">
+          <option value="">Same as every item</option>
+          {STATUSES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+        </select>
+      </label>
+      <label className={`${labelCls} sm:col-span-3`}>Gender
+        <select className={inputCls} name={`gender_${pos}`} defaultValue="">
+          <option value="">Same as every item</option>
+          <option value="none">Not set</option>
+          {GENDERS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+        </select>
+      </label>
       {!row.photo && (
         <div className={`${labelCls} sm:col-span-6`}>
           Photo (optional)
