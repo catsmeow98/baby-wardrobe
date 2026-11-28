@@ -11,7 +11,7 @@ export interface HistoryEntry {
   lines: HistoryLine[];
 }
 
-type ItemRow = { id: string; category_id: string; size_id: string; quantity_ordered: number; quantity_received: number; quantity_needed: number; status: string; order_id: string | null; updated_at: string };
+type ItemRow = { id: string; category_id: string; size_id: string; quantity_ordered: number; quantity_received: number; quantity_needed: number; quantity_cancelled?: number; status: string; order_id: string | null; updated_at: string };
 
 /** Adds a line, merging the same item type and size. */
 function add(lines: HistoryLine[], l: HistoryLine) {
@@ -29,7 +29,7 @@ function add(lines: HistoryLine[], l: HistoryLine) {
 export async function loadHistory(ctx: Ctx, childId: string, limit = 30): Promise<HistoryEntry[]> {
   const [{ data: orders }, { data: items }, { data: receipts }] = await Promise.all([
     ctx.supabase.from('shopping_orders').select('id, name, ordered_at').eq('child_id', childId),
-    ctx.supabase.from('shopping_items').select('id, category_id, size_id, quantity_ordered, quantity_received, quantity_needed, status, order_id, updated_at').eq('child_id', childId),
+    ctx.supabase.from('shopping_items').select('id, category_id, size_id, quantity_ordered, quantity_received, quantity_needed, quantity_cancelled, status, order_id, updated_at').eq('child_id', childId),
     ctx.supabase.from('shopping_receipts').select('shopping_item_id, trip_id, trip_name, received_at, quantity_received'),
   ]);
   const rows = (items ?? []) as ItemRow[];
@@ -44,7 +44,12 @@ export async function loadHistory(ctx: Ctx, childId: string, limit = 30): Promis
     if (!its.length || its.some((r) => r.status === 'ordered' || r.status === 'partially_received' || r.status === 'needed')) continue;
     const lines: HistoryLine[] = [];
     for (const r of its) {
-      add(lines, { categoryId: r.category_id, sizeId: r.size_id, qty: r.quantity_received, cancelled: r.status === 'cancelled' ? r.quantity_ordered - r.quantity_received : 0 });
+      // Pieces marked Not purchased while adding photos count as cancelled, like the part of an order that never came.
+      const notBought = r.quantity_cancelled ?? 0;
+      add(lines, {
+        categoryId: r.category_id, sizeId: r.size_id, qty: r.quantity_received - notBought,
+        cancelled: notBought + (r.status === 'cancelled' ? r.quantity_ordered - r.quantity_received : 0),
+      });
     }
     out.push({ key: `o:${o.id}`, kind: 'order', name: o.name, at: o.ordered_at, lines });
   }
@@ -60,7 +65,8 @@ export async function loadHistory(ctx: Ctx, childId: string, limit = 30): Promis
     const t = trips.get(r.trip_id) ?? { key: `t:${r.trip_id}`, kind: 'store' as const, name: r.trip_name ?? undefined, at: r.received_at, lines: [] };
     if (r.received_at < t.at) t.at = r.received_at;
     if (!t.name && r.trip_name) t.name = r.trip_name;
-    add(t.lines, { categoryId: it.category_id, sizeId: it.size_id, qty: r.quantity_received, cancelled: 0 });
+    const notBought = Math.min(r.quantity_received, it.quantity_cancelled ?? 0);
+    add(t.lines, { categoryId: it.category_id, sizeId: it.size_id, qty: r.quantity_received - notBought, cancelled: notBought });
     trips.set(r.trip_id, t);
   }
   out.push(...trips.values());

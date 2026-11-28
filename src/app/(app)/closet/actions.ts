@@ -177,6 +177,8 @@ export async function bulkCreate(formData: FormData) {
   // photo. Everything then goes through complete_received, which swaps the placeholders for these items in one transaction.
   const trip = z.string().uuid().safeParse(formData.get('trip') || undefined);
   const consume: { item: string; qty: number }[] = [];
+  // Pieces from the trip that were not purchased after all (taken off with nothing added, counted on the order).
+  const cancel: { item: string; qty: number }[] = [];
 
   const ctx = await getContext();
   if (!ctx.active) return fail('/closet', 'Add a child first.');
@@ -252,7 +254,7 @@ export async function bulkCreate(formData: FormData) {
       const [item, n] = v.split(':');
       const id = z.string().uuid().safeParse(item);
       const k = Number(n);
-      if (id.success && Number.isInteger(k) && k > 0 && k <= 999) consume.push({ item: id.data, qty: k });
+      if (id.success && Number.isInteger(k) && k > 0 && k <= 999) cancel.push({ item: id.data, qty: k });
     }
     if (wanted.length) {
       const { data: holders } = await ctx.supabase
@@ -285,13 +287,15 @@ export async function bulkCreate(formData: FormData) {
       }
     }
   }
-  if (!rows.length && !consume.length) return fail(path, 'Add at least one item: a photo, a name or a brand.');
+  if (!rows.length && !consume.length && !cancel.length) return fail(path, 'Add at least one item: a photo, a name or a brand.');
+  // Everything added from a trip remembers it, for the shopping History page.
+  if (trip.success) for (const r of rows) r.trip_id = trip.data;
   // One insert, so either every row is saved or none is.
   let made: { id: string }[] | null = null;
   let error: { code?: string; message?: string } | null = null;
-  if (trip.success && consume.length) {
+  if (trip.success && (consume.length || cancel.length)) {
     // One transaction: the new items in, the received placeholders down (or gone). Ids come back in order.
-    const res = await ctx.supabase.rpc('complete_received', { p_rows: rows, p_consume: consume });
+    const res = await ctx.supabase.rpc('complete_received', { p_rows: rows, p_consume: consume, p_cancel: cancel });
     error = res.error;
     made = ((res.data as string[] | null) ?? []).map((id) => ({ id }));
     if (error?.code === '22023') return fail(path, `${error.message}. Nothing was added; reload the trip and try again.`);

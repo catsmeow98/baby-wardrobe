@@ -163,7 +163,9 @@ export default async function ShoppingPage({ searchParams }: { searchParams: Pro
             {history.map((h) => (
               <li key={h.key} className="border-t border-line py-3 first:border-t-0">
                 <p>
-                  <b>{h.name ?? (h.kind === 'store' ? 'In store' : 'Earlier')}</b>{' '}
+                  {h.kind === 'earlier'
+                    ? <b>Earlier</b>
+                    : <Link className="font-bold text-accent underline" href={`/shopping/history?${h.kind === 'order' ? 'o' : 't'}=${h.key.slice(2)}`}>{h.name ?? 'In store'}</Link>}{' '}
                   <span className="text-sm text-muted">· {h.kind === 'order' ? 'order' : h.kind === 'store' ? 'in store' : 'list'} · <LocalTime iso={h.at} /></span>
                 </p>
                 <p className="text-sm text-muted">
