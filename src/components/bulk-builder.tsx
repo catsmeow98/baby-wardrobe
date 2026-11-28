@@ -19,6 +19,7 @@ import { downloadOriginal, uploadPhoto } from '@/lib/photo-upload';
 import { joinPhotoField, pathsOf } from '@/lib/photo-paths';
 import { PHOTO_BUCKET } from '@/lib/photos';
 import { detectColor } from '@/lib/color-detect';
+import { TagInput } from '@/components/tag-input';
 import { btnCls, btnGhostCls, inputCls, labelCls } from '@/components/ui';
 import { COLORS, sizeName } from '@/lib/db';
 import type { CategoryRow, SizeLabelRow, SizeRow } from '@/lib/db';
@@ -56,7 +57,7 @@ interface Row {
  * them all to bulkCreate as before. Field names carry the item's position (cat_0, name_1 and so on). The browser's Back button
  * steps back one screen.
  */
-export function BulkBuilder({ userId, childId, categories, labels, sizes, brands, defaultTagId, removeBg = false, back, error: serverError, trip, tripGone = false, children }: {
+export function BulkBuilder({ userId, childId, categories, labels, sizes, brands, defaultTagId, removeBg = false, back, error: serverError, trip, tripGone = false, tagNames = [], children }: {
   userId: string;
   childId: string;
   categories: CategoryRow[];
@@ -76,6 +77,8 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
   trip?: { id: string; at: string; lines: TripLineView[] };
   /** The trip in the address is already done (or not this child's). */
   tripGone?: boolean;
+  /** The account's tags, offered while typing an item's tags. */
+  tagNames?: string[];
   /** The details shared by every item, shown on the first screen. */
   children?: React.ReactNode;
 }) {
@@ -447,7 +450,7 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
             </ul>
           )}
           <details className="rounded-xl border border-line bg-surface p-4">
-            <summary className="cursor-pointer font-medium">Details for every item <span className="text-sm font-normal text-muted">(condition, season, status, gender)</span></summary>
+            <summary className="cursor-pointer font-medium">Details for every item <span className="text-sm font-normal text-muted">(tags, status, gender)</span></summary>
             <div className="mt-3">{children}</div>
           </details>
         </section>
@@ -456,7 +459,7 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
           <BulkRow key={row.id} row={row} pos={pos} hidden={current !== String(row.id)} onRemove={() => removeRow(row)} onSavePhoto={(r, o) => savePhoto(row, r, o)}
             onReplace={(f) => replacePhoto(row, f)} onRemovePhoto={() => removePhoto(row)} photoBusy={rowBusy[row.id] ?? null} photoError={rowError[row.id] ?? null}
             onEditor={setEditorOpen} onTurning={(on) => setTurningRows((l) => (on ? (l.includes(row.id) ? l : [...l, row.id]) : l.filter((x) => x !== row.id)))} setRef={(el) => (el ? sets.current.set(row.id, el) : sets.current.delete(row.id))} userId={userId} childId={childId}
-            categories={categories} labels={labels} sizes={sizes} defaultTagId={defaultTagId} brands={brands} removeBg={removeBg}
+            categories={categories} labels={labels} sizes={sizes} defaultTagId={defaultTagId} brands={brands} removeBg={removeBg} tagNames={tagNames}
             tripLines={trip ? lines : undefined} left={left} meta={meta[row.id] ?? NO_META} onMeta={(m) => setMeta((all) => ({ ...all, [row.id]: m }))}
             onChoose={(lineId) => choose(row.id, lineId)}
             onTypeName={(n) => setRowTypes((t) => (t[row.id] === n ? t : { ...t, [row.id]: n }))} />
@@ -581,7 +584,7 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
   );
 }
 
-function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onReplace, onRemovePhoto, photoBusy, photoError, onEditor, onTurning, setRef, userId, childId, categories, labels, sizes, defaultTagId, brands, removeBg, tripLines, left, meta, onMeta, onChoose, onTypeName }: {
+function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onReplace, onRemovePhoto, photoBusy, photoError, onEditor, onTurning, setRef, userId, childId, categories, labels, sizes, defaultTagId, brands, removeBg, tagNames, tripLines, left, meta, onMeta, onChoose, onTypeName }: {
   row: Row;
   pos: number;
   hidden: boolean;
@@ -602,6 +605,7 @@ function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onReplace, onRemoveP
   defaultTagId: string;
   brands: string[];
   removeBg: boolean;
+  tagNames: string[];
   /** From a shopping trip: its lines, the pieces left on each, and which line this item is. */
   tripLines?: TripLineView[];
   left: ReadonlyMap<string, number>;
@@ -788,6 +792,7 @@ function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onReplace, onRemoveP
         <input className={inputCls} type="number" name={`qty_${pos}`} min={1} max={999} value={meta.qty || ''}
           onChange={(e) => onMeta({ match: meta.match, qty: Math.max(0, Math.min(999, Math.round(Number(e.target.value) || 0))) })} />
       </label>
+      <TagInput name={`tags_${pos}`} suggestions={tagNames} className={`${labelCls} sm:col-span-6`} />
       {!row.photo && (
         <div className={`${labelCls} sm:col-span-6`}>
           Photo (optional)

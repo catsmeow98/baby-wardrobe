@@ -9,6 +9,7 @@ import type { ItemRow, SizeLabelRow } from '@/lib/db';
 import { ItemForm } from '../item-form';
 import { saveItem } from '../actions';
 import { safeBack } from '@/lib/back';
+import { loadTags } from '@/lib/tags';
 
 export const metadata: Metadata = { title: 'Add item' };
 
@@ -17,9 +18,11 @@ export default async function NewItemPage({ searchParams }: { searchParams: Prom
   const back = safeBack(rawBack, '/closet');
   const ctx = await getContext();
   if (!ctx.active) return <NoChild />;
-  const [{ data: labels }, { data: brands }] = await Promise.all([
+  const fromId = from && z.string().uuid().safeParse(from).success ? from : null;
+  const [{ data: labels }, { data: brands }, tagInfo] = await Promise.all([
     ctx.supabase.from('size_labels').select('id, size_id, label, sort_order'),
     ctx.supabase.from('brands').select('name').order('name'),
+    loadTags(ctx, fromId ? [fromId] : []),
   ]);
   const sorted = ((labels ?? []) as SizeLabelRow[]).sort(
     (a, b) => (ctx.orderOf.get(a.size_id) ?? 0) - (ctx.orderOf.get(b.size_id) ?? 0) || a.sort_order - b.sort_order,
@@ -41,11 +44,11 @@ export default async function NewItemPage({ searchParams }: { searchParams: Prom
       </div>
       <FormMessage error={error} />
       <ItemForm action={saveItem} categories={withCurrent(ctx.categories, ctx.catById, src?.category_id)} sizes={ctx.sizes} labels={sorted}
-        brands={(brands ?? []).map((b: { name: string }) => b.name)} submitLabel="Add item" back={back}
+        brands={(brands ?? []).map((b: { name: string }) => b.name)} submitLabel="Add item" back={back} tagNames={tagInfo.tags.map((t) => t.name)}
         defaults={src ? {
           name: src.name, categoryId: src.category_id, brand: srcBrand, quantity: 1, tagId: src.label_id, customTag: src.custom_tag,
-          fitFromId: src.fit_from_size_id, fitToId: src.fit_to_size_id, condition: src.condition, gender: src.gender, color: src.color,
-          season: src.season, status: 'active',
+          fitFromId: src.fit_from_size_id, fitToId: src.fit_to_size_id, gender: src.gender, color: src.color,
+          status: 'active', tags: tagInfo.byItem.get(src.id) ?? [],
         } : undefined}
         photos={{ userId: ctx.user.id, childId: ctx.active.id, removeBg: ctx.settings.removeBackground }} />
     </>

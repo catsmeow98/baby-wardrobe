@@ -8,7 +8,8 @@ import { btnCls, btnGhostCls, inputCls, labelCls } from '@/components/ui';
 import { sizeName } from '@/lib/db';
 import { createChild, deleteChild, updateChild } from '../children/actions';
 import { searchPlaces, type Place } from '@/lib/weather';
-import { clearLocation, cleanupPhotos, deleteAccount, markOutgrown, saveLocation, savePhotoSettings } from './actions';
+import { clearLocation, cleanupPhotos, deleteAccount, deleteTag, markOutgrown, renameTag, saveLocation, savePhotoSettings } from './actions';
+import { loadTags } from '@/lib/tags';
 
 export const metadata: Metadata = { title: 'Account' };
 
@@ -28,6 +29,9 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
       searchError = 'The place search is not available right now. Try again in a minute.';
     }
   }
+  const tagInfo = await loadTags(ctx);
+  const tagCount = new Map<string, number>();
+  for (const ids of tagInfo.idsByItem.values()) for (const t of ids) tagCount.set(t, (tagCount.get(t) ?? 0) + 1);
   const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
   // After a size increase: active items whose fit range ends below the new current size.
@@ -227,6 +231,40 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
           </ul>
         )}
         <p className="text-xs text-muted">Places from <a className="underline" href="https://www.geonames.org/" rel="noreferrer">GeoNames</a> (CC BY 4.0). Past weather from <a className="underline" href="https://power.larc.nasa.gov/" rel="noreferrer">NASA POWER</a> (CC BY 4.0). Neither endorses this app.</p>
+      </section>
+
+      <section id="tags" className="flex scroll-mt-4 flex-col gap-3 rounded-xl border border-line bg-surface p-4">
+        <h2 className="font-display text-lg font-bold">Tags</h2>
+        <p className="text-sm text-muted">Tags are made when you add them to an item, and are shared by all your children. Renaming a tag to the name of another one merges them. Deleting a tag takes it off every item; the items stay.</p>
+        {tagInfo.tags.length === 0 ? (
+          <p className="text-sm text-muted">No tags yet. Add them when you add or edit an item.</p>
+        ) : (
+          <ul>
+            {tagInfo.tags.map((t) => {
+              const n = tagCount.get(t.id) ?? 0;
+              return (
+                <li key={t.id} className="flex flex-wrap items-end gap-2 border-t border-line py-2.5 first:border-t-0">
+                  <form action={renameTag} className="flex flex-1 flex-wrap items-end gap-2">
+                    <input type="hidden" name="id" value={t.id} />
+                    <label className={`${labelCls} min-w-40 flex-1`}>
+                      <span className="text-sm font-normal text-muted">{n} item{n === 1 ? '' : 's'}</span>
+                      <input className={inputCls} name="name" defaultValue={t.name} maxLength={30} required aria-label={`Rename ${t.name}`} />
+                    </label>
+                    <button className={btnGhostCls} type="submit">Rename</button>
+                  </form>
+                  <details className="text-sm">
+                    <summary className="cursor-pointer py-1.5 text-bad">Delete</summary>
+                    <form action={deleteTag} className="mt-1 flex items-center gap-2">
+                      <input type="hidden" name="id" value={t.id} />
+                      <span className="text-muted">Take it off {n} item{n === 1 ? '' : 's'}?</span>
+                      <button className="rounded-lg bg-bad-soft px-3 py-1.5 font-bold text-bad" type="submit">Delete tag</button>
+                    </form>
+                  </details>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </section>
 
       <section className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-4">

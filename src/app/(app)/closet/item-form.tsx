@@ -4,7 +4,8 @@ import { CategoryPicker } from '@/components/category-picker';
 import { PhotoPicker } from '@/components/photo-picker';
 import { btnCls, inputCls, labelCls } from '@/components/ui';
 import { FitFields } from '@/components/fit-fields';
-import { COLORS, CONDITIONS, FIT_LABELS, GENDERS, SEASONS, STATUSES } from '@/lib/db';
+import { COLORS, GENDERS, STATUSES } from '@/lib/db';
+import { TagInput } from '@/components/tag-input';
 import type { CategoryRow, SizeLabelRow, SizeRow } from '@/lib/db';
 import { StickyActions } from '@/components/sticky-actions';
 
@@ -18,12 +19,10 @@ export interface ItemDefaults {
   customTag?: string | null;
   fitFromId?: string | null;
   fitToId?: string | null;
-  condition?: string;
   gender?: string | null;
   color?: string | null;
-  season?: string;
   status?: string;
-  fitOverride?: string | null;
+  tags?: string[];
   fitFeedback?: number | null;
   notes?: string | null;
 }
@@ -40,9 +39,11 @@ interface Props {
   back?: string;
   /** Shows a photo field. Only for a new item, since existing items add photos from their own Photos section. */
   photos?: { userId: string; childId: string; removeBg?: boolean };
+  /** The account's tags, offered while typing. */
+  tagNames?: string[];
 }
 
-export function ItemForm({ action, categories, sizes, labels, brands, defaults: d = {}, submitLabel, photos, back }: Props) {
+export function ItemForm({ action, categories, sizes, labels, brands, defaults: d = {}, submitLabel, photos, back, tagNames = [] }: Props) {
   return (
     <form action={action} className="flex flex-col gap-4 rounded-xl border border-line bg-surface p-4">
       {d.id && <input type="hidden" name="id" value={d.id} />}
@@ -75,12 +76,6 @@ export function ItemForm({ action, categories, sizes, labels, brands, defaults: 
           }}
         />
         <label className={labelCls}>
-          Condition
-          <select className={inputCls} name="condition" defaultValue={d.condition ?? 'good'}>
-            {CONDITIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-          </select>
-        </label>
-        <label className={labelCls}>
           Gender (optional)
           <select className={inputCls} name="gender" defaultValue={d.gender ?? ''}>
             <option value="">Not set</option>
@@ -95,24 +90,13 @@ export function ItemForm({ action, categories, sizes, labels, brands, defaults: 
           </select>
         </label>
         <label className={labelCls}>
-          Season
-          <select className={inputCls} name="season" defaultValue={d.season ?? 'year_round'}>
-            {SEASONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-          </select>
-        </label>
-        <label className={labelCls}>
           Status
           <select className={inputCls} name="status" defaultValue={d.status ?? 'active'}>
             {STATUSES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select>
         </label>
-        <label className={labelCls}>
-          Fit status
-          <select className={inputCls} name="fitOverride" defaultValue={d.fitOverride ?? ''}>
-            <option value="">Work it out from the child&apos;s size</option>
-            {['fits', 'notyet', 'outgrown'].map((v) => <option key={v} value={v}>{FIT_LABELS[v]}</option>)}
-          </select>
-        </label>
+        <TagInput name="tags" suggestions={tagNames} defaultTags={d.tags} className={`${labelCls} sm:col-span-2`}
+          hint="Anything you like: a season, a holiday, hand-me-down, stained." />
         <label className={`${labelCls} sm:col-span-2`}>
           Notes
           <textarea className={inputCls} name="notes" rows={2} maxLength={1000} defaultValue={d.notes ?? ''} placeholder="Runs small, long torso, and so on" />

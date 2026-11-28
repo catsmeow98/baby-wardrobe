@@ -112,3 +112,29 @@ export async function clearLocation() {
   for (const path of ['/survey', '/account']) revalidatePath(path);
   return done('Location removed.', '#location');
 }
+
+const tagDone = (q: string): never => redirect(`/account?${q}#tags`);
+
+/** Renames a tag on every item. A name another tag already has merges the two. */
+export async function renameTag(formData: FormData) {
+  const id = z.string().uuid().safeParse(formData.get('id'));
+  const name = z.string().trim().min(1).max(30).safeParse(formData.get('name'));
+  if (!id.success) return tagDone(`error=${encodeURIComponent('That tag could not be found.')}`);
+  if (!name.success) return tagDone(`error=${encodeURIComponent('A tag is 1 to 30 characters.')}`);
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('rename_tag', { p_tag: id.data, p_name: name.data });
+  if (error) return tagDone(`error=${encodeURIComponent('That tag could not be renamed. Try again.')}`);
+  ['/closet', '/account'].forEach((p) => revalidatePath(p));
+  return tagDone(`ok=${encodeURIComponent(`Tag renamed to ${name.data}.`)}`);
+}
+
+/** Deletes a tag, taking it off every item. The items themselves stay. */
+export async function deleteTag(formData: FormData) {
+  const id = z.string().uuid().safeParse(formData.get('id'));
+  if (!id.success) return tagDone(`error=${encodeURIComponent('That tag could not be found.')}`);
+  const supabase = await createClient();
+  const { error } = await supabase.from('tags').delete().eq('id', id.data);
+  if (error) return tagDone(`error=${encodeURIComponent('That tag could not be deleted. Try again.')}`);
+  ['/closet', '/account'].forEach((p) => revalidatePath(p));
+  return tagDone(`ok=${encodeURIComponent('Tag deleted.')}`);
+}

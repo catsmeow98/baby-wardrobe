@@ -15,6 +15,7 @@ import { deletePhoto } from '../photo-actions';
 import { deleteItem, saveItem } from '../actions';
 import { safeBack } from '@/lib/back';
 import { tripOfItem } from '@/lib/trips-data';
+import { loadTags } from '@/lib/tags';
 
 export const metadata: Metadata = { title: 'Edit item' };
 
@@ -35,9 +36,10 @@ export default async function EditItemPage({
   const { data } = await ctx.supabase.from('inventory_items').select('*').eq('id', id).maybeSingle();
   if (!data) notFound();
   const item = data as ItemRow;
-  const [{ data: labels }, { data: brands }] = await Promise.all([
+  const [{ data: labels }, { data: brands }, tagInfo] = await Promise.all([
     ctx.supabase.from('size_labels').select('id, size_id, label, sort_order'),
     ctx.supabase.from('brands').select('id, name').order('name'),
+    loadTags(ctx, [id]),
   ]);
   const sorted = ((labels ?? []) as SizeLabelRow[]).sort(
     (a, b) => (ctx.orderOf.get(a.size_id) ?? 0) - (ctx.orderOf.get(b.size_id) ?? 0) || a.sort_order - b.sort_order,
@@ -104,10 +106,11 @@ export default async function EditItemPage({
         brands={brandList.map((b) => b.name)}
         submitLabel="Save changes"
         back={back}
+        tagNames={tagInfo.tags.map((t) => t.name)}
         defaults={{
           id: item.id, name: item.name, categoryId: item.category_id, brand: brandName, quantity: item.quantity,
-          tagId: item.label_id, customTag: item.custom_tag, fitFromId: item.fit_from_size_id, fitToId: item.fit_to_size_id, condition: item.condition, gender: item.gender, color: item.color,
-          season: item.season, status: item.status, fitOverride: item.fit_override, fitFeedback: item.fit_feedback, notes: item.notes,
+          tagId: item.label_id, customTag: item.custom_tag, fitFromId: item.fit_from_size_id, fitToId: item.fit_to_size_id, gender: item.gender, color: item.color,
+          status: item.status, tags: tagInfo.byItem.get(item.id) ?? [], fitFeedback: item.fit_feedback, notes: item.notes,
         }}
       />
       <p className="text-sm"><Link className="text-accent underline" href={`/closet/new?from=${item.id}&back=${bk}`}>Add another like this</Link></p>

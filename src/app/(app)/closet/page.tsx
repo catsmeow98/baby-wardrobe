@@ -4,7 +4,8 @@ import { getContext, toInventory } from '@/lib/context';
 import { NoChild } from '@/components/no-child';
 import { Pill } from '@/components/pill';
 import { btnCls, btnGhostCls, inputCls } from '@/components/ui';
-import { COLORS, CONDITIONS, FIT_FEEDBACK, FIT_LABELS, GENDERS, SEASONS, STATUSES, sizeName } from '@/lib/db';
+import { COLORS, FIT_FEEDBACK, FIT_LABELS, GENDERS, STATUSES, sizeName } from '@/lib/db';
+import { loadTags } from '@/lib/tags';
 import type { ItemRow, SizeLabelRow } from '@/lib/db';
 import { ColorDot } from '@/components/color-dot';
 import { TypeFilters } from '@/components/type-filters';
@@ -21,7 +22,7 @@ export const metadata: Metadata = { title: 'Closet' };
 
 // Filters can repeat (?cat=a&cat=b). f=1 marks a submitted filter form, so ticking no status means any status, not the default.
 type Many = string | string[];
-type SP = { q?: string; fit?: Many; cat?: Many; group?: Many; gender?: Many; color?: Many; sort?: string; size?: Many; status?: Many; season?: Many; f?: string; added?: string; photos?: string };
+type SP = { q?: string; fit?: Many; cat?: Many; group?: Many; gender?: Many; color?: Many; sort?: string; size?: Many; status?: Many; tag?: Many; f?: string; added?: string; photos?: string };
 
 export default async function ClosetPage({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
@@ -31,10 +32,11 @@ export default async function ClosetPage({ searchParams }: { searchParams: Promi
   const here = currentUrl('/closet', sp);
   const bk = encodeURIComponent(here);
 
-  const [{ data: itemRows }, { data: labelData }, { data: brandData }] = await Promise.all([
+  const [{ data: itemRows }, { data: labelData }, { data: brandData }, tagInfo] = await Promise.all([
     ctx.supabase.from('inventory_items').select('*').eq('child_id', ctx.active.id).order('created_at', { ascending: false }),
     ctx.supabase.from('size_labels').select('id, size_id, label, sort_order'),
     ctx.supabase.from('brands').select('id, name'),
+    loadTags(ctx),
   ]);
   const labels = (labelData ?? []) as SizeLabelRow[];
   const labelById = new Map(labels.map((l) => [l.id, l]));
@@ -60,7 +62,10 @@ export default async function ClosetPage({ searchParams }: { searchParams: Promi
   const tagSizes = listOf(sp.size);
   const genders = listOf(sp.gender);
   const colors = listOf(sp.color);
-  const seasons = listOf(sp.season);
+  // Tags are shared by all children; only ones on this child's items are offered as filters.
+  const tagPicks = listOf(sp.tag);
+  const usedTagIds = new Set(rows.flatMap((r) => tagInfo.idsByItem.get(r.id) ?? []));
+  const tagOptions = tagInfo.tags.filter((t) => usedTagIds.has(t.id) || tagPicks.includes(t.id));
   // Active pieces by default. Once the filters are submitted, no status ticked means any ("all" is from older links).
   const statusPicked = listOf(sp.status).filter((v) => v !== 'all');
   const statuses = statusPicked.length || sp.f === '1' || listOf(sp.status).includes('all') ? statusPicked : ['active'];
@@ -72,7 +77,6 @@ export default async function ClosetPage({ searchParams }: { searchParams: Promi
       categoryIds: cats,
       tagGroups: tagSizes.map(Number).filter(Number.isFinite),
       statuses,
-      seasons,
     },
     ctx.currentSize,
     ctx.currentSizeTo,
@@ -80,7 +84,8 @@ export default async function ClosetPage({ searchParams }: { searchParams: Promi
   const filtered = shown
     .filter((i) => matchesCategory(ctx.catById.get(i.categoryId), { group: groupIds }))
     .filter((i) => !colors.length || colors.includes(colorOf.get(i.id) ?? 'none'))
-    .filter((i) => !genders.length || genders.includes(genderOf.get(i.id) ?? 'none'));
+    .filter((i) => !genders.length || genders.includes(genderOf.get(i.id) ?? 'none'))
+    .filter((i) => !tagPicks.length || (tagInfo.idsByItem.get(i.id) ?? []).some((t) => tagPicks.includes(t)));
   const sort = sp.sort ?? 'new';
   const typeName = (id: string) => ctx.catById.get(id)?.name ?? '';
   const ordered = sort === 'new' ? filtered : [...filtered].sort((a, b) =>
@@ -96,7 +101,7 @@ export default async function ClosetPage({ searchParams }: { searchParams: Promi
     return from === to ? sizeName(a) : `${sizeName(a)} to ${sizeName(b)}`;
   };
   const isDefaultStatus = statuses.length === 1 && statuses[0] === 'active';
-  const activeFilters = [fits, groupIds, cats, tagSizes, genders, seasons, colors].filter((l) => l.length > 0).length + (isDefaultStatus ? 0 : 1) + (sort !== 'new' ? 1 : 0);
+  const activeFilters = [fits, groupIds, cats, tagSizes, genders, tagPicks, colors].filter((l) => l.length > 0).length + (isDefaultStatus ? 0 : 1) + (sort !== 'new' ? 1 : 0);
   const rowOf = new Map(rows.map((r) => [r.id, r]));
   const fbLabel = (v: number | null | undefined) => FIT_FEEDBACK.find(([k]) => Number(k) === v)?.[1];
 
@@ -125,7 +130,7 @@ export default async function ClosetPage({ searchParams }: { searchParams: Promi
           <TypeFilters categories={ctx.categories} groups={ctx.groups} sizes={ctx.sizes} group={groupIds} cat={cats} size={tagSizes} sizeLabel="Tag size" />
           <MultiSelect label="Gender" name="gender" defaultSelected={genders} options={[...GENDERS.map(([v, l]) => ({ value: v, label: l })), { value: 'none', label: 'Not set' }]} />
           <MultiSelect label="Status" name="status" defaultSelected={statuses} options={STATUSES.map(([v, l]) => ({ value: v, label: l }))} />
-          <MultiSelect label="Season" name="season" defaultSelected={seasons} options={SEASONS.map(([v, l]) => ({ value: v, label: l }))} />
+          {tagOptions.length > 0 && <MultiSelect label="Tags" name="tag" defaultSelected={tagPicks} options={tagOptions.map((t) => ({ value: t.id, label: t.name }))} />}
           <MultiSelect label="Color" name="color" defaultSelected={colors} options={[...COLORS.map(([v, l]) => ({ value: v, label: l })), { value: 'none', label: 'Not set' }]} />
           <select className={`${inputCls} w-auto`} name="sort" defaultValue={sort} aria-label="Sort by">
             <option value="new">Newest first</option>
@@ -182,11 +187,15 @@ export default async function ClosetPage({ searchParams }: { searchParams: Promi
                   <span className="text-sm text-muted">
                     <ColorDot color={raw.color} className="mr-1.5" />{ctx.catById.get(i.categoryId)?.name}{i.brand ? ` · ${i.brand}` : ''}{raw.gender ? ` · ${GENDERS.find(([v]) => v === raw.gender)?.[1]}` : ''}
                   </span>
-                  <span className="text-sm text-muted">Tag {tag ?? 'not set'} · Fits {rangeText(i.fitFrom, i.fitTo)}</span>
+                  <span className="text-sm text-muted">Tag size {tag ?? 'not set'} · Fits {rangeText(i.fitFrom, i.fitTo)}</span>
+                  {(tagInfo.byItem.get(i.id)?.length ?? 0) > 0 && (
+                    <span className="flex flex-wrap gap-1">
+                      {tagInfo.byItem.get(i.id)!.map((t) => <span key={t} className="rounded-full bg-accent-soft px-2 py-0.5 text-xs text-accent">{t}</span>)}
+                    </span>
+                  )}
                   <span className="mt-auto flex flex-wrap gap-1.5 pt-1">
                     <Pill tone={state}>{FIT_LABELS[state]}</Pill>
                     {i.status !== 'active' && <Pill>{STATUSES.find(([v]) => v === i.status)?.[1]}</Pill>}
-                    {i.condition === 'unusable' && <Pill tone="bad">{CONDITIONS.find(([v]) => v === i.condition)?.[1]}</Pill>}
                     {fb && <Pill>{fb}</Pill>}
                     {raw.needs_details && <Pill tone="warn">Needs photos</Pill>}
                   </span>

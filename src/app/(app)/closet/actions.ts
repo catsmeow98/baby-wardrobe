@@ -6,7 +6,8 @@ import { z } from 'zod';
 import { getContext, type Ctx } from '@/lib/context';
 import { safeBack, withParams } from '@/lib/back';
 import type { CategoryRow } from '@/lib/db';
-import { itemSchema, COLOR_VALUES, CONDITION_VALUES, GENDER_VALUES, SEASON_VALUES, STATUS_VALUES } from '@/lib/validation/items';
+import { itemSchema, COLOR_VALUES, GENDER_VALUES, STATUS_VALUES } from '@/lib/validation/items';
+import { parseTags, saveTags } from '@/lib/tags';
 import { autoName, parseTagRange, resolveFitRange } from '@/lib/domain';
 import { attachPhotos, discardPhotos } from '@/lib/photo-attach';
 
@@ -119,30 +120,32 @@ export async function saveItem(formData: FormData) {
     custom_tag: customTag,
     fit_from_size_id: range.fitFrom === null ? null : (ctx.sizeByOrder.get(range.fitFrom)?.id ?? null),
     fit_to_size_id: range.fitTo === null ? null : (ctx.sizeByOrder.get(range.fitTo)?.id ?? null),
-    condition: v.condition,
-    season: v.season,
     gender: v.gender ?? null,
     color: v.color ?? null,
     status: v.status,
-    fit_override: v.fitOverride ?? null,
+    // Fit always comes from the sizes now, so any fit set by hand before is cleared on save.
+    fit_override: null,
     fit_feedback: v.fitFeedback ?? null,
     notes: v.notes || null,
   };
 
+  const tags = parseTags(formData.get('tags'));
   if (id.success) {
     const { error } = await ctx.supabase.from('inventory_items').update(row).eq('id', id.data);
     if (error) return fail(path, 'We could not save that item. Check the sizes and try again.');
+    if (!(await saveTags(ctx, [{ item: id.data, tags }]))) return fail(path, 'The item was saved, but its tags could not be. Try again.');
     ['/closet', '/dashboard', '/shopping', '/goals'].forEach((p) => revalidatePath(p));
     return redirect(backTo);
   }
   const { data: made, error } = await ctx.supabase.from('inventory_items').insert({ ...row, child_id: ctx.active.id }).select('id').single();
   if (error || !made) return fail(path, 'We could not save that item. Check the sizes and try again.');
+  const tagsSaved = await saveTags(ctx, tags.length ? [{ item: made.id as string, tags }] : []);
   // Photos were uploaded by the browser while the form was open. Attach them now that the item exists.
   const wanted = formData.getAll('photoPath').map(String);
   const attached = wanted.length ? await attachPhotos(ctx.supabase, ctx.user.id, ctx.active.id, made.id as string, wanted) : 0;
   revalidatePath('/closet');
-  if (attached < wanted.length) {
-    return redirect(`/closet/${made.id}?error=${encodeURIComponent('The item was saved, but some photos could not be added. You can add them below.')}${backTo !== '/closet' ? `&back=${encodeURIComponent(backTo)}` : ''}`);
+  if (attached < wanted.length || !tagsSaved) {
+    return redirect(`/closet/${made.id}?error=${encodeURIComponent(!tagsSaved ? 'The item was saved, but its tags could not be. Add them below.' : 'The item was saved, but some photos could not be added. You can add them below.')}${backTo !== '/closet' ? `&back=${encodeURIComponent(backTo)}` : ''}`);
   }
   return redirect(backTo);
 }
@@ -169,9 +172,11 @@ export async function bulkCreate(formData: FormData) {
     tripQs.success && p === '/closet/bulk' ? redirect(`${p}?trip=${tripQs.data}&error=${encodeURIComponent(m)}${backTo !== '/closet' ? `&back=${encodeURIComponent(backTo)}` : ''}`) : failWith(p, m, backTo);
   const path = '/closet/bulk';
   const shared = z
-    .object({ condition: z.enum(CONDITION_VALUES), season: z.enum(SEASON_VALUES), status: z.enum(STATUS_VALUES), gender: z.enum(GENDER_VALUES).nullable() })
-    .safeParse({ condition: formData.get('condition'), season: formData.get('season'), status: formData.get('status'), gender: formData.get('gender') || null });
-  if (!shared.success) return fail(path, 'Check the condition, season and status.');
+    .object({ status: z.enum(STATUS_VALUES), gender: z.enum(GENDER_VALUES).nullable() })
+    .safeParse({ status: formData.get('status') || 'active', gender: formData.get('gender') || null });
+  if (!shared.success) return fail(path, 'Check the status and gender.');
+  const sharedTags = parseTags(formData.get('tags_shared'));
+  const rowTags: string[][] = []; // each kept row's tags, in the same order as rows
   const count = Math.min(MAX_BULK_ROWS, Math.max(0, Number(formData.get('rows')) || 0));
   // From a shopping trip: rows can say which received placeholder they are (match_i), and "nophoto" lines add pieces with no
   // photo. Everything then goes through complete_received, which swaps the placeholders for these items in one transaction.
@@ -219,6 +224,7 @@ export async function bulkCreate(formData: FormData) {
     const match = z.string().uuid().safeParse(text('match') || undefined);
     if (trip.success && match.success) consume.push({ item: match.data, qty: qty.data });
     sourceRow.push(i);
+    rowTags.push(parseTags(formData.get(`tags_${i}`), sharedTags));
     rows.push({
       child_id: ctx.active.id,
       name: autoName(name, brand, ctx.catById.get(cat.data)?.name ?? 'Item'),
@@ -230,8 +236,6 @@ export async function bulkCreate(formData: FormData) {
       custom_tag: customTag,
       fit_from_size_id: range.fitFrom === null ? null : (ctx.sizeByOrder.get(range.fitFrom)?.id ?? null),
       fit_to_size_id: range.fitTo === null ? null : (ctx.sizeByOrder.get(range.fitTo)?.id ?? null),
-      condition: shared.data.condition,
-      season: shared.data.season,
       gender: shared.data.gender,
       color: z.enum(COLOR_VALUES).safeParse(text('color')).data ?? null,
       status: shared.data.status,
@@ -268,6 +272,7 @@ export async function bulkCreate(formData: FormData) {
         if (!h) return fail(path, 'Those received pieces were already added. Reload the trip and try again.');
         for (let k = 0; k < w.n; k++) {
           sourceRow.push(-1);
+          rowTags.push(sharedTags);
           rows.push({
             child_id: ctx.active.id,
             name: ctx.catById.get(h.category_id)?.name ?? 'Item',
@@ -277,8 +282,6 @@ export async function bulkCreate(formData: FormData) {
             label_id: h.label_id,
             fit_from_size_id: h.fit_from_size_id,
             fit_to_size_id: h.fit_to_size_id,
-            condition: shared.data.condition,
-            season: shared.data.season,
             gender: shared.data.gender,
             status: shared.data.status,
           });
@@ -315,6 +318,11 @@ export async function bulkCreate(formData: FormData) {
       if (attached < wanted.length) photoProblem = true;
     }
   } else if ([...formData.keys()].some((key) => key.startsWith('photo_'))) photoProblem = true;
+  // Tags, once the items exist.
+  let tagProblem = false;
+  if (made && made.length === rows.length) {
+    tagProblem = !(await saveTags(ctx, made.flatMap((m, k) => (rowTags[k]?.length ? [{ item: m.id, tags: rowTags[k] }] : []))));
+  } else if (rowTags.some((t) => t.length)) tagProblem = true;
   revalidatePath('/closet');
-  return redirect(withParams(backTo, { added: rows.length ? String(rows.length) : undefined, photos: photoProblem ? 'partial' : undefined }));
+  return redirect(withParams(backTo, { added: rows.length ? String(rows.length) : undefined, photos: photoProblem ? 'partial' : undefined, tags: tagProblem ? 'partial' : undefined }));
 }

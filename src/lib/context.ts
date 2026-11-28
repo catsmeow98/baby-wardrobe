@@ -81,8 +81,6 @@ export interface Settings {
 }
 export type Ctx = Awaited<ReturnType<typeof getContext>>;
 
-const FIT_OVERRIDES = ['fits', 'notyet', 'outgrown'];
-
 /** Converts database rows into the shapes the tested domain code uses. */
 export function toInventory(rows: ItemRow[], ctx: Pick<Ctx, 'orderOf'>, tagGroupOf?: Map<string, number>): ClosetItem[] {
   return rows.map((r) => ({
@@ -94,7 +92,8 @@ export function toInventory(rows: ItemRow[], ctx: Pick<Ctx, 'orderOf'>, tagGroup
     condition: r.condition as InventoryItem['condition'],
     fitFrom: r.fit_from_size_id ? (ctx.orderOf.get(r.fit_from_size_id) ?? null) : null,
     fitTo: r.fit_to_size_id ? (ctx.orderOf.get(r.fit_to_size_id) ?? null) : null,
-    fitOverride: FIT_OVERRIDES.includes(r.fit_override ?? '') ? (r.fit_override as InventoryItem['fitOverride']) : null,
+    // Fit always comes from the item's sizes and the child's size; a fit set by hand (an older setting) is ignored.
+    fitOverride: null,
     name: r.name,
     brand: null,
     notes: r.notes,
