@@ -101,7 +101,10 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
   rowsRef.current = rows;
   const usesOf = (rs: readonly Row[], m: Record<number, Meta>) => rs.map((r) => ({ itemId: m[r.id]?.match ?? '', qty: m[r.id]?.qty ?? 1 }));
   const left = piecesLeft(lines, usesOf(rows, meta));
-  const [noPhoto, setNoPhoto] = useState<Record<string, boolean>>({});
+  // For pieces with no photo, per trip line: add them as plain items, or leave them for later (they stay on the trip).
+  const [leftover, setLeftover] = useState<Record<string, 'nophoto' | 'later'>>({});
+  // Each item's chosen item type name, for listing the extras (not from the trip) on the last screen.
+  const [rowTypes, setRowTypes] = useState<Record<number, string>>({});
   /**
    * "Which one is this?" for an item, as one piece. When that line has no pieces left, it is swapped: the latest other item
    * on it takes this item's old answer (or Something else), so a wrong guess can always be fixed in one tap.
@@ -163,11 +166,11 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
   const allOk = () => {
     if (trip) {
       const over = lines.find((l) => (left.get(l.itemId) ?? 0) < 0);
-      const open = lines.find((l) => (left.get(l.itemId) ?? 0) > 0 && !noPhoto[l.itemId]);
+      const open = lines.find((l) => (left.get(l.itemId) ?? 0) > 0 && !leftover[l.itemId]);
       const bad = over
         ? `More ${over.typeName} (${over.sizeLabel}) are matched than were bought. Change one of those photos to Something else, or untick its pack.`
         : open
-          ? `${open.typeName} (${open.sizeLabel}) still has ${left.get(open.itemId)} without a photo: tick No photo, or go back and match a photo.`
+          ? `${open.typeName} (${open.sizeLabel}) still has ${left.get(open.itemId)} without a photo: choose Add without a photo or Leave for later, or go back and match a photo.`
           : null;
       setReviewError(bad);
       if (bad) {
@@ -391,14 +394,15 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
             onEditor={setEditorOpen} onTurning={(on) => setTurningRows((l) => (on ? (l.includes(row.id) ? l : [...l, row.id]) : l.filter((x) => x !== row.id)))} setRef={(el) => (el ? sets.current.set(row.id, el) : sets.current.delete(row.id))} userId={userId} childId={childId}
             categories={categories} labels={labels} sizes={sizes} defaultTagId={defaultTagId} brands={brands} removeBg={removeBg}
             tripLines={trip ? lines : undefined} left={left} meta={meta[row.id] ?? NO_META} onMeta={(m) => setMeta((all) => ({ ...all, [row.id]: m }))}
-            onChoose={(lineId) => choose(row.id, lineId)} />
+            onChoose={(lineId) => choose(row.id, lineId)}
+            onTypeName={(n) => setRowTypes((t) => (t[row.id] === n ? t : { ...t, [row.id]: n }))} />
         ))}
 
         {trip && (
           <section hidden={current !== REVIEW} className="flex flex-col gap-4">
             <div>
               <h1 className="font-display text-2xl font-bold">Check the trip</h1>
-              <p className="text-muted">Every piece from the trip needs a photo, or a tick to add it without one.</p>
+              <p className="text-muted">Pieces without a photo can be added without one, or left for later (the trip stays on your Home screen).</p>
             </div>
             <ul className="flex flex-col gap-2">
               {lines.map((l) => {
@@ -412,16 +416,45 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
                     {n === 0 && <span className="text-sm text-good">✓ Every piece has a photo</span>}
                     {n < 0 && <span className="text-sm text-bad">{-n} more matched than were bought</span>}
                     {n > 0 && (
-                      <label className="flex items-center gap-2 text-sm">
-                        <input type="checkbox" name="nophoto" value={`${l.itemId}:${n}`} checked={Boolean(noPhoto[l.itemId])}
-                          onChange={(e) => { setNoPhoto((x) => ({ ...x, [l.itemId]: e.target.checked })); setReviewError(null); }} className="size-4 accent-accent" />
-                        {n} without a photo: add {n === 1 ? 'it' : 'them'} with no photo
-                      </label>
+                      <fieldset className="flex flex-col gap-1 text-sm">
+                        <legend className="mb-1">{n} without a photo:</legend>
+                        {leftover[l.itemId] === 'nophoto' && <input type="hidden" name="nophoto" value={`${l.itemId}:${n}`} />}
+                        <label className="flex items-center gap-2">
+                          <input type="radio" name={`leftover_${l.itemId}`} checked={leftover[l.itemId] === 'nophoto'}
+                            onChange={() => { setLeftover((x) => ({ ...x, [l.itemId]: 'nophoto' })); setReviewError(null); }} className="size-4 accent-accent" />
+                          Add {n === 1 ? 'it' : 'them'} without a photo
+                        </label>
+                        <label className="flex items-center gap-2">
+                          <input type="radio" name={`leftover_${l.itemId}`} checked={leftover[l.itemId] === 'later'}
+                            onChange={() => { setLeftover((x) => ({ ...x, [l.itemId]: 'later' })); setReviewError(null); }} className="size-4 accent-accent" />
+                          Leave for later
+                        </label>
+                      </fieldset>
                     )}
                   </li>
                 );
               })}
             </ul>
+            {rows.some((r) => !(meta[r.id]?.match)) && (
+              <div className="flex flex-col gap-2">
+                <h2 className="font-display text-lg font-bold">Extra items</h2>
+                <p className="-mt-1 text-sm text-muted">Not from this shopping trip. They are added as well.</p>
+                <ul className="flex flex-col gap-2">
+                  {rows.map((r, pos) => (meta[r.id]?.match ? null : (
+                    <li key={r.id}>
+                      <button type="button" onClick={() => go(String(r.id))} className="flex w-full items-center gap-3 rounded-xl border border-line bg-surface p-2 text-left">
+                        <span className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-line/60 text-xs text-muted">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          {r.photo ? <img src={r.photo.preview} alt="" className="size-full object-contain" /> : `#${pos + 1}`}
+                        </span>
+                        <span className="flex-1"><b>{rowTypes[r.id] ?? 'Item'}</b>{(meta[r.id]?.qty ?? 1) > 1 ? ` ×${meta[r.id]!.qty}` : ''} <span className="text-sm text-muted">· item {pos + 1}</span></span>
+                        <span className="text-sm text-accent underline">Change</span>
+                      </button>
+                    </li>
+                  )))}
+                </ul>
+              </div>
+            )}
             {reviewError && <p role="alert" className="text-sm text-bad">{reviewError}</p>}
           </section>
         )}
@@ -451,7 +484,7 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
   );
 }
 
-function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onEditor, onTurning, setRef, userId, childId, categories, labels, sizes, defaultTagId, brands, removeBg, tripLines, left, meta, onMeta, onChoose }: {
+function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onEditor, onTurning, setRef, userId, childId, categories, labels, sizes, defaultTagId, brands, removeBg, tripLines, left, meta, onMeta, onChoose, onTypeName }: {
   row: Row;
   pos: number;
   hidden: boolean;
@@ -474,6 +507,7 @@ function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onEditor, onTurning,
   meta: Meta;
   onMeta: (m: Meta) => void;
   onChoose: (lineId: string) => void;
+  onTypeName: (name: string) => void;
 }) {
   const line = tripLines?.find((l) => l.itemId === meta.match);
   const [tag, setTag] = useState<TagValue>(() => ({ tagId: line?.labelId ?? defaultTagId, custom: false, text: '' }));
@@ -487,6 +521,7 @@ function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onEditor, onTurning,
   const [editError, setEditError] = useState<string | null>(null);
   // The chosen item type, for the placeholder icon of an item without a photo. Starts where the picker starts.
   const [type, setType] = useState<CategoryRow | undefined>(() => (line && categories.find((c) => c.id === line.categoryId)) || groupCategories(categories)[0]?.items[0]);
+  useEffect(() => onTypeName(type?.name ?? 'New item type'), [type?.name]); // eslint-disable-line react-hooks/exhaustive-deps
   // Whenever this item's trip line changes (its own tap, or a swap from another item), fill in that type and tag size.
   const firstMatch = useRef(true);
   useEffect(() => {
