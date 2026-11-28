@@ -63,7 +63,8 @@ export function ColorBackfill({ count }: { count: number }) {
         const path = cover.get(id);
         if (!path) { unsure++; continue; }
         const { data: blob } = await supabase.storage.from(PHOTO_BUCKET).download(path);
-        const color = blob ? await detectColor(blob) : null;
+        // Only a sure guess is filled in; muted colors (white, cream, gray, beige) are left for you to pick.
+        const color = blob ? (await detectColor(blob)).color : null;
         if (!color) { unsure++; continue; }
         // Only fills a color that is still empty, in case one was set meanwhile.
         const { error: upError } = await supabase.from('inventory_items').update({ color }).eq('id', id).is('color', null);
@@ -73,7 +74,7 @@ export function ColorBackfill({ count }: { count: number }) {
         if (tagged.length >= 20) await flush();
       }
       await flush();
-      setStatus(`Done: ${colored} item${colored === 1 ? '' : 's'} got a color and the tag “${TAG}”.${unsure ? ` ${unsure} could not be told and were left as they were.` : ''}`);
+      setStatus(`Done: ${colored} item${colored === 1 ? '' : 's'} got a color and the tag “${TAG}”.${unsure ? ` ${unsure} were left as they were: their color is muted (white, cream, gray or beige) or could not be told, so pick it yourself.` : ''}`);
       router.refresh();
     } catch (e) {
       console.error('Color backfill failed', e);

@@ -57,8 +57,10 @@ const NO_META: Meta = { match: '', qty: 1 };
 interface Row {
   id: number;
   photo: { path: string; originalPath?: string; preview: string; blob: Blob } | null;
-  /** The main color guessed from the photo, offered as the item's color until the color is picked by hand. */
+  /** The main color guessed from the photo, offered as the item's color until the color is picked by hand (only when sure). */
   color?: string | null;
+  /** When the color is not sure: quick picks to offer. */
+  hints?: string[];
 }
 
 /**
@@ -309,7 +311,7 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
   /** Guesses the item's color from its photo, in the background. */
   async function guessColor(id: number, blob: Blob) {
     const c = await detectColor(blob);
-    setRows((list) => list.map((r) => (r.id === id && r.photo?.blob === blob ? { ...r, color: c } : r)));
+    setRows((list) => list.map((r) => (r.id === id && r.photo?.blob === blob ? { ...r, color: c.color, hints: c.hints } : r)));
   }
 
   // Replacing or adding an item's photo on its own screen: progress text per item.
@@ -325,7 +327,7 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
       const ref = await uploadPhoto(supabase, userId, childId, done.blob, done.cutout ? done.original : undefined);
       if (!ref) throw new Error('The photo could not be uploaded. Check your connection and try again.');
       const old = rowsRef.current.find((r) => r.id === row.id)?.photo ?? null;
-      setRows((list) => list.map((r) => (r.id === row.id ? { ...r, photo: { ...ref, preview: URL.createObjectURL(done.blob), blob: done.blob }, color: undefined } : r)));
+      setRows((list) => list.map((r) => (r.id === row.id ? { ...r, photo: { ...ref, preview: URL.createObjectURL(done.blob), blob: done.blob }, color: undefined, hints: undefined } : r)));
       void guessColor(row.id, done.blob);
       if (old) {
         URL.revokeObjectURL(old.preview);
@@ -342,7 +344,7 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
   async function removePhoto(row: Row) {
     const old = row.photo;
     if (!old) return;
-    setRows((list) => list.map((r) => (r.id === row.id ? { ...r, photo: null, color: undefined } : r)));
+    setRows((list) => list.map((r) => (r.id === row.id ? { ...r, photo: null, color: undefined, hints: undefined } : r)));
     URL.revokeObjectURL(old.preview);
     await createClient().storage.from(PHOTO_BUCKET).remove(pathsOf(old)).catch(() => undefined);
   }
@@ -798,6 +800,15 @@ function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onReplace, onRemoveP
           {COLORS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
         </select>
         {!picked.current && row.color && color === row.color && <span className="text-xs font-normal text-muted">Guessed from the photo</span>}
+        {!color && (row.hints?.length ?? 0) > 0 && (
+          <span className="flex flex-wrap items-center gap-1.5 text-xs font-normal text-muted">
+            Looks like:
+            {row.hints!.map((h) => (
+              <button key={h} type="button" onClick={() => { picked.current = true; setColor(h); }}
+                className="rounded-full border border-line bg-surface px-2.5 py-1 text-sm text-ink">{COLORS.find(([v]) => v === h)?.[1] ?? h}</button>
+            ))}
+          </span>
+        )}
       </label>
       <TagSizeField labels={labels} value={tag} onChange={setTag} tagName={`tag_${pos}`} customName={`ctag_${pos}`} className={`${labelCls} sm:col-span-2`} />
       {line && differs && sameOk !== diffKey && (

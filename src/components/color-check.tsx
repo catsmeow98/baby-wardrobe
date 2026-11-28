@@ -74,7 +74,7 @@ export function ColorCheck({ tagId, tagName, items }: { tagId: string; tagName: 
                 : <span className="flex size-24 shrink-0 items-center justify-center rounded-lg bg-line text-xs text-muted">No photo</span>}
               <div className="flex min-w-0 flex-1 flex-col gap-1.5 text-sm">
                 <b className="truncate">{i.name}</b>
-                <span className="text-muted">Saved: <ColorDot color={i.color} className="mr-1" />{colorName(i.color)} · Guess now: {a === undefined ? '…' : a ? colorName(a.color) : 'could not read'}</span>
+                <span className="text-muted">Saved: <ColorDot color={i.color} className="mr-1" />{colorName(i.color)} · Guess now: {a === undefined ? '…' : a ? `${colorName(a.color)}${a.sure ? '' : ' (not sure, so left blank)'}` : 'could not read'}</span>
                 {a && (
                   <span className="flex h-3 overflow-hidden rounded-full" title={a.buckets.map((b) => `${b.name} ${Math.round(b.share * 100)}%`).join(', ')}>
                     {a.buckets.filter((b) => b.share >= 0.02).map((b) => <span key={b.name} style={{ width: `${b.share * 100}%`, background: `rgb(${b.rgb.join(',')})` }} />)}

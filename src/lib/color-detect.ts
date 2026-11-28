@@ -37,17 +37,19 @@ export function colorOfPixel(r: number, g: number, b: number): Exclude<ColorValu
   // Olive and khaki-green: dim and muted, between yellow and green (warm light pulls it toward brown).
   if (l > 0.18 && l < 0.55 && ((chroma >= 6 && chroma < 60 && h >= 55 && h <= 150) || (chroma >= 6 && chroma < 32 && h >= 35 && h < 55))) return 'green';
   if (chroma < 14 || (l > 0.85 && chroma < 24)) return l > 0.62 ? 'white' : l < 0.2 ? 'black' : 'gray';
+  // A faint pink or red tint is usually the light on white or gray, not pink fabric.
+  if ((h < 15 || h >= 335) && chroma < 40) return l > 0.62 ? 'white' : l < 0.2 ? 'black' : 'gray';
   if (l < 0.18 && chroma < 30) return 'black';
-  if (h < 15 || h >= 335) {
+  if (h < 10 || h >= 335) {
     if (l > 0.68) return 'pink';
-    return l < 0.28 && chroma < 90 ? 'brown' : 'red';
+    return l < 0.45 && chroma < 70 ? 'brown' : 'red';
   }
-  // Orange stops at 38°: warm light pushes yellow (about 50°) down toward 40°, while real oranges sit around 20 to 30°.
-  if (h < 38) {
+  // Orange is 10° to 31°: warm light pushes yellow (about 50°) down to the low 30s, while real oranges sit around 20 to 30°.
+  if (h < 31) {
     if (l < 0.42 || chroma < 70) return 'brown';
     return l > 0.75 ? 'pink' : 'orange';
   }
-  if (h < 68) return l < 0.3 ? 'brown' : 'yellow';
+  if (h < 68) return l < 0.3 || (h < 38 && (l < 0.42 || chroma < 70)) ? 'brown' : 'yellow';
   if (h < 170) return 'green';
   if (h < 255) return l < 0.28 || (h > 215 && l < 0.34) ? 'navy' : 'blue';
   if (h < 290) return 'purple';
@@ -86,11 +88,40 @@ const SIDE = 96;
 
 export interface ColorBucket { name: string; share: number; rgb: [number, number, number] }
 /** clusters: the most common colours on the item, coarsely grouped (8 steps per channel), as [r, g, b, share]. For tuning. */
-export interface ColorAnalysis { color: ColorValue | null; cutout: boolean; pixels: number; buckets: ColorBucket[]; clusters: [number, number, number, number][] }
+export interface ColorAnalysis {
+  color: ColorValue | null;
+  /** Only a clear, vivid colour is sure. Muted ones (white, cream, gray, beige, light brown) can't be told apart from a photo's tint. */
+  sure: boolean;
+  /** When not sure: likely colors to offer as quick picks, most likely first. */
+  hints: ColorValue[];
+  cutout: boolean;
+  pixels: number;
+  buckets: ColorBucket[];
+  clusters: [number, number, number, number][];
+}
 
-/** Reads a photo and guesses its main color. Never throws: a photo it cannot read gives null. */
-export async function detectColor(blob: Blob): Promise<ColorValue | null> {
-  return (await analyzeColor(blob))?.color ?? null;
+const MUTED = new Set(['white', 'cream', 'gray', 'black', 'brown']);
+const chromaOf = (rgb: readonly number[]) => Math.max(...rgb) - Math.min(...rgb);
+const mutedBucket = (b: ColorBucket) => MUTED.has(b.name) || chromaOf(b.rgb) < 60;
+
+/** Whether a guess can be filled in, and quick picks when it can't. Exported for tests. */
+export function judge(color: ColorValue | null, buckets: readonly ColorBucket[]): { sure: boolean; hints: ColorValue[] } {
+  const top = buckets[0];
+  if (!color || !top) return { sure: false, hints: [] };
+  const vivid = buckets.filter((b) => !mutedBucket(b) && b.share >= 0.15);
+  const sure = color === 'multicolor' ? vivid.length >= 2 : !mutedBucket(top) && top.name === color;
+  if (sure) return { sure, hints: [] };
+  // Muted: offer the neutrals in order of how light the item looks, then any clear colour it has.
+  const l = (Math.max(...top.rgb) + Math.min(...top.rgb)) / 510;
+  const order: ColorValue[] = l > 0.75 ? ['white', 'cream', 'gray'] : l > 0.42 ? ['gray', 'cream', 'white', 'brown'] : ['gray', 'brown', 'black'];
+  const extra = vivid.map((b) => b.name as ColorValue).filter((n) => !order.includes(n));
+  return { sure, hints: [...order, ...extra].slice(0, 5) };
+}
+
+/** Reads a photo: the color when it is sure, otherwise null, with quick picks. Never throws: a photo it cannot read gives nothing. */
+export async function detectColor(blob: Blob): Promise<{ color: ColorValue | null; hints: ColorValue[] }> {
+  const a = await analyzeColor(blob);
+  return a ? { color: a.sure ? a.color : null, hints: a.hints } : { color: null, hints: [] };
 }
 
 /**
@@ -157,7 +188,8 @@ export async function analyzeColor(blob: Blob): Promise<ColorAnalysis | null> {
     });
     const clusters = [...bins.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12).map(([bin, k]) => (
       [((bin >> 6) << 5) + 16, (((bin >> 3) & 7) << 5) + 16, ((bin & 7) << 5) + 16, Math.round((k / total) * 1000) / 1000] as [number, number, number, number]));
-    return { color: pickColor(counts), cutout, pixels: total, buckets, clusters };
+    const color = pickColor(counts);
+    return { color, ...judge(color, buckets), cutout, pixels: total, buckets, clusters };
   } catch (e) {
     console.error('Color detection failed', e);
     return null;
