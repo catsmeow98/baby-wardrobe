@@ -541,6 +541,11 @@ function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onEditor, onTurning,
   }, [meta.match]); // eslint-disable-line react-hooks/exhaustive-deps
   // Pieces this item could take on its line: what is left there plus what it already holds.
   const avail = line ? (left.get(line.itemId) ?? 0) + meta.qty : 0;
+  // Matched to a trip line but then given another item type or tag size: ask whether it is still that piece.
+  const tagSize = tag.custom ? null : (labels.find((l) => l.id === tag.tagId)?.size_id ?? null);
+  const differs = Boolean(line && ((type && type.id !== line.categoryId) || (line.sizeId && tagSize !== line.sizeId)));
+  const diffKey = `${meta.match}|${type?.id ?? ''}|${tag.custom ? `c:${tag.text}` : tag.tagId}`;
+  const [sameOk, setSameOk] = useState('');
 
   // Turns show at once; quick taps are saved together once they stop. The stored original turns too, so Restore lines up.
   const turns = useTurnQueue(async (q) => {
@@ -643,6 +648,18 @@ function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onEditor, onTurning,
         </select>
       </label>
       <TagSizeField labels={labels} value={tag} onChange={setTag} tagName={`tag_${pos}`} customName={`ctag_${pos}`} className={`${labelCls} sm:col-span-2`} />
+      {line && differs && sameOk !== diffKey && (
+        <div role="alert" className="flex flex-col gap-2 rounded-xl border border-warn bg-warn-soft p-3 text-sm text-warn sm:col-span-6">
+          <p>
+            <b>Is this the same item?</b> It is matched to the {line.typeName} {line.sizeLabel} you bought, but now says{' '}
+            {[type && type.id !== line.categoryId ? type.name : null, line.sizeId && tagSize !== line.sizeId ? (tag.custom ? `tag ${tag.text || '(custom)'}` : `size ${(sizes.find((z) => z.id === tagSize) ? sizeName(sizes.find((z) => z.id === tagSize)!) : null) ?? labels.find((l) => l.id === tag.tagId)?.label ?? 'another size'}`) : null].filter(Boolean).join(', ')}.
+          </p>
+          <div className="flex flex-wrap gap-3">
+            <button type="button" className="font-medium underline" onClick={() => setSameOk(diffKey)}>Yes, it is that piece</button>
+            <button type="button" className="font-medium underline" onClick={() => onMeta({ match: '', qty: meta.qty })}>No, it is something else</button>
+          </div>
+        </div>
+      )}
       <label className={`${labelCls} sm:col-span-2`}>Fits through
         <select className={inputCls} name={`thru_${pos}`} defaultValue="">
           <option value="">{tag.custom ? 'Same as the tag range' : 'Same as tag size'}</option>
