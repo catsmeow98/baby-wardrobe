@@ -10,6 +10,7 @@ import { createChild, deleteChild, updateChild } from '../children/actions';
 import { searchPlaces, type Place } from '@/lib/weather';
 import { clearLocation, cleanupPhotos, deleteAccount, deleteTag, markOutgrown, renameTag, saveLocation, savePhotoSettings } from './actions';
 import { loadTags } from '@/lib/tags';
+import { ColorBackfill } from '@/components/color-backfill';
 
 export const metadata: Metadata = { title: 'Account' };
 
@@ -29,7 +30,10 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
       searchError = 'The place search is not available right now. Try again in a minute.';
     }
   }
-  const tagInfo = await loadTags(ctx);
+  const [tagInfo, { count: noColor }] = await Promise.all([
+    loadTags(ctx),
+    ctx.supabase.from('inventory_items').select('id', { count: 'exact', head: true }).is('color', null),
+  ]);
   const tagCount = new Map<string, number>();
   for (const ids of tagInfo.idsByItem.values()) for (const t of ids) tagCount.set(t, (tagCount.get(t) ?? 0) + 1);
   const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -278,6 +282,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
           <button className={btnGhostCls} type="submit">Clean up unused photos</button>
           <span className="text-sm text-muted">Removes photo files that no item uses, such as ones left by an upload that failed.</span>
         </form>
+        {(noColor ?? 0) > 0 && <ColorBackfill count={noColor ?? 0} />}
       </section>
 
       <section className="flex flex-col gap-3 rounded-xl border border-bad p-4">
