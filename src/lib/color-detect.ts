@@ -32,19 +32,21 @@ export function colorOfPixel(r: number, g: number, b: number): Exclude<ColorValu
   const [h, , l] = hsl(r, g, b);
   const chroma = Math.max(r, g, b) - Math.min(r, g, b);
   if (l < 0.12) return 'black';
-  // Warm, pale and only a little colour: cream (ivory, beige, oatmeal).
-  if (l > 0.68 && chroma >= 10 && chroma < 70 && h >= 25 && h <= 65) return 'cream';
-  if (chroma < 16 || (l > 0.85 && chroma < 24)) return l > 0.62 ? 'white' : l < 0.2 ? 'black' : 'gray';
+  // Warm and pale with little colour: indoor light tints white fabric this way. Cream, or white when barely tinted.
+  if (l > 0.5 && h >= 15 && h <= 65 && chroma < 55) return chroma < 20 && l > 0.6 ? 'white' : 'cream';
+  // Olive and khaki-green: dim and muted, between yellow and green (warm light pulls it toward brown).
+  if (l > 0.18 && l < 0.55 && ((chroma >= 6 && chroma < 60 && h >= 55 && h <= 150) || (chroma >= 6 && chroma < 32 && h >= 35 && h < 55))) return 'green';
+  if (chroma < 14 || (l > 0.85 && chroma < 24)) return l > 0.62 ? 'white' : l < 0.2 ? 'black' : 'gray';
   if (l < 0.18 && chroma < 30) return 'black';
   if (h < 15 || h >= 335) {
     if (l > 0.68) return 'pink';
     return l < 0.28 && chroma < 90 ? 'brown' : 'red';
   }
   if (h < 45) {
-    if (l < 0.42 || chroma < 70) return l > 0.68 ? 'cream' : 'brown';
+    if (l < 0.5 || chroma < 70) return 'brown';
     return l > 0.75 ? 'pink' : 'orange';
   }
-  if (h < 68) return l < 0.3 ? 'brown' : chroma < 45 && l > 0.6 ? 'cream' : 'yellow';
+  if (h < 68) return l < 0.3 ? 'brown' : 'yellow';
   if (h < 170) return 'green';
   if (h < 255) return l < 0.28 || (h > 215 && l < 0.34) ? 'navy' : 'blue';
   if (h < 290) return 'purple';

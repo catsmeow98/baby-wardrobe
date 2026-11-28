@@ -11,6 +11,10 @@ test('names common clothing colors, including dim and pale ones from real photos
     // Indoor light: a white shirt reads light gray, a blue one in shade reads gray-blue.
     [182, 182, 178, 'white'], [100, 112, 130, 'blue'], [150, 150, 150, 'gray'], [110, 125, 100, 'green'],
     [200, 170, 175, 'pink'], [40, 40, 45, 'black'],
+    // From real photos in warm indoor light: a white bodysuit, a cream sweater, an olive shirt in shade.
+    [166, 152, 143, 'cream'], [183, 179, 179, 'white'], [160, 140, 126, 'cream'], [87, 79, 64, 'green'], [100, 97, 81, 'green'],
+    // Browns stay brown.
+    [90, 60, 40, 'brown'], [150, 130, 100, 'brown'], [110, 90, 60, 'brown'], [60, 45, 35, 'brown'],
   ];
   for (const [r, g, b, want] of cases) assert.equal(colorOfPixel(r, g, b), want, `${r},${g},${b}`);
 });
