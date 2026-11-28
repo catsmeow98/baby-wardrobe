@@ -34,6 +34,18 @@ export function NeedsCart({ childId, columns, rows, types, sizeLabels, allSizes 
   const [loaded, setLoaded] = useState(false);
   const [open, setOpen] = useState<{ categoryId: string; sizeId: string; need: number; info?: CellInfo } | null>(null);
   const [showCart, setShowCart] = useState(false);
+  // Counts for a panel opened without them (an extra with no goal): looked up when it opens.
+  const [looked, setLooked] = useState<{ key: string; info: CellInfo } | null>(null);
+  useEffect(() => {
+    if (!open || open.info) return;
+    const key = cartKey(open.categoryId, open.sizeId);
+    let live = true;
+    closetPieces(open.categoryId, open.sizeId)
+      .then((res) => { if (live && !res.error) setLooked({ key, info: { goal: 0, owned: res.pieces.reduce((t, p) => t + p.quantity, 0), incoming: 0 } }); })
+      .catch(() => undefined);
+    return () => { live = false; };
+  }, [open]);
+  const openInfo = open ? (open.info ?? (looked?.key === cartKey(open.categoryId, open.sizeId) ? looked.info : undefined)) : undefined;
   // The closet pieces behind "N in closet", loaded when tapped.
   const [closet, setCloset] = useState<{ title: string; pieces: ClosetPiece[] | null; error?: string } | null>(null);
   const [saving, setSaving] = useState(false);
@@ -208,15 +220,15 @@ export function NeedsCart({ childId, columns, rows, types, sizeLabels, allSizes 
             <div>
               <p className="font-display text-lg font-bold">{name(open.categoryId)}</p>
               <p className="text-sm text-muted">{sizeLabels[open.sizeId] ?? ''} · {open.need ? `Need ${open.need}` : 'Not needed for your goals'}</p>
-              {open.info && (
+              {openInfo ? (
                 <p className="text-xs text-muted">
-                  Goal {open.info.goal} ·{' '}
-                  {open.info.owned > 0
-                    ? <button type="button" className="text-accent underline" onClick={() => showCloset(open.categoryId, open.sizeId)}>{open.info.owned} in closet</button>
+                  Goal {openInfo.goal} ·{' '}
+                  {openInfo.owned > 0
+                    ? <button type="button" className="text-accent underline" onClick={() => showCloset(open.categoryId, open.sizeId)}>{openInfo.owned} in closet</button>
                     : '0 in closet'}
-                  {open.info.incoming > 0 ? ` · ${open.info.incoming} on order` : ''}
+                  {openInfo.incoming > 0 ? ` · ${openInfo.incoming} on order` : ''}
                 </p>
-              )}
+              ) : <p className="text-xs text-muted">Checking the closet…</p>}
             </div>
           </div>
           <div className="flex items-center justify-center gap-5 py-2">
