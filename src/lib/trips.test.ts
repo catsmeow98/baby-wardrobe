@@ -33,3 +33,13 @@ test('trips: pieces left and the next guess', () => {
   assert.equal(left.get('p2'), -1, 'over-matching shows as negative');
   assert.equal(guessLine(lines, left), '');
 });
+
+test('trips: the name comes from the receipts', () => {
+  const t = groupTrips([
+    { trip_id: 'a', received_at: 'x', trip_name: null, item: item('p1', 'body', 1) },
+    { trip_id: 'a', received_at: 'x', trip_name: 'Old Navy sale – part 2', item: item('p2', 'pants', 1) },
+    { trip_id: 'b', received_at: 'y', item: item('p3', 'hat', 1) },
+  ]);
+  assert.equal(t.find((x) => x.id === 'a')?.name, 'Old Navy sale – part 2');
+  assert.equal(t.find((x) => x.id === 'b')?.name, undefined, 'older trips have no name');
+});

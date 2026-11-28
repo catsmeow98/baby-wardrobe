@@ -3,7 +3,9 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ItemIcon } from '@/components/item-icon';
-import { btnCls, btnGhostCls } from '@/components/ui';
+import { Sheet } from '@/components/sheet';
+import { defaultOrderName } from '@/components/order-select';
+import { btnCls, btnGhostCls, inputCls } from '@/components/ui';
 import { MAX_IN_CART, cartKey, cartLines, cartPieces, cartStorageKey, leftToFind, parseCart, setInCart, splitKey, type Cart } from '@/lib/cart';
 import Link from 'next/link';
 import { closetPieces, markCartBought, receiveCart, type ClosetPiece } from '@/app/(app)/shopping/actions';
@@ -49,6 +51,8 @@ export function NeedsCart({ childId, columns, rows, types, sizeLabels, allSizes 
   // The closet pieces behind "N in closet", loaded when tapped.
   const [closet, setCloset] = useState<{ title: string; pieces: ClosetPiece[] | null; error?: string } | null>(null);
   const [saving, setSaving] = useState(false);
+  // The name for this shopping trip or order (empty: the date and time).
+  const [tripName, setTripName] = useState('');
   const [message, setMessage] = useState<{ text: string; bad: boolean } | null>(null);
 
   // Read the stored cart after the first render (the server cannot see it), and keep it saved on every change.
@@ -89,10 +93,10 @@ export function NeedsCart({ childId, columns, rows, types, sizeLabels, allSizes 
     setSaving(true);
     setMessage(null);
     try {
-      const res = await markCartBought(lines);
+      const res = await markCartBought(lines, tripName.trim() || defaultOrderName());
       if (res.saved.length) setCart((c) => res.saved.reduce((acc, k) => setInCart(acc, k, 0), c));
-      setMessage(res.error ? { text: res.error, bad: true } : { text: 'Marked as bought. Those pieces now count as incoming until you receive them.', bad: false });
-      if (!res.error) setShowCart(false);
+      setMessage(res.error ? { text: res.error, bad: true } : { text: 'Marked as ordered. It is under Orders on the Shopping page and counts as incoming until it arrives.', bad: false });
+      if (!res.error) { setShowCart(false); setTripName(''); }
       router.refresh();
     } catch {
       setMessage({ text: 'Could not reach the server. Your cart is still here; try again when you have signal.', bad: true });
@@ -116,10 +120,10 @@ export function NeedsCart({ childId, columns, rows, types, sizeLabels, allSizes 
     setSaving(true);
     setMessage(null);
     try {
-      const res = await receiveCart(lines);
+      const res = await receiveCart(lines, tripName.trim() || defaultOrderName());
       if (res.saved.length) setCart((c) => res.saved.reduce((acc, k) => setInCart(acc, k, 0), c));
       if (res.error) setMessage({ text: res.error, bad: true });
-      else setShowCart(false);
+      else { setShowCart(false); setTripName(''); }
       if (res.trip) router.push(`/shopping?trip=${res.trip}`);
       else router.refresh();
     } catch {
@@ -313,6 +317,9 @@ export function NeedsCart({ childId, columns, rows, types, sizeLabels, allSizes 
           {lines.length === 0 && <p className="py-3 text-center text-muted">The cart is empty.</p>}
           {lines.length > 0 && (
             <div className="flex flex-col gap-2 pt-2">
+              <label className="flex flex-col gap-1 text-sm font-medium">Name (optional)
+                <input className={inputCls} value={tripName} maxLength={80} placeholder={defaultOrderName()} onChange={(e) => setTripName(e.target.value)} />
+              </label>
               <button type="button" className={btnCls} disabled={saving} onClick={received}>{saving ? 'Saving…' : 'Bought & received'}</button>
               <p className="text-xs text-muted">Puts these in your closet now as one shopping trip, then offers to add photos and details.</p>
               <button type="button" className={btnGhostCls} disabled={saving} onClick={bought}>Mark ordered (not here yet)</button>
@@ -349,19 +356,3 @@ function AddOther({ types, sizes, onPick }: { types: Record<string, TypeInfo>; s
   );
 }
 
-/** A panel that slides up from the bottom, over the page and its navigation. Tapping outside closes it. */
-function Sheet({ children, onClose, label }: { children: React.ReactNode; onClose: () => void; label: string }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40" onClick={onClose}>
-      <div role="dialog" aria-modal="true" aria-label={label} onClick={(e) => e.stopPropagation()}
-        className="flex w-full max-w-md flex-col gap-3 rounded-t-2xl bg-bg p-4 pb-[calc(1rem+var(--safe-bottom))] shadow-xl">
-        {children}
-      </div>
-    </div>
-  );
-}

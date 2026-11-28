@@ -16,10 +16,14 @@ import type { GoalRow, ItemRow, ShoppingRow } from '@/lib/db';
 import { goalProgress } from '@/lib/domain';
 import { currentUrl } from '@/lib/back';
 import { buildNeedsTable } from '@/lib/needs-table';
-import { addShoppingItem, cancelItem, markOrdered, orderFromGap, receiveDelivery } from './actions';
+import { addShoppingItem, cancelItem, receiveDelivery, renameOrder } from './actions';
 import { TypeIcon } from '@/components/item-icon';
 import { NeedsCart } from '@/components/needs-cart';
 import { TripCard } from '@/components/trip-card';
+import { OrderCheck, OrderSelect } from '@/components/order-select';
+import { ReceiveOrder } from '@/components/receive-order';
+import { LocalTime } from '@/components/local-time';
+import { loadOpenOrders } from '@/lib/orders-data';
 import { loadTrips } from '@/lib/trips-data';
 import { iconForType } from '@/lib/item-icons';
 
@@ -55,7 +59,9 @@ export default async function ShoppingPage({ searchParams }: { searchParams: Pro
     .sort((a, b) => a.size - b.size || b.remaining - a.remaining);
 
   const passes = (s: ShoppingRow) => typeOk(s.category_id) || (!visibleIds.has(s.category_id) && !groupIds.length && !cats.length) ? sizeOk(ctx.orderOf.get(s.size_id)) : false;
-  const open = shopRowsT.filter((s) => !['received', 'cancelled'].includes(s.status) && passes(s));
+  // Ordered entries that belong to an order show under Orders; Your list keeps what is still to order (and older loose orders).
+  const open = shopRowsT.filter((s) => !['received', 'cancelled'].includes(s.status) && !(s.order_id && s.status !== 'needed') && passes(s));
+  const orders = await loadOpenOrders(ctx, child.id);
   const done = shopRowsT.filter((s) => ['received', 'cancelled'].includes(s.status) && passes(s));
   // Plain text for pasting into a note or message: what is still to buy, from the gaps and from entries not yet ordered.
   const wanted = [
@@ -83,12 +89,8 @@ export default async function ShoppingPage({ searchParams }: { searchParams: Pro
         {!finished && (
           <div className="flex flex-wrap items-center gap-2">
             {s.status === 'needed' && (
-              <form action={markOrdered} className="flex items-center gap-1.5">
-<input type="hidden" name="back" value={here} />
-                <input type="hidden" name="id" value={s.id} />
-                <input className={`${inputCls} w-16`} type="number" name="quantity" min={1} defaultValue={s.quantity_needed} aria-label="Quantity ordered" />
-                <button className={btnCls} type="submit">Mark ordered</button>
-              </form>
+              <OrderCheck id={`item:${s.id}`} line={{ item: s.id }} defaultQty={s.quantity_needed}
+                label={`${ctx.catById.get(s.category_id)?.name ?? 'Item'} ${size ? sizeName(size) : ''}`} />
             )}
             {(s.status === 'ordered' || s.status === 'partially_received') && (
               <form action={receiveDelivery} className="flex items-center gap-1.5">
@@ -109,8 +111,9 @@ export default async function ShoppingPage({ searchParams }: { searchParams: Pro
     );
   };
 
+  const typeName = (id: string) => ctx.catById.get(id)?.name ?? 'Item';
   return (
-    <>
+    <OrderSelect>
       <div>
         <h1 className="font-display text-2xl font-bold">{child.name}&apos;s shopping list</h1>
         <p className="text-muted">Needs come from your goals. Ordered items count as incoming until you receive them.</p>
@@ -127,6 +130,45 @@ export default async function ShoppingPage({ searchParams }: { searchParams: Pro
         {filtering && <Link className={btnGhostCls} href="/shopping">Clear</Link>}
         <CopyButton text={listText} label="Copy list" />
       </form>
+
+      <section id="orders" className="rounded-xl border border-line bg-surface p-4">
+        <h2 className="font-display text-lg font-bold">Orders</h2>
+        {orders.length === 0 ? (
+          <p className="py-3 text-sm text-muted">Nothing on order. Tick items in Gaps or Your list below, then Mark ordered.</p>
+        ) : (
+          <ul className="flex flex-col">
+            {orders.map((o) => (
+              <li key={o.id} className="flex flex-col gap-2 border-t border-line py-3 first:border-t-0">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <b>{o.name}</b> <span className="text-sm text-muted">· ordered <LocalTime iso={o.orderedAt} /></span>
+                    <ul className="text-sm text-muted">
+                      {o.lines.map((l) => {
+                        const z = ctx.sizeById.get(l.sizeId);
+                        return <li key={l.item}>{typeName(l.categoryId)} {z ? sizeName(z) : ''}: {l.received} of {l.ordered} arrived</li>;
+                      })}
+                    </ul>
+                  </div>
+                  <ReceiveOrder orderId={o.id} name={o.name} returnTo={currentUrl('/shopping', { ...sp, trip: undefined, ok: undefined })}
+                    lines={o.lines.filter((l) => l.ordered > l.received && ['ordered', 'partially_received'].includes(l.status)).map((l) => {
+                      const z = ctx.sizeById.get(l.sizeId);
+                      return { item: l.item, typeName: typeName(l.categoryId), sizeLabel: z ? sizeName(z) : '', icon: iconForType(ctx.catById.get(l.categoryId)), outstanding: l.ordered - l.received };
+                    })} />
+                </div>
+                <details className="text-sm">
+                  <summary className="cursor-pointer text-accent">Rename</summary>
+                  <form action={renameOrder} className="mt-2 flex flex-wrap items-center gap-2">
+                    <input type="hidden" name="back" value={here} />
+                    <input type="hidden" name="id" value={o.id} />
+                    <input className={inputCls} name="name" defaultValue={o.name} maxLength={80} required aria-label="Order name" />
+                    <button className={btnGhostCls} type="submit">Save name</button>
+                  </form>
+                </details>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       <section className="rounded-xl border border-line bg-surface p-4">
         <h2 className="font-display text-lg font-bold">Needs by item and size</h2>
@@ -164,13 +206,8 @@ export default async function ShoppingPage({ searchParams }: { searchParams: Pro
                   </div>
                   <Pill tone="warn">Need {g.remaining}</Pill>
                   <ProgressBar owned={g.owned} incoming={g.incoming} goal={g.target} />
-                  <form action={orderFromGap} className="flex items-center gap-1.5">
-<input type="hidden" name="back" value={here} />
-                    <input type="hidden" name="categoryId" value={g.categoryId} />
-                    <input type="hidden" name="sizeId" value={size.id} />
-                    <input className={`${inputCls} w-16`} type="number" name="quantity" min={1} defaultValue={g.remaining} aria-label="Quantity to order" />
-                    <button className={btnCls} type="submit">Mark ordered</button>
-                  </form>
+                  <OrderCheck id={`gap:${g.categoryId}:${size.id}`} line={{ categoryId: g.categoryId, sizeId: size.id }} defaultQty={g.remaining}
+                    label={`${typeName(g.categoryId)} ${sizeName(size)}`} />
                 </li>
               );
             })}
@@ -194,7 +231,7 @@ export default async function ShoppingPage({ searchParams }: { searchParams: Pro
           <label className={labelCls}>Note<input className={inputCls} name="notes" maxLength={500} placeholder="Optional" /></label>
           <button className={btnCls} type="submit">Add</button>
         </form>
-        {open.length ? <ul>{open.map((s) => row(s, false))}</ul> : <p className="py-4 text-center text-muted">No open orders. Mark a gap above as ordered, or add an entry.</p>}
+        {open.length ? <ul>{open.map((s) => row(s, false))}</ul> : <p className="py-4 text-center text-muted">Nothing on your list. Add an entry above, or tick gaps to order them.</p>}
       </section>
 
       {done.length > 0 && (
@@ -203,6 +240,6 @@ export default async function ShoppingPage({ searchParams }: { searchParams: Pro
           <ul>{done.map((s) => row(s, true))}</ul>
         </section>
       )}
-    </>
+    </OrderSelect>
   );
 }

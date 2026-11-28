@@ -17,6 +17,8 @@ export interface Trip {
   id: string;
   /** When the first piece was received (ISO). */
   at: string;
+  /** The order's name ("- part N" for a part), or the name given in the store; none for older trips. */
+  name?: string;
   lines: TripLine[];
   pieces: number;
 }
@@ -24,6 +26,7 @@ export interface Trip {
 export interface TripRow {
   trip_id: string;
   received_at: string;
+  trip_name?: string | null;
   item: { id: string; category_id: string; fit_from_size_id: string | null; label_id: string | null; quantity: number } | null;
 }
 
@@ -32,7 +35,8 @@ export function groupTrips(rows: readonly TripRow[]): Trip[] {
   const byId = new Map<string, Trip>();
   for (const r of rows) {
     if (!r.item) continue;
-    const t = byId.get(r.trip_id) ?? { id: r.trip_id, at: r.received_at, lines: [], pieces: 0 };
+    const t: Trip = byId.get(r.trip_id) ?? { id: r.trip_id, at: r.received_at, lines: [], pieces: 0 };
+    if (r.trip_name && !t.name) t.name = r.trip_name;
     if (r.received_at < t.at) t.at = r.received_at;
     t.lines.push({ itemId: r.item.id, categoryId: r.item.category_id, sizeId: r.item.fit_from_size_id, labelId: r.item.label_id, qty: r.item.quantity });
     t.pieces += r.item.quantity;

@@ -8,7 +8,7 @@ import { groupTrips, type Trip, type TripRow } from '@/lib/trips';
 export async function loadTrips(ctx: Ctx, childId: string, tripId?: string): Promise<Trip[]> {
   let q = ctx.supabase
     .from('shopping_receipts')
-    .select('trip_id, received_at, item:inventory_items!inner(id, category_id, fit_from_size_id, label_id, quantity, needs_details, child_id)')
+    .select('trip_id, received_at, trip_name, item:inventory_items!inner(id, category_id, fit_from_size_id, label_id, quantity, needs_details, child_id)')
     .not('trip_id', 'is', null)
     .eq('item.needs_details', true)
     .eq('item.child_id', childId);

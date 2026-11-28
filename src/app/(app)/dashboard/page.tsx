@@ -13,6 +13,10 @@ import { forecastFor, loadMeasurements } from '@/lib/forecast-data';
 import { TypeIcon } from '@/components/item-icon';
 import { TripCard } from '@/components/trip-card';
 import { loadTrips } from '@/lib/trips-data';
+import { ReceiveOrder } from '@/components/receive-order';
+import { LocalTime } from '@/components/local-time';
+import { loadOpenOrders } from '@/lib/orders-data';
+import { iconForType } from '@/lib/item-icons';
 
 export const metadata: Metadata = { title: 'Dashboard' };
 
@@ -29,11 +33,15 @@ function Stat({ label, value, note }: { label: string; value: React.ReactNode; n
 const monthOf = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' });
 const FIT_ORDER: FitState[] = ['fits', 'notyet', 'outgrown', 'unknown'];
 
-export default async function DashboardPage() {
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ trip?: string }> }) {
+  const sp = await searchParams;
   const ctx = await getContext();
   if (!ctx.active) return <><SetupBanner ctx={ctx} /><NoChild /></>;
   const child = ctx.active;
-  const trips = await loadTrips(ctx, child.id);
+  const [trips, orders] = await Promise.all([loadTrips(ctx, child.id), loadOpenOrders(ctx, child.id)]);
+  // Just received an order from here: offer photos for it (Later leaves it in the list below).
+  const justReceived = sp.trip ? trips.find((t) => t.id === sp.trip) : undefined;
+  const typeName = (id: string) => ctx.catById.get(id)?.name ?? 'Item';
   const [{ data: itemRows }, { data: goalRows }, { data: shopRows }] = await Promise.all([
     ctx.supabase.from('inventory_items').select('*').eq('child_id', child.id),
     ctx.supabase.from('wardrobe_goals').select('*').eq('child_id', child.id),
@@ -106,10 +114,31 @@ export default async function DashboardPage() {
         </div>
       )}
 
+      {justReceived && <TripCard trip={justReceived} typeName={typeName} back="/dashboard" prompt laterHref="/dashboard" />}
+
+      {orders.length > 0 && (
+        <section className="flex flex-col gap-2">
+          <h2 className="font-display text-lg font-bold">Orders on the way</h2>
+          {orders.map((o) => (
+            <div key={o.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-surface p-4">
+              <div>
+                <b>{o.name}</b> <span className="text-sm text-muted">· ordered <LocalTime iso={o.orderedAt} /></span>
+                <p className="text-sm text-muted">{o.outstanding} piece{o.outstanding === 1 ? '' : 's'} to come: {o.lines.filter((l) => l.ordered > l.received).map((l) => typeName(l.categoryId)).join(', ')}</p>
+              </div>
+              <ReceiveOrder orderId={o.id} name={o.name} returnTo="/dashboard"
+                lines={o.lines.filter((l) => l.ordered > l.received && ['ordered', 'partially_received'].includes(l.status)).map((l) => {
+                  const z = ctx.sizeById.get(l.sizeId);
+                  return { item: l.item, typeName: typeName(l.categoryId), sizeLabel: z ? sizeName(z) : '', icon: iconForType(ctx.catById.get(l.categoryId)), outstanding: l.ordered - l.received };
+                })} />
+            </div>
+          ))}
+        </section>
+      )}
+
       {trips.length > 0 && (
         <section className="flex flex-col gap-2">
           <h2 className="font-display text-lg font-bold">Shopping trips needing photos</h2>
-          {trips.slice(0, 5).map((t) => <TripCard key={t.id} trip={t} typeName={(id) => ctx.catById.get(id)?.name ?? 'Item'} back="/dashboard" />)}
+          {trips.filter((t) => t.id !== justReceived?.id).slice(0, 5).map((t) => <TripCard key={t.id} trip={t} typeName={typeName} back="/dashboard" />)}
           {trips.length > 5 && <p className="text-sm text-muted">And {trips.length - 5} more.</p>}
         </section>
       )}

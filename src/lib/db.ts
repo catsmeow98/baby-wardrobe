@@ -24,6 +24,7 @@ export interface GoalRow { id: string; child_id: string; category_id: string; si
 export interface ShoppingRow {
   id: string; child_id: string; category_id: string; size_id: string; quantity_needed: number; quantity_ordered: number;
   quantity_received: number; status: string; priority: string; estimated_price: number | null; notes: string | null;
+  order_id?: string | null;
 }
 
 export const CONDITIONS: [string, string][] = [['new', 'New'], ['like_new', 'Like new'], ['good', 'Good'], ['worn', 'Worn'], ['unusable', 'Unusable']];

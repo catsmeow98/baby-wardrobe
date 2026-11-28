@@ -108,31 +108,62 @@ const cartLineSchema = z.object({ categoryId: uuid, sizeId: uuid, qty: z.number(
  * "Mark bought" for the in-store cart: each line goes on the shopping list as ordered (the same path as Order on a gap), so it
  * counts as incoming until it is received. Returns which lines were saved, so the page clears only those from the cart.
  */
-export async function markCartBought(lines: unknown): Promise<{ saved: string[]; error?: string }> {
+export async function markCartBought(lines: unknown, name?: unknown): Promise<{ saved: string[]; error?: string }> {
   const parsed = z.array(cartLineSchema).min(1).max(100).safeParse(lines);
   if (!parsed.success) return { saved: [], error: 'The cart could not be read. Try again.' };
+  const res = await placeOrder(name, parsed.data.map((l) => ({ categoryId: l.categoryId, sizeId: l.sizeId, qty: l.qty, notes: 'From the store cart' })));
+  return res.ok ? { saved: parsed.data.map((l) => `${l.categoryId}|${l.sizeId}`) } : { saved: [], error: res.error };
+}
+
+const orderNameSchema = z.string().trim().min(1).max(80);
+const orderLineSchema = z.union([
+  z.object({ item: uuid, qty: z.number().int().min(1).max(999) }),
+  z.object({ categoryId: uuid, sizeId: uuid, qty: z.number().int().min(1).max(999), notes: z.string().max(200).optional() }),
+]);
+
+/**
+ * Places a named order (one tap = one order): list entries ({item}) and new lines from goal gaps or the cart ({categoryId,
+ * sizeId}), all marked ordered together so they count as incoming.
+ */
+export async function placeOrder(name: unknown, lines: unknown): Promise<{ ok: boolean; error?: string }> {
+  const n = orderNameSchema.safeParse(name);
+  const ls = z.array(orderLineSchema).min(1).max(100).safeParse(lines);
+  if (!n.success) return { ok: false, error: 'Give the order a name (up to 80 characters).' };
+  if (!ls.success) return { ok: false, error: 'Choose what was ordered, with quantities of 1 or more.' };
   const ctx = await getContext();
-  if (!ctx.active) return { saved: [], error: 'Add a child first.' };
-  const known = new Set(ctx.sizes.map((s) => s.id));
-  const saved: string[] = [];
-  for (const l of parsed.data) {
-    const key = `${l.categoryId}|${l.sizeId}`;
-    if (!known.has(l.sizeId) || !ctx.catById.has(l.categoryId)) continue;
-    const { data, error } = await ctx.supabase
-      .from('shopping_items')
-      .insert({ child_id: ctx.active.id, category_id: l.categoryId, size_id: l.sizeId, quantity_needed: l.qty, notes: 'Bought in store' })
-      .select('id')
-      .single();
-    if (error || !data) break;
-    const { error: e2 } = await ctx.supabase.rpc('order_shopping_item', { p_shopping_item: data.id, p_quantity: l.qty });
-    if (e2) {
-      await ctx.supabase.from('shopping_items').delete().eq('id', data.id);
-      break;
-    }
-    saved.push(key);
-  }
-  if (saved.length) refresh();
-  return saved.length === parsed.data.length ? { saved } : { saved, error: `${saved.length} of ${parsed.data.length} cart lines were saved. The rest are still in the cart; try again.` };
+  if (!ctx.active) return { ok: false, error: 'Add a child first.' };
+  const payload = ls.data.map((l) => ('item' in l ? { item: l.item, qty: l.qty } : { category_id: l.categoryId, size_id: l.sizeId, qty: l.qty, notes: l.notes ?? 'From goals' }));
+  const { error } = await ctx.supabase.rpc('place_order', { p_child: ctx.active.id, p_name: n.data, p_lines: payload });
+  if (error) return { ok: false, error: message(error, 'We could not place that order.') };
+  refresh();
+  return { ok: true };
+}
+
+/** Receives some or all of an order as one trip, named after the order ("- part N" when it comes in parts). */
+export async function receiveOrder(orderId: unknown, lines: unknown): Promise<{ trip?: string; name?: string; error?: string }> {
+  const id = uuid.safeParse(orderId);
+  const ls = z.array(z.object({ item: uuid, qty: z.number().int().min(0).max(999) })).min(1).max(100).safeParse(lines);
+  if (!id.success || !ls.success) return { error: 'Choose what arrived.' };
+  const wanted = ls.data.filter((l) => l.qty > 0);
+  if (!wanted.length) return { error: 'Choose what arrived.' };
+  const ctx = await getContext();
+  const trip = crypto.randomUUID();
+  const { data, error } = await ctx.supabase.rpc('receive_order', { p_order: id.data, p_lines: wanted, p_trip: trip });
+  if (error) return { error: message(error, 'We could not record that delivery.') };
+  refresh();
+  return { trip, name: data as string };
+}
+
+export async function renameOrder(formData: FormData) {
+  const back = backFor(formData);
+  const id = uuid.safeParse(formData.get('id'));
+  const n = orderNameSchema.safeParse(formData.get('name'));
+  if (!id.success || !n.success) return back('Give the order a name (up to 80 characters).');
+  const ctx = await getContext();
+  const { error } = await ctx.supabase.from('shopping_orders').update({ name: n.data }).eq('id', id.data);
+  if (error) return back('We could not rename that order.');
+  refresh();
+  return back(undefined, 'Order renamed.');
 }
 
 export interface ClosetPiece { id: string; name: string; brand: string | null; quantity: number; fits: string; photoUrl: string | null; cutout: boolean }
@@ -188,7 +219,7 @@ export async function closetPieces(categoryId: unknown, sizeId: unknown): Promis
  * trip, so the pieces are in the closet (as placeholders) and can get photos and details together. Returns the lines saved
  * and the trip.
  */
-export async function receiveCart(lines: unknown): Promise<{ saved: string[]; trip: string | null; error?: string }> {
+export async function receiveCart(lines: unknown, name?: unknown): Promise<{ saved: string[]; trip: string | null; error?: string }> {
   const parsed = z.array(cartLineSchema).min(1).max(100).safeParse(lines);
   if (!parsed.success) return { saved: [], trip: null, error: 'The cart could not be read. Try again.' };
   const ctx = await getContext();
@@ -212,6 +243,9 @@ export async function receiveCart(lines: unknown): Promise<{ saved: string[]; tr
     }
     saved.push(`${l.categoryId}|${l.sizeId}`);
   }
+  // The trip's name: the one given, or none (the Home screen then shows its date and time).
+  const tripName = orderNameSchema.safeParse(name);
+  if (saved.length && tripName.success) await ctx.supabase.from('shopping_receipts').update({ trip_name: tripName.data }).eq('trip_id', trip);
   if (saved.length) refresh();
   const done = saved.length ? trip : null;
   return saved.length === parsed.data.length

@@ -17,8 +17,8 @@ export function TripCard({ trip, typeName, back, prompt = false, laterHref }: {
   return (
     <div className={`flex flex-col gap-2 rounded-xl p-4 ${prompt ? 'border border-accent bg-accent-soft' : 'border border-line bg-surface'}`}>
       <p>
-        {prompt ? <><b>{trip.pieces} piece{trip.pieces === 1 ? '' : 's'}</b> {trip.pieces === 1 ? 'is' : 'are'} in your closet. Add photos and details now?</>
-          : <><b><LocalTime iso={trip.at} /></b> · {trip.pieces} piece{trip.pieces === 1 ? '' : 's'}</>}
+        {prompt ? <>{trip.name && <><b>{trip.name}</b>: </>}<b>{trip.pieces} piece{trip.pieces === 1 ? '' : 's'}</b> {trip.pieces === 1 ? 'is' : 'are'} in your closet. Add photos and details now?</>
+          : <><b>{trip.name ?? <LocalTime iso={trip.at} />}</b>{trip.name && <span className="text-sm text-muted"> · <LocalTime iso={trip.at} /></span>} · {trip.pieces} piece{trip.pieces === 1 ? '' : 's'}</>}
       </p>
       <p className="text-sm text-muted">{tripSummary(trip, typeName)}</p>
       <div className="flex flex-wrap items-center gap-3">
