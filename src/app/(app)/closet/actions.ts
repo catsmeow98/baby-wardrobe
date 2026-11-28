@@ -247,6 +247,13 @@ export async function bulkCreate(formData: FormData) {
       const k = Number(n);
       return id.success && Number.isInteger(k) && k > 0 && k <= 999 ? [{ item: id.data, n: k }] : [];
     });
+    // Pieces not actually bought: taken off their placeholder with nothing added, so they count as needed again.
+    for (const v of formData.getAll('notbought').map(String)) {
+      const [item, n] = v.split(':');
+      const id = z.string().uuid().safeParse(item);
+      const k = Number(n);
+      if (id.success && Number.isInteger(k) && k > 0 && k <= 999) consume.push({ item: id.data, qty: k });
+    }
     if (wanted.length) {
       const { data: holders } = await ctx.supabase
         .from('inventory_items')
@@ -278,7 +285,7 @@ export async function bulkCreate(formData: FormData) {
       }
     }
   }
-  if (!rows.length) return fail(path, 'Add at least one item: a photo, a name or a brand.');
+  if (!rows.length && !consume.length) return fail(path, 'Add at least one item: a photo, a name or a brand.');
   // One insert, so either every row is saved or none is.
   let made: { id: string }[] | null = null;
   let error: { code?: string; message?: string } | null = null;
@@ -305,5 +312,5 @@ export async function bulkCreate(formData: FormData) {
     }
   } else if ([...formData.keys()].some((key) => key.startsWith('photo_'))) photoProblem = true;
   revalidatePath('/closet');
-  return redirect(withParams(backTo, { added: String(rows.length), photos: photoProblem ? 'partial' : undefined }));
+  return redirect(withParams(backTo, { added: rows.length ? String(rows.length) : undefined, photos: photoProblem ? 'partial' : undefined }));
 }

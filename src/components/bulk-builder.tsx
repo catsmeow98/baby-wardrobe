@@ -102,7 +102,7 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
   const usesOf = (rs: readonly Row[], m: Record<number, Meta>) => rs.map((r) => ({ itemId: m[r.id]?.match ?? '', qty: m[r.id]?.qty ?? 1 }));
   const left = piecesLeft(lines, usesOf(rows, meta));
   // For pieces with no photo, per trip line: add them as plain items, or leave them for later (they stay on the trip).
-  const [leftover, setLeftover] = useState<Record<string, 'nophoto' | 'later'>>({});
+  const [leftover, setLeftover] = useState<Record<string, 'nophoto' | 'later' | 'notbought'>>({});
   // Each item's chosen item type name, for listing the extras (not from the trip) on the last screen.
   const [rowTypes, setRowTypes] = useState<Record<number, string>>({});
   /**
@@ -170,7 +170,7 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
       const bad = over
         ? `More ${over.typeName} (${over.sizeLabel}) are matched than were bought. Change one of those photos to Something else, or untick its pack.`
         : open
-          ? `${open.typeName} (${open.sizeLabel}) still has ${left.get(open.itemId)} without a photo: choose Add without a photo or Leave for later, or go back and match a photo.`
+          ? `${open.typeName} (${open.sizeLabel}) still has ${left.get(open.itemId)} without a photo: choose Add without a photo, Leave for later or Not purchased, or go back and match a photo.`
           : null;
       setReviewError(bad);
       if (bad) {
@@ -419,6 +419,7 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
                       <fieldset className="flex flex-col gap-1 text-sm">
                         <legend className="mb-1">{n} without a photo:</legend>
                         {leftover[l.itemId] === 'nophoto' && <input type="hidden" name="nophoto" value={`${l.itemId}:${n}`} />}
+                        {leftover[l.itemId] === 'notbought' && <input type="hidden" name="notbought" value={`${l.itemId}:${n}`} />}
                         <label className="flex items-center gap-2">
                           <input type="radio" name={`leftover_${l.itemId}`} checked={leftover[l.itemId] === 'nophoto'}
                             onChange={() => { setLeftover((x) => ({ ...x, [l.itemId]: 'nophoto' })); setReviewError(null); }} className="size-4 accent-accent" />
@@ -428,6 +429,11 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
                           <input type="radio" name={`leftover_${l.itemId}`} checked={leftover[l.itemId] === 'later'}
                             onChange={() => { setLeftover((x) => ({ ...x, [l.itemId]: 'later' })); setReviewError(null); }} className="size-4 accent-accent" />
                           Leave for later
+                        </label>
+                        <label className="flex items-center gap-2">
+                          <input type="radio" name={`leftover_${l.itemId}`} checked={leftover[l.itemId] === 'notbought'}
+                            onChange={() => { setLeftover((x) => ({ ...x, [l.itemId]: 'notbought' })); setReviewError(null); }} className="size-4 accent-accent" />
+                          Not purchased (take {n === 1 ? 'it' : 'them'} off the trip; still needed)
                         </label>
                       </fieldset>
                     )}
