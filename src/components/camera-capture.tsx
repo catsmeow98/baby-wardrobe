@@ -7,12 +7,16 @@ import { useEffect, useRef, useState } from 'react';
  * straight away (onShot) so it can be processed and uploaded while the next one is taken. Uses the back camera when there is
  * one. If the live camera cannot start (no permission, an older phone), it offers the phone's own camera instead.
  * status: short progress text from the page ("Processing 2 of 3…"), shown under the shutter.
+ * planned: how many photos are expected (the pieces on a shopping trip), shown as "3 of 7 photos taken"; already counts the
+ * photos taken before the camera opened.
  */
-export function CameraCapture({ onShot, onClose, multiple = true, status }: {
+export function CameraCapture({ onShot, onClose, multiple = true, status, planned, already = 0 }: {
   onShot: (file: File) => void;
   onClose: () => void;
   multiple?: boolean;
   status?: string | null;
+  planned?: number;
+  already?: number;
 }) {
   const video = useRef<HTMLVideoElement>(null);
   const fallback = useRef<HTMLInputElement>(null);
@@ -73,7 +77,11 @@ export function CameraCapture({ onShot, onClose, multiple = true, status }: {
   return (
     <div role="dialog" aria-modal="true" aria-label="Camera" className="fixed inset-0 z-[70] flex flex-col bg-black pt-[var(--safe-top)] text-white">
       <div className="flex items-center justify-between px-4 py-2 text-sm">
-        <span>{count ? `${count} photo${count === 1 ? '' : 's'} taken` : multiple ? 'Snap each item, then tap Done' : 'Snap the item'}</span>
+        <span aria-live="polite">{planned
+          ? already + count > planned
+            ? `${already + count} photos taken (${planned} on the trip)`
+            : `${already + count} of ${planned} photo${planned === 1 ? '' : 's'} taken`
+          : count ? `${count} photo${count === 1 ? '' : 's'} taken` : multiple ? 'Snap each item, then tap Done' : 'Snap the item'}</span>
         <button type="button" className="underline" onClick={onClose}>{count ? 'Done' : 'Cancel'}</button>
       </div>
       <div className="relative flex-1 overflow-hidden">

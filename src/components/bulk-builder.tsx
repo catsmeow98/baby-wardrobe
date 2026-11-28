@@ -11,7 +11,6 @@ import { LocalTime } from '@/components/local-time';
 import { CameraCapture } from '@/components/camera-capture';
 import { guessLine, piecesLeft } from '@/lib/trips';
 import { groupCategories } from '@/lib/categories';
-import { PhotoPicker } from '@/components/photo-picker';
 import { PhotoEditor } from '@/components/photo-editor';
 import { TagSizeField, type TagValue } from '@/components/tag-size-field';
 import { createClient } from '@/lib/supabase/client';
@@ -19,6 +18,7 @@ import { processPhoto, reasonOf, turnWithOriginal } from '@/lib/photo-client';
 import { downloadOriginal, uploadPhoto } from '@/lib/photo-upload';
 import { joinPhotoField, pathsOf } from '@/lib/photo-paths';
 import { PHOTO_BUCKET } from '@/lib/photos';
+import { detectColor } from '@/lib/color-detect';
 import { btnCls, btnGhostCls, inputCls, labelCls } from '@/components/ui';
 import { COLORS, sizeName } from '@/lib/db';
 import type { CategoryRow, SizeLabelRow, SizeRow } from '@/lib/db';
@@ -26,6 +26,7 @@ import type { CategoryRow, SizeLabelRow, SizeRow } from '@/lib/db';
 const MAX_ROWS = 50;
 const PHOTOS = 'photos';
 const REVIEW = 'review';
+const MORE = 'more';
 
 /** A line of a shopping trip, as bulk add shows it: the received placeholder and what it holds. */
 export interface TripLineView {
@@ -44,6 +45,8 @@ const NO_META: Meta = { match: '', qty: 1 };
 interface Row {
   id: number;
   photo: { path: string; originalPath?: string; preview: string; blob: Blob } | null;
+  /** The main color guessed from the photo, offered as the item's color until the color is picked by hand. */
+  color?: string | null;
 }
 
 /**
@@ -129,7 +132,8 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
   }, [busy, turningRows.length]);
 
   // Screens: the photo screen, then one per item. A screen for an item that was removed falls back to the photo screen.
-  const steps = [PHOTOS, ...rows.map((r) => String(r.id)), ...(trip ? [REVIEW] : [])];
+  // After the last item comes "Add more items?", then (from a trip) the check of the trip.
+  const steps = [PHOTOS, ...rows.map((r) => String(r.id)), ...(rows.length ? [MORE] : []), ...(trip ? [REVIEW] : [])];
   const idx = Math.max(0, steps.indexOf(stepId));
   const current = steps[idx];
   const last = idx === steps.length - 1 && idx > 0;
@@ -187,8 +191,21 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
     }
     return true;
   };
+  // Add more items: the photo screen's Next then goes to the first item added after this point, not back to item 1.
+  const [resumeFrom, setResumeFrom] = useState<number | null>(null);
+  const addMore = () => {
+    setResumeFrom(nextId.current);
+    setDone(null);
+    go(PHOTOS);
+  };
   const next = () => {
-    if (screenOk()) go(steps[idx + 1]);
+    if (!screenOk()) return;
+    if (current === PHOTOS && resumeFrom !== null) {
+      const fresh = rows.find((r) => r.id >= resumeFrom);
+      go(fresh ? String(fresh.id) : MORE);
+      return;
+    }
+    go(steps[idx + 1]);
   };
 
   // Photos are processed one batch at a time, in order, so camera shots taken quickly queue up instead of overlapping.
@@ -258,12 +275,54 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
         setMeta((m) => ({ ...m, [id]: { match: g, qty: 1 } }));
       }
       setRows((list) => [...list, { id, photo: { ...ref, preview: URL.createObjectURL(blob), blob } }]);
+      void guessColor(id, blob);
     }
     setBusy(null);
     if (skipped) setError(`${skipped} photo${skipped > 1 ? 's' : ''} could not be added. ${problems.join(' · ')}`);
     else if (quiet) return;
     // Say they are all in and wait for Next, rather than jumping ahead.
     else if (added) setDone(`${added === 1 ? 'Your photo is uploaded.' : `All ${added} photos are uploaded.`} Tap Next to ${trip ? 'match each one to what you bought' : added === 1 ? 'fill in its details' : 'fill in the details'}.`);
+  }
+
+  /** Guesses the item's color from its photo, in the background. */
+  async function guessColor(id: number, blob: Blob) {
+    const c = await detectColor(blob);
+    setRows((list) => list.map((r) => (r.id === id && r.photo?.blob === blob ? { ...r, color: c } : r)));
+  }
+
+  // Replacing or adding an item's photo on its own screen: progress text per item.
+  const [rowBusy, setRowBusy] = useState<Record<number, string | null>>({});
+  const [rowError, setRowError] = useState<Record<number, string | null>>({});
+  /** Puts a new photo on an item (processed like the others), and deletes the one it replaces. */
+  async function replacePhoto(row: Row, f: File) {
+    setRowError((m) => ({ ...m, [row.id]: null }));
+    setRowBusy((m) => ({ ...m, [row.id]: removeBg ? 'Processing the photo…' : 'Uploading the photo…' }));
+    try {
+      const done = await processPhoto(f, removeBg, (text) => setRowBusy((m) => ({ ...m, [row.id]: text })));
+      const supabase = createClient();
+      const ref = await uploadPhoto(supabase, userId, childId, done.blob, done.cutout ? done.original : undefined);
+      if (!ref) throw new Error('The photo could not be uploaded. Check your connection and try again.');
+      const old = rowsRef.current.find((r) => r.id === row.id)?.photo ?? null;
+      setRows((list) => list.map((r) => (r.id === row.id ? { ...r, photo: { ...ref, preview: URL.createObjectURL(done.blob), blob: done.blob }, color: undefined } : r)));
+      void guessColor(row.id, done.blob);
+      if (old) {
+        URL.revokeObjectURL(old.preview);
+        await supabase.storage.from(PHOTO_BUCKET).remove(pathsOf(old)).catch(() => undefined);
+      }
+    } catch (err) {
+      console.error('Photo could not be replaced', err);
+      setRowError((m) => ({ ...m, [row.id]: err instanceof Error && err.message.startsWith('The photo') ? err.message : `The photo could not be added (${reasonOf(err).slice(0, 160)}).` }));
+    } finally {
+      setRowBusy((m) => ({ ...m, [row.id]: null }));
+    }
+  }
+  /** Takes the photo off an item, keeping the item. */
+  async function removePhoto(row: Row) {
+    const old = row.photo;
+    if (!old) return;
+    setRows((list) => list.map((r) => (r.id === row.id ? { ...r, photo: null, color: undefined } : r)));
+    URL.revokeObjectURL(old.preview);
+    await createClient().storage.from(PHOTO_BUCKET).remove(pathsOf(old)).catch(() => undefined);
   }
 
   const addBlank = () => {
@@ -273,12 +332,12 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
     go(String(id));
   };
 
-  async function removeRow(row: Row) {
+  async function removeRow(row: Row, fromPhotos = false) {
     const at = rows.findIndex((r) => r.id === row.id);
     const rest = rows.filter((r) => r.id !== row.id);
     setRows(rest);
-    // Stay in place: show the item that takes its spot, or the one before it, or the photo screen.
-    const stay = rest[at] ?? rest[at - 1];
+    // Stay in place: on the photo screen stay there; on an item's screen show the item that takes its spot, or the one before it.
+    const stay = fromPhotos ? undefined : rest[at] ?? rest[at - 1];
     setStepId(stay ? String(stay.id) : PHOTOS);
     window.history.replaceState({ ...window.history.state, b: stay ? String(stay.id) : PHOTOS }, '');
     if (row.photo) {
@@ -312,7 +371,9 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
     router.push(back);
   }
 
-  const label = current === PHOTOS ? 'Photos' : current === REVIEW ? 'Check the trip' : `Item ${idx} of ${rows.length}`;
+  const label = current === PHOTOS ? 'Photos' : current === REVIEW ? 'Check the trip' : current === MORE ? 'Add more?' : `Item ${idx} of ${rows.length}`;
+  const tripPieces = lines.reduce((a, l) => a + l.qty, 0);
+  const [camAlready, setCamAlready] = useState(0);
   // The keyboard's Enter (Go) key never saves the batch; it closes the keyboard. Only the save button saves.
   const noEnter = (e: React.KeyboardEvent) => {
     const t = e.target as HTMLElement;
@@ -366,19 +427,21 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
             <button type="button" className={btnCls} disabled={busy !== null || rows.length >= MAX_ROWS} onClick={() => file.current?.click()}>
               {busy ?? (rows.length ? 'Choose more photos' : 'Choose photos')}
             </button>
-            <button type="button" className={btnGhostCls} disabled={rows.length >= MAX_ROWS} onClick={() => { setDone(null); setCamera(true); }}>Take photos</button>
+            <button type="button" className={btnGhostCls} disabled={rows.length >= MAX_ROWS} onClick={() => { setDone(null); setCamAlready(rows.filter((r) => r.photo).length); setCamera(true); }}>Take photos</button>
             {busy === null && rows.length < MAX_ROWS && <button type="button" className="text-sm text-accent underline" onClick={addBlank}>Add an item without a photo</button>}
           </div>
           {error && <p role="alert" className="text-sm text-bad">{error}</p>}
           {done && !busy && <p role="status" className="rounded-lg bg-good-soft p-3 text-sm font-medium text-good">✓ {done}</p>}
           {rows.length > 0 && (
-            <ul className="flex flex-wrap gap-2" aria-label="Items so far">
+            <ul className="flex flex-wrap gap-3 pt-1.5" aria-label="Items so far">
               {rows.map((r, pos) => (
-                <li key={r.id}>
+                <li key={r.id} className="relative">
                   <button type="button" className="flex size-16 items-center justify-center overflow-hidden rounded-lg border border-line bg-surface text-xs text-muted" onClick={() => go(String(r.id))} aria-label={`Go to item ${pos + 1}`}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     {r.photo ? <img src={r.photo.preview} alt="" className="size-full object-cover" /> : `Item ${pos + 1}`}
                   </button>
+                  <button type="button" onClick={() => removeRow(r, true)} aria-label={`Remove item ${pos + 1}`}
+                    className="absolute -right-1.5 -top-1.5 flex size-6 items-center justify-center rounded-full border border-line bg-bg text-xs font-bold text-bad shadow">✕</button>
                 </li>
               ))}
             </ul>
@@ -391,12 +454,40 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
 
         {rows.map((row, pos) => (
           <BulkRow key={row.id} row={row} pos={pos} hidden={current !== String(row.id)} onRemove={() => removeRow(row)} onSavePhoto={(r, o) => savePhoto(row, r, o)}
+            onReplace={(f) => replacePhoto(row, f)} onRemovePhoto={() => removePhoto(row)} photoBusy={rowBusy[row.id] ?? null} photoError={rowError[row.id] ?? null}
             onEditor={setEditorOpen} onTurning={(on) => setTurningRows((l) => (on ? (l.includes(row.id) ? l : [...l, row.id]) : l.filter((x) => x !== row.id)))} setRef={(el) => (el ? sets.current.set(row.id, el) : sets.current.delete(row.id))} userId={userId} childId={childId}
             categories={categories} labels={labels} sizes={sizes} defaultTagId={defaultTagId} brands={brands} removeBg={removeBg}
             tripLines={trip ? lines : undefined} left={left} meta={meta[row.id] ?? NO_META} onMeta={(m) => setMeta((all) => ({ ...all, [row.id]: m }))}
             onChoose={(lineId) => choose(row.id, lineId)}
             onTypeName={(n) => setRowTypes((t) => (t[row.id] === n ? t : { ...t, [row.id]: n }))} />
         ))}
+
+        {rows.length > 0 && (
+          <section hidden={current !== MORE} className="flex flex-col gap-4">
+            <div>
+              <h1 className="font-display text-2xl font-bold">Add more items?</h1>
+              <p className="text-muted">{rows.length} item{rows.length === 1 ? '' : 's'} so far. Add more, or carry on to {trip ? 'check the trip' : 'add them to the closet'}.</p>
+            </div>
+            <ul className="flex flex-wrap gap-2" aria-label="Items so far">
+              {rows.map((r, pos) => (
+                <li key={r.id}>
+                  <button type="button" className="flex size-14 items-center justify-center overflow-hidden rounded-lg border border-line bg-surface text-xs text-muted" onClick={() => go(String(r.id))} aria-label={`Go to item ${pos + 1}`}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    {r.photo ? <img src={r.photo.preview} alt="" className="size-full object-cover" /> : `#${pos + 1}`}
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <button type="button" className={btnCls} disabled={rows.length >= MAX_ROWS} onClick={addMore}>Yes, add more</button>
+              <button type="button" className={btnGhostCls}
+                onClick={(e) => { if (trip) go(REVIEW); else if (allOk()) e.currentTarget.form?.requestSubmit(); }}>
+                {trip ? 'No, check the trip' : `No, add ${rows.length} item${rows.length === 1 ? '' : 's'} to closet`}
+              </button>
+            </div>
+            {rows.length >= MAX_ROWS && <p className="text-sm text-muted">A bulk add holds up to {MAX_ROWS} items. Save these first, then start another.</p>}
+          </section>
+        )}
 
         {trip && (
           <section hidden={current !== REVIEW} className="flex flex-col gap-4">
@@ -467,7 +558,7 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
       </div>
 
       {camera && (
-        <CameraCapture status={busy}
+        <CameraCapture status={busy} planned={trip ? tripPieces : undefined} already={camAlready}
           onShot={(f) => { camShots.current += 1; addFiles([f], true); }}
           onClose={closeCamera} />
       )}
@@ -490,11 +581,15 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
   );
 }
 
-function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onEditor, onTurning, setRef, userId, childId, categories, labels, sizes, defaultTagId, brands, removeBg, tripLines, left, meta, onMeta, onChoose, onTypeName }: {
+function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onReplace, onRemovePhoto, photoBusy, photoError, onEditor, onTurning, setRef, userId, childId, categories, labels, sizes, defaultTagId, brands, removeBg, tripLines, left, meta, onMeta, onChoose, onTypeName }: {
   row: Row;
   pos: number;
   hidden: boolean;
   onRemove: () => void;
+  onReplace: (file: File) => void;
+  onRemovePhoto: () => void;
+  photoBusy: string | null;
+  photoError: string | null;
   onEditor: (open: boolean) => void;
   onTurning: (on: boolean) => void;
   setRef: (el: HTMLFieldSetElement | null) => void;
@@ -546,6 +641,21 @@ function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onEditor, onTurning,
   const differs = Boolean(line && ((type && type.id !== line.categoryId) || (line.sizeId && tagSize !== line.sizeId)));
   const diffKey = `${meta.match}|${type?.id ?? ''}|${tag.custom ? `c:${tag.text}` : tag.tagId}`;
   const [sameOk, setSameOk] = useState('');
+  // Color: the guess from the photo fills it in until the color is picked by hand.
+  const [color, setColor] = useState('');
+  const picked = useRef(false);
+  useEffect(() => {
+    if (!picked.current) setColor(row.color ?? '');
+  }, [row.color]);
+  const [snapping, setSnapping] = useState(false);
+  const chooser = useRef<HTMLInputElement>(null);
+  const photoTools = (
+    <>
+      <input ref={chooser} type="file" accept="image/*" className="sr-only" tabIndex={-1} aria-label="Choose a photo"
+        onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) onReplace(f); }} />
+      {snapping && <CameraCapture multiple={false} onShot={onReplace} onClose={() => setSnapping(false)} />}
+    </>
+  );
 
   // Turns show at once; quick taps are saved together once they stop. The stored original turns too, so Restore lines up.
   const turns = useTurnQueue(async (q) => {
@@ -595,6 +705,13 @@ function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onEditor, onTurning,
             <button type="button" className="text-sm text-accent underline" disabled={opening} onClick={() => turns.turn(1)} aria-label="Turn right">Right ↻</button>
             <button type="button" className="text-sm text-accent underline" disabled={opening || turning} onClick={openEditor}>{opening ? 'Opening…' : 'Edit photo'}</button>
           </div>
+          <div className="flex flex-wrap justify-center gap-4">
+            <button type="button" className="text-sm text-accent underline" disabled={photoBusy !== null || turning} onClick={() => setSnapping(true)}>Retake</button>
+            <button type="button" className="text-sm text-accent underline" disabled={photoBusy !== null || turning} onClick={() => chooser.current?.click()}>Choose another</button>
+            <button type="button" className="text-sm text-bad underline" disabled={photoBusy !== null || turning} onClick={onRemovePhoto}>Remove photo</button>
+          </div>
+          {photoBusy && <p role="status" className="text-xs text-muted">{photoBusy}</p>}
+          {photoError && <p role="alert" className="text-sm text-bad">{photoError}</p>}
           {turns.saving && <p role="status" className="text-xs text-muted">Saving the turn…</p>}
           {(editError ?? turns.error) && <p role="alert" className="text-sm text-bad">{editError ?? turns.error}</p>}
           {editing && <PhotoEditor blob={row.photo.blob} original={original} onSave={async (r, o) => { await onSavePhoto(r, o); setEditing(false); }} onCancel={() => setEditing(false)} />}
@@ -642,10 +759,11 @@ function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onEditor, onTurning,
         <BrandSelect brands={brands} name={`brand_${pos}`} />
       </label>
       <label className={`${labelCls} sm:col-span-2`}>Color
-        <select className={inputCls} name={`color_${pos}`} defaultValue="">
+        <select className={inputCls} name={`color_${pos}`} value={color} onChange={(e) => { picked.current = true; setColor(e.target.value); }}>
           <option value="">Not set</option>
           {COLORS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
         </select>
+        {!picked.current && row.color && color === row.color && <span className="text-xs font-normal text-muted">Guessed from the photo</span>}
       </label>
       <TagSizeField labels={labels} value={tag} onChange={setTag} tagName={`tag_${pos}`} customName={`ctag_${pos}`} className={`${labelCls} sm:col-span-2`} />
       {line && differs && sameOk !== diffKey && (
@@ -673,9 +791,15 @@ function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onEditor, onTurning,
       {!row.photo && (
         <div className={`${labelCls} sm:col-span-6`}>
           Photo (optional)
-          <PhotoPicker userId={userId} childId={childId} name={`photo_${pos}`} max={1} label="Add a photo" removeBg={removeBg} />
+          <div className="flex flex-wrap items-center gap-3">
+            <button type="button" className={btnGhostCls} disabled={photoBusy !== null} onClick={() => setSnapping(true)}>Take a photo</button>
+            <button type="button" className={btnGhostCls} disabled={photoBusy !== null} onClick={() => chooser.current?.click()}>Choose a photo</button>
+          </div>
+          {photoBusy && <p role="status" className="text-xs font-normal text-muted">{photoBusy}</p>}
+          {photoError && <p role="alert" className="text-sm text-bad">{photoError}</p>}
         </div>
       )}
+      {photoTools}
       <div className="sm:col-span-6">
         <button type="button" className="text-sm text-bad underline" onClick={onRemove}>Remove this item</button>
       </div>
