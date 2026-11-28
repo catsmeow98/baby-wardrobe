@@ -256,6 +256,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
                     </label>
                     <button className={btnGhostCls} type="submit">Rename</button>
                   </form>
+                  <Link className="py-1.5 text-sm text-accent underline" href={`/closet/color-check?tag=${t.id}`}>Check colors</Link>
                   <details className="text-sm">
                     <summary className="cursor-pointer py-1.5 text-bad">Delete</summary>
                     <form action={deleteTag} className="mt-1 flex items-center gap-2">

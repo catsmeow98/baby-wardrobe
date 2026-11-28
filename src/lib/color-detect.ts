@@ -84,8 +84,20 @@ export function pickColor(counts: ReadonlyMap<string, number>, minPixels = 50): 
 
 const SIDE = 96;
 
+export interface ColorBucket { name: string; share: number; rgb: [number, number, number] }
+/** clusters: the most common colours on the item, coarsely grouped (8 steps per channel), as [r, g, b, share]. For tuning. */
+export interface ColorAnalysis { color: ColorValue | null; cutout: boolean; pixels: number; buckets: ColorBucket[]; clusters: [number, number, number, number][] }
+
 /** Reads a photo and guesses its main color. Never throws: a photo it cannot read gives null. */
 export async function detectColor(blob: Blob): Promise<ColorValue | null> {
+  return (await analyzeColor(blob))?.color ?? null;
+}
+
+/**
+ * Reads a photo and works out what the guess is based on: each color name's share of the item's pixels and their average
+ * RGB, as well as the guess. Null when the photo cannot be read.
+ */
+export async function analyzeColor(blob: Blob): Promise<ColorAnalysis | null> {
   try {
     const bmp = await createImageBitmap(blob);
     const scale = Math.min(1, SIDE / Math.max(bmp.width, bmp.height));
@@ -117,6 +129,8 @@ export async function detectColor(blob: Blob): Promise<ColorValue | null> {
     }
 
     const counts = new Map<string, number>();
+    const sums = new Map<string, [number, number, number]>();
+    const bins = new Map<number, number>();
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
       const i = (y * w + x) * 4;
       if (cutout) {
@@ -131,8 +145,19 @@ export async function detectColor(blob: Blob): Promise<ColorValue | null> {
       }
       const name = colorOfPixel(px[i], px[i + 1], px[i + 2]);
       counts.set(name, (counts.get(name) ?? 0) + 1);
+      const t = sums.get(name) ?? [0, 0, 0];
+      sums.set(name, [t[0] + px[i], t[1] + px[i + 1], t[2] + px[i + 2]]);
+      const bin = ((px[i] >> 5) << 6) | ((px[i + 1] >> 5) << 3) | (px[i + 2] >> 5);
+      bins.set(bin, (bins.get(bin) ?? 0) + 1);
     }
-    return pickColor(counts);
+    const total = [...counts.values()].reduce((a, b) => a + b, 0);
+    const buckets = [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([name, k]) => {
+      const t = sums.get(name)!;
+      return { name, share: Math.round((k / total) * 1000) / 1000, rgb: [Math.round(t[0] / k), Math.round(t[1] / k), Math.round(t[2] / k)] as [number, number, number] };
+    });
+    const clusters = [...bins.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12).map(([bin, k]) => (
+      [((bin >> 6) << 5) + 16, (((bin >> 3) & 7) << 5) + 16, ((bin & 7) << 5) + 16, Math.round((k / total) * 1000) / 1000] as [number, number, number, number]));
+    return { color: pickColor(counts), cutout, pixels: total, buckets, clusters };
   } catch (e) {
     console.error('Color detection failed', e);
     return null;

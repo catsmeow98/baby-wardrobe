@@ -386,3 +386,35 @@ export async function bulkUpdate(formData: FormData) {
   if (error) return stop('Those items could not be changed. Try again.');
   return done('updated');
 }
+
+/** Saves colors picked on the color check page, and (if asked) takes the tag being checked off those items. */
+export async function saveColors(formData: FormData) {
+  const tagId = z.string().uuid().safeParse(formData.get('tag'));
+  const page = `/closet/color-check${tagId.success ? `?tag=${tagId.data}` : ''}`;
+  const stop = (m: string): never => redirect(withParams(page, { error: m }));
+  let raw: unknown = [];
+  try {
+    raw = JSON.parse(String(formData.get('colors') ?? '[]'));
+  } catch {
+    raw = [];
+  }
+  const rows = z.array(z.object({ id: z.string().uuid(), color: z.enum(COLOR_VALUES).nullable() })).max(500).safeParse(raw);
+  if (!rows.success) return stop('Those colors could not be read. Try again.');
+  const ctx = await getContext();
+  // One update per color, for every item given that color.
+  const byColor = new Map<string | null, string[]>();
+  for (const r of rows.data) byColor.set(r.color, [...(byColor.get(r.color) ?? []), r.id]);
+  for (const [color, ids] of byColor) {
+    const { error } = await ctx.supabase.from('inventory_items').update({ color }).in('id', ids);
+    if (error) return stop('Some colors could not be saved. Try again.');
+  }
+  let untagged = 0;
+  if (tagId.success && formData.get('untag') === 'yes' && rows.data.length) {
+    const ids = rows.data.map((r) => r.id);
+    const { error } = await ctx.supabase.from('item_tags').delete().eq('tag_id', tagId.data).in('item_id', ids);
+    if (error) return stop('The colors were saved, but the tag could not be taken off. Try again.');
+    untagged = ids.length;
+  }
+  ['/closet', '/account'].forEach((p) => revalidatePath(p));
+  return redirect(withParams(page, { ok: `${rows.data.length} color${rows.data.length === 1 ? '' : 's'} saved${untagged ? ', tag taken off' : ''}.` }));
+}
