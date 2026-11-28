@@ -46,7 +46,7 @@ export function OrderCheck({ id, line, defaultQty, label }: { id: string; line: 
         <input type="checkbox" className="size-5 accent-accent" checked={on} onChange={(e) => ctx?.set(id, e.target.checked ? { line, qty, label } : null)} />
         Order
       </label>
-      <input className={`${inputCls} w-16`} type="number" min={1} max={999} value={qty} aria-label={`Quantity of ${label} to order`}
+      <input className={`${inputCls} !w-20 shrink-0 text-center`} type="number" inputMode="numeric" min={1} max={999} value={qty} aria-label={`Quantity of ${label} to order`}
         onChange={(e) => { const n = Math.max(1, Math.min(999, Math.round(Number(e.target.value) || 1))); ctx?.set(id, { line, qty: n, label }); }} />
     </div>
   );

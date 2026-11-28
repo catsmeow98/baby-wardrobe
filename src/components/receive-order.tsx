@@ -53,8 +53,8 @@ export function ReceiveOrder({ orderId, name, lines, returnTo }: { orderId: stri
             {lines.map((l) => (
               <li key={l.item} className="flex items-center gap-2 border-t border-line py-2 first:border-t-0">
                 <ItemIcon itemKey={l.icon} size={22} className="shrink-0 text-accent" />
-                <span className="min-w-0 flex-1"><b className="block truncate">{l.typeName}</b><span className="text-xs text-muted">{l.sizeLabel} · {l.outstanding} to come</span></span>
-                <input className={`${inputCls} w-16`} type="number" min={0} max={l.outstanding} value={q(l)} aria-label={`${l.typeName} received`}
+                <span className="min-w-0 flex-1"><b className="block">{l.typeName}</b><span className="text-xs text-muted">{l.sizeLabel} · {l.outstanding} to come</span></span>
+                <input className={`${inputCls} !w-20 shrink-0 text-center`} type="number" inputMode="numeric" min={0} max={l.outstanding} value={q(l)} aria-label={`${l.typeName} received`}
                   onChange={(e) => setQty((x) => ({ ...x, [l.item]: Math.max(0, Math.min(l.outstanding, Math.round(Number(e.target.value) || 0))) }))} />
               </li>
             ))}
