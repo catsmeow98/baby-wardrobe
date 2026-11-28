@@ -3,7 +3,7 @@
  * "back" value; the page or action that finishes the job sends the person back to it. Only addresses inside the given base
  * path are accepted, so the value cannot be used to send anyone to another site or section.
  */
-const ONE_SHOT = new Set(['error', 'ok', 'saved', 'added', 'photos', 'back']);
+const ONE_SHOT = new Set(['error', 'ok', 'saved', 'added', 'photos', 'back', 'tags', 'updated', 'deleted']);
 // Room for many repeated filters (?cat=<id>&cat=<id>…); an id is 36 characters.
 const MAX = 4000;
 

@@ -7,7 +7,7 @@ import { getContext, type Ctx } from '@/lib/context';
 import { safeBack, withParams } from '@/lib/back';
 import type { CategoryRow } from '@/lib/db';
 import { itemSchema, COLOR_VALUES, GENDER_VALUES, STATUS_VALUES } from '@/lib/validation/items';
-import { parseTags, saveTags } from '@/lib/tags';
+import { loadTags, parseTags, saveTags } from '@/lib/tags';
 import { autoName, parseTagRange, resolveFitRange } from '@/lib/domain';
 import { attachPhotos, discardPhotos } from '@/lib/photo-attach';
 
@@ -327,4 +327,62 @@ export async function bulkCreate(formData: FormData) {
   } else if (rowTags.some((t) => t.length)) tagProblem = true;
   revalidatePath('/closet');
   return redirect(withParams(backTo, { added: rows.length ? String(rows.length) : undefined, photos: photoProblem ? 'partial' : undefined, tags: tagProblem ? 'partial' : undefined }));
+}
+
+const BULK_FIELDS = ['status', 'gender', 'color', 'addTag', 'removeTag', 'delete'] as const;
+
+/** Changes one thing on many items at once, from Select in the closet. Row-level security keeps it to the person's own items. */
+export async function bulkUpdate(formData: FormData) {
+  const backTo = backOf(formData);
+  const stop = (m: string): never => redirect(withParams(backTo, { error: m }));
+  let raw: unknown = [];
+  try {
+    raw = JSON.parse(String(formData.get('ids') ?? '[]'));
+  } catch {
+    raw = [];
+  }
+  const ids = z.array(z.string().uuid()).min(1).max(500).safeParse(raw);
+  if (!ids.success) return stop('Select at least one item.');
+  const field = z.enum(BULK_FIELDS).safeParse(formData.get('field'));
+  if (!field.success) return stop('Choose what to change.');
+  const value = String(formData.get('value') ?? '').trim();
+  const ctx = await getContext();
+  const n = ids.data.length;
+  const done = (key: 'updated' | 'deleted') => {
+    ['/closet', '/dashboard', '/shopping', '/goals'].forEach((p) => revalidatePath(p));
+    return redirect(withParams(backTo, { [key]: String(n), error: undefined }));
+  };
+
+  if (field.data === 'delete') {
+    if (formData.get('confirm') !== 'yes') return stop('Tick the box to confirm deleting.');
+    const { error } = await ctx.supabase.from('inventory_items').delete().in('id', ids.data);
+    if (error) return stop('Those items could not be deleted. Try again.');
+    return done('deleted');
+  }
+  if (field.data === 'addTag' || field.data === 'removeTag') {
+    const tag = parseTags(JSON.stringify([value]))[0];
+    if (!tag) return stop('Type a tag.');
+    const { byItem } = await loadTags(ctx, ids.data);
+    const entries = ids.data.flatMap((id) => {
+      const now = byItem.get(id) ?? [];
+      const has = now.some((t) => t.toLowerCase() === tag.toLowerCase());
+      if (field.data === 'addTag') return has ? [] : [{ item: id, tags: [...now, tag] }];
+      return has ? [{ item: id, tags: now.filter((t) => t.toLowerCase() !== tag.toLowerCase()) }] : [];
+    });
+    if (!(await saveTags(ctx, entries))) return stop('The tags could not be saved. Try again.');
+    return done('updated');
+  }
+  let patch: Record<string, string | null>;
+  if (field.data === 'status') {
+    const s = z.enum(STATUS_VALUES).safeParse(value);
+    if (!s.success) return stop('Choose a status.');
+    patch = { status: s.data };
+  } else if (field.data === 'gender') {
+    patch = { gender: value === 'none' ? null : (z.enum(GENDER_VALUES).safeParse(value).data ?? stop('Choose a gender.')) };
+  } else {
+    patch = { color: value === 'none' ? null : (z.enum(COLOR_VALUES).safeParse(value).data ?? stop('Choose a color.')) };
+  }
+  const { error } = await ctx.supabase.from('inventory_items').update(patch).in('id', ids.data);
+  if (error) return stop('Those items could not be changed. Try again.');
+  return done('updated');
 }

@@ -18,12 +18,13 @@ import { FilterPanel } from '@/components/filter-panel';
 import { currentUrl } from '@/lib/back';
 import { filterItems, fitStateFor, parseTagRange, type FitState } from '@/lib/domain';
 import { tagFitText } from '@/lib/fit-text';
+import { ClosetGrid } from '@/components/closet-grid';
 
 export const metadata: Metadata = { title: 'Closet' };
 
 // Filters can repeat (?cat=a&cat=b). f=1 marks a submitted filter form, so ticking no status means any status, not the default.
 type Many = string | string[];
-type SP = { q?: string; fit?: Many; cat?: Many; group?: Many; gender?: Many; color?: Many; sort?: string; size?: Many; status?: Many; tag?: Many; f?: string; added?: string; photos?: string };
+type SP = { q?: string; fit?: Many; cat?: Many; group?: Many; gender?: Many; color?: Many; sort?: string; size?: Many; status?: Many; tag?: Many; f?: string; added?: string; photos?: string; tags?: string; updated?: string; deleted?: string; error?: string };
 
 export default async function ClosetPage({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
@@ -119,7 +120,11 @@ export default async function ClosetPage({ searchParams }: { searchParams: Promi
           <p className="text-muted">
             {filtered.length} record{filtered.length === 1 ? '' : 's'}, {pieces} piece{pieces === 1 ? '' : 's'}
             {sp.added ? ` · ${sp.added} added` : ''}
+            {sp.updated ? ` · ${sp.updated} updated` : ''}
+            {sp.deleted ? ` · ${sp.deleted} deleted` : ''}
           </p>
+          {sp.error && <p role="alert" className="text-sm text-bad">{sp.error}</p>}
+          {sp.tags === 'partial' && <p role="status" className="text-sm text-warn">Items were added, but their tags could not be saved. Add them on each item.</p>}
           {sp.photos === 'partial' && <p role="status" className="text-sm text-warn">Items were added, but some photos could not be attached. Open an item to add them again.</p>}
         </div>
         <div className="flex gap-2">
@@ -168,15 +173,20 @@ export default async function ClosetPage({ searchParams }: { searchParams: Promi
           {items.length === 0 ? 'Nothing here yet. Tap Add items to start.' : 'Nothing matches these filters.'}
         </div>
       ) : (
-        <ul className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-3">
-          {ordered.map((i) => {
+        <ClosetGrid
+          back={here}
+          tagNames={tagInfo.tags.map((t) => t.name)}
+          tagsByItem={Object.fromEntries(ordered.map((i) => [i.id, tagInfo.byItem.get(i.id) ?? []]))}
+          cards={ordered.map((i) => {
             const state = fitStateFor(i, ctx.currentSize, ctx.currentSizeTo);
             const raw = rowOf.get(i.id)!;
             const tag = raw.label_id ? labelById.get(raw.label_id)?.label : (raw.custom_tag ?? undefined);
             const fb = fbLabel(feedbackById.get(i.id));
-            return (
-              <li key={i.id}>
-                <Link href={`/closet/${i.id}?back=${bk}`} className="flex h-full flex-col gap-1.5 rounded-xl border border-line bg-surface p-2.5 hover:border-accent sm:p-3">
+            return {
+              id: i.id,
+              href: `/closet/${i.id}?back=${bk}`,
+              content: (
+                <>
                   {coverPath.has(i.id) && coverUrls.get(coverPath.get(i.id)!) ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={coverUrls.get(coverPath.get(i.id)!)} alt="" loading="lazy" className={`mb-1 aspect-[4/3] w-full rounded-lg ${coverPath.get(i.id)!.endsWith('.png') ? 'bg-line object-contain' : 'object-cover'}`} />
@@ -204,11 +214,11 @@ export default async function ClosetPage({ searchParams }: { searchParams: Promi
                     {fb && <Pill>{fb}</Pill>}
                     {raw.needs_details && <Pill tone="warn">Needs photos</Pill>}
                   </span>
-                </Link>
-              </li>
-            );
+                </>
+              ),
+            };
           })}
-        </ul>
+        />
       )}
     </>
   );
