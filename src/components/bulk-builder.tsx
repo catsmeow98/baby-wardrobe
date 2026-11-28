@@ -260,8 +260,6 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
     const problems: string[] = [];
     let added = 0;
     const startRows = rowCount.current;
-    // From a trip, each new photo starts as the next piece still to match, in the trip's order.
-    const guessLeft = piecesLeft(lines, usesOf(rowsRef.current, metaRef.current));
     for (let k = 0; k < files.length; k++) {
       if (startRows + added >= MAX_ROWS) {
         setError(`You can add up to ${MAX_ROWS} items at a time, so the rest of the photos were skipped. Save these, then add the rest.`);
@@ -289,12 +287,16 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
       }
       const id = nextId.current++;
       added++;
-      const g = guessLine(lines, guessLeft);
+      // From a trip, each new photo starts as the next piece still to match, in the trip's order. Worked out per photo, so
+      // matches changed on items already being filled in (while the rest process) are taken into account.
+      const g = guessLine(lines, piecesLeft(lines, usesOf(rowsRef.current, metaRef.current)));
       if (g) {
-        guessLeft.set(g, (guessLeft.get(g) ?? 0) - 1);
+        metaRef.current = { ...metaRef.current, [id]: { match: g, qty: 1 } };
         setMeta((m) => ({ ...m, [id]: { match: g, qty: 1 } }));
       }
-      setRows((list) => [...list, { id, photo: { ...ref, preview: URL.createObjectURL(blob), blob } }]);
+      const row: Row = { id, photo: { ...ref, preview: URL.createObjectURL(blob), blob } };
+      rowsRef.current = [...rowsRef.current, row];
+      setRows((list) => [...list, row]);
       void guessColor(id, blob);
     }
     setBusy(null);
@@ -393,6 +395,8 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
 
   const label = current === PHOTOS ? 'Photos' : current === REVIEW ? 'Check the trip' : current === MORE ? 'Add more?' : `Item ${idx} of ${rows.length}`;
   const tripPieces = lines.reduce((a, l) => a + l.qty, 0);
+  // On the last ready item (or the photo screen with none ready) while photos are still coming: Next would skip past them.
+  const waitForMore = rows.length === 0 || current === String(rows[rows.length - 1]?.id) || (current === PHOTOS && resumeFrom !== null && !rows.some((r) => r.id >= resumeFrom));
   const [camAlready, setCamAlready] = useState(0);
   // The keyboard's Enter (Go) key never saves the batch; it closes the keyboard. Only the save button saves.
   const noEnter = (e: React.KeyboardEvent) => {
@@ -450,6 +454,7 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
             <button type="button" className={btnGhostCls} disabled={rows.length >= MAX_ROWS} onClick={() => { setDone(null); setCamAlready(rows.filter((r) => r.photo).length); setCamera(true); }}>Take photos</button>
             {busy === null && rows.length < MAX_ROWS && <button type="button" className="text-sm text-accent underline" onClick={addBlank}>Add an item without a photo</button>}
           </div>
+          {busy !== null && rows.length > 0 && <p className="text-sm text-muted">You can tap Next and start filling in the items that are ready while the rest process.</p>}
           {error && <p role="alert" className="text-sm text-bad">{error}</p>}
           {done && !busy && <p role="status" className="rounded-lg bg-good-soft p-3 text-sm font-medium text-good">✓ {done}</p>}
           {rows.length > 0 && (
@@ -503,7 +508,7 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
             </ul>
             <div className="flex flex-col gap-2 sm:flex-row">
               <button type="button" className={btnCls} disabled={rows.length >= MAX_ROWS} onClick={addMore}>Yes, add more</button>
-              <button type="button" className={btnGhostCls}
+              <button type="button" className={btnGhostCls} disabled={busy !== null}
                 onClick={(e) => { if (trip) go(REVIEW); else if (allOk()) e.currentTarget.form?.requestSubmit(); }}>
                 {trip ? 'No, check the trip' : `No, add ${rows.length} item${rows.length === 1 ? '' : 's'} to closet`}
               </button>
@@ -591,12 +596,14 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
         <div className="mx-auto flex max-w-xl items-center gap-3">
           {idx > 0 ? <button type="button" className={btnGhostCls} onClick={() => window.history.back()}>Back</button> : <Link className={btnGhostCls} href={back} onClick={exit}>Exit</Link>}
           <span className="flex-1" />
+          {busy !== null && current !== PHOTOS && <span role="status" className="min-w-0 truncate text-xs text-muted">{busy}</span>}
           {last ? (
             // Not a submit button: a tap on Next that lands here would otherwise finish as a save, because the browser decides what
             // a tap does after React has already swapped the button. This one saves only from its own tap, through requestSubmit.
-            <button key="save" type="button" className={btnCls} onClick={(e) => { if (allOk()) e.currentTarget.form?.requestSubmit(); }}>{trip ? 'Save to closet' : `Add ${rows.length} item${rows.length === 1 ? '' : 's'} to closet`}</button>
+            <button key="save" type="button" className={btnCls} disabled={busy !== null} onClick={(e) => { if (allOk()) e.currentTarget.form?.requestSubmit(); }}>{busy !== null ? 'Waiting for photos…' : trip ? 'Save to closet' : `Add ${rows.length} item${rows.length === 1 ? '' : 's'} to closet`}</button>
           ) : (
-            <button key="next" type="button" className={btnCls} onClick={next} disabled={steps.length <= 1 || busy !== null}>Next</button>
+            // While photos are still processing, items that are ready can be filled in; only the step past the last ready item waits.
+            <button key="next" type="button" className={btnCls} onClick={next} disabled={steps.length <= 1 || (busy !== null && waitForMore)}>{busy !== null && waitForMore ? 'Next photo processing…' : 'Next'}</button>
           )}
         </div>
       </div>
