@@ -79,7 +79,7 @@ export function CameraCapture({ onShot, onClose, multiple = true, status, planne
       <div className="flex items-center justify-between px-4 py-2 text-sm">
         <span aria-live="polite">{planned
           ? already + count > planned
-            ? `${already + count} photos taken (${planned} on the trip)`
+            ? `${already + count} photos taken (${planned} planned)`
             : `${already + count} of ${planned} photo${planned === 1 ? '' : 's'} taken`
           : count ? `${count} photo${count === 1 ? '' : 's'} taken` : multiple ? 'Snap each item, then tap Done' : 'Snap the item'}</span>
         <button type="button" className="underline" onClick={onClose}>{count ? 'Done' : 'Cancel'}</button>

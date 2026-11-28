@@ -10,6 +10,7 @@ import { listOf, listQs } from '@/lib/multi';
 import { TypeIcon } from '@/components/item-icon';
 import { groupCategories, matchesCategory } from '@/lib/categories';
 import { sizeName } from '@/lib/db';
+import { loadSizeMonths } from '@/lib/size-months';
 import type { GoalRow, ItemRow, ShoppingRow } from '@/lib/db';
 import { goalProgress, incomingFor, ownedFor, sizeProgress } from '@/lib/domain';
 import { copyGoals, saveGoals } from './actions';
@@ -24,10 +25,11 @@ export default async function GoalsPage({ searchParams }: { searchParams: Promis
   if (!ctx.active) return <NoChild />;
   const child = ctx.active;
 
-  const [{ data: itemRows }, { data: goalRows }, { data: shopRows }] = await Promise.all([
+  const [{ data: itemRows }, { data: goalRows }, { data: shopRows }, months] = await Promise.all([
     ctx.supabase.from('inventory_items').select('*').eq('child_id', child.id),
     ctx.supabase.from('wardrobe_goals').select('*').eq('child_id', child.id),
     ctx.supabase.from('shopping_items').select('*').eq('child_id', child.id),
+    loadSizeMonths(ctx),
   ]);
   const items = toInventory((itemRows ?? []) as ItemRow[], ctx);
   const goals = toGoals((goalRows ?? []) as GoalRow[], ctx);
@@ -70,6 +72,7 @@ export default async function GoalsPage({ searchParams }: { searchParams: Promis
             className={`rounded-full border px-3 py-1 text-sm ${s.sort_order === sizeOrder ? 'border-accent bg-accent text-accent-ink' : 'border-line bg-surface'}`}
           >
             {s.alias ? `${s.label} / ${s.alias}` : s.label}{s.sort_order === ctx.currentSize ? ' (now)' : ''}
+            {months[s.sort_order] && <span className={`ml-1 text-xs ${s.sort_order === sizeOrder ? 'opacity-80' : 'text-muted'}`}>{months[s.sort_order]}</span>}
           </Link>
         ))}
       </div>
@@ -102,7 +105,7 @@ export default async function GoalsPage({ searchParams }: { searchParams: Promis
           <input key={c.id} type="hidden" name={`goal_${c.id}`} value={goals.find((x) => x.categoryId === c.id && x.size === sizeOrder)?.target ?? ''} />
         ))}
         <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="font-display text-lg font-bold">{sizeName(size)} goals</h2>
+          <h2 className="font-display text-lg font-bold">{sizeName(size)} goals{months[sizeOrder] && <span className="ml-2 text-sm font-normal text-muted">worn about {months[sizeOrder]}</span>}</h2>
           <span className="text-sm text-muted">{completion.percent === null ? 'No goals set yet' : `${completion.percent}% of target pieces owned`}</span>
         </div>
         <ul>

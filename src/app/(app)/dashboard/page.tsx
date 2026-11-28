@@ -6,7 +6,9 @@ import { SetupBanner } from '@/components/setup-banner';
 import { Pill } from '@/components/pill';
 import { ProgressBar } from '@/components/progress-bar';
 import { btnCls, btnGhostCls } from '@/components/ui';
+import { FormMessage } from '@/components/form-message';
 import { FIT_LABELS, sizeName } from '@/lib/db';
+import { loadSizeMonths } from '@/lib/size-months';
 import type { GoalRow, ItemRow, ShoppingRow } from '@/lib/db';
 import { KEPT_STATUSES, countFitting, fitStateFor, goalProgress, sizeProgress, transition, type FitState } from '@/lib/domain';
 import { forecastFor, loadMeasurements } from '@/lib/forecast-data';
@@ -33,22 +35,26 @@ function Stat({ label, value, note }: { label: string; value: React.ReactNode; n
 const monthOf = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' });
 const FIT_ORDER: FitState[] = ['fits', 'notyet', 'outgrown', 'unknown'];
 
-export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ trip?: string }> }) {
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ trip?: string; ok?: string; error?: string }> }) {
   const sp = await searchParams;
   const ctx = await getContext();
   if (!ctx.active) return <><SetupBanner ctx={ctx} /><NoChild /></>;
   const child = ctx.active;
-  const [trips, orders] = await Promise.all([loadTrips(ctx, child.id), loadOpenOrders(ctx, child.id)]);
+  const [trips, orders, months] = await Promise.all([loadTrips(ctx, child.id), loadOpenOrders(ctx, child.id), loadSizeMonths(ctx)]);
   // Just received an order from here: offer photos for it (Later leaves it in the list below).
   const justReceived = sp.trip ? trips.find((t) => t.id === sp.trip) : undefined;
   const typeName = (id: string) => ctx.catById.get(id)?.name ?? 'Item';
   const sizeOf = (id: string) => { const z = ctx.sizeById.get(id); return z ? sizeName(z) : ''; };
-  const [{ data: itemRows }, { data: goalRows }, { data: shopRows }] = await Promise.all([
+  const [{ data: itemRows }, { data: goalRows }, { data: shopRows }, { data: photoRows }] = await Promise.all([
     ctx.supabase.from('inventory_items').select('*').eq('child_id', child.id),
     ctx.supabase.from('wardrobe_goals').select('*').eq('child_id', child.id),
     ctx.supabase.from('shopping_items').select('*').eq('child_id', child.id),
+    ctx.supabase.from('inventory_photos').select('inventory_item_id'),
   ]);
   const rawItems = (itemRows ?? []) as ItemRow[];
+  // Items with no photo (not counting ones still waiting on a shopping trip, which have their own list).
+  const pictured = new Set(((photoRows ?? []) as { inventory_item_id: string }[]).map((p) => p.inventory_item_id));
+  const noPhoto = rawItems.filter((r) => !r.needs_details && !pictured.has(r.id));
   const items = toInventory(rawItems, ctx);
   const shopRowsT = (shopRows ?? []) as ShoppingRow[];
   const progress = goalProgress(toGoals((goalRows ?? []) as GoalRow[], ctx), items, toShopping(shopRowsT, ctx));
@@ -131,6 +137,17 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 })} />
             </div>
           ))}
+        </section>
+      )}
+
+      <FormMessage error={sp.error} message={sp.ok} />
+      {noPhoto.length > 0 && (
+        <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-surface p-4">
+          <div>
+            <h2 className="font-display text-lg font-bold">Items missing photos</h2>
+            <p className="text-sm text-muted">{noPhoto.length} item{noPhoto.length === 1 ? ' has' : 's have'} no photo: {noPhoto.slice(0, 3).map((r) => ctx.catById.get(r.category_id)?.name ?? 'Item').join(', ')}{noPhoto.length > 3 ? ', and more' : ''}.</p>
+          </div>
+          <Link className={btnCls} href="/closet/add-photos?back=%2Fdashboard">Add photos</Link>
         </section>
       )}
 
@@ -230,8 +247,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               const s = ctx.sizeByOrder.get(order);
               const p = sizeProgress(progress, child.id, order);
               return (
-                <li key={order} className="grid grid-cols-[6rem_1fr_3rem] items-center gap-3 border-t border-line py-2 first:border-t-0">
-                  <Link className="text-accent underline" href={`/goals?size=${order}`}>{s ? sizeName(s) : ''}{order === cur ? ' (now)' : ''}</Link>
+                <li key={order} className="grid grid-cols-[6.5rem_1fr_3rem] items-center gap-3 border-t border-line py-2 first:border-t-0">
+                  <span className="flex flex-col">
+                    <Link className="text-accent underline" href={`/goals?size=${order}`}>{s ? sizeName(s) : ''}{order === cur ? ' (now)' : ''}</Link>
+                    {months[order] && <span className="text-xs text-muted">{months[order]}</span>}
+                  </span>
                   <ProgressBar owned={p.ownedTowardGoal} incoming={0} goal={p.goalTotal} />
                   <span className="text-right text-sm tabular-nums">{p.percent ?? 0}%</span>
                 </li>

@@ -14,8 +14,10 @@ test('age in months', () => {
 
 test('sizeFor follows the chart and offsets shift it', () => {
   assert.equal(sizeFor(20), 0);
-  assert.equal(sizeFor(27), 3);
-  assert.equal(sizeFor(27, 1), 2); // a brand that runs large keeps a taller child in a smaller size
+  assert.equal(sizeFor(27), 2); // Carter's 6M runs to 27 in
+  assert.equal(sizeFor(27.5), 3);
+  assert.equal(sizeFor(27.5, 1), 2); // a brand that runs large keeps a taller child in a smaller size
+  assert.equal(sizeFor(41), 9);
   assert.equal(sizeFor(99), 9);
 });
 
@@ -66,4 +68,19 @@ test('brand ratings: none means no change, few ratings move little, many move mo
   assert.equal(fitWord(-0.5), 'Runs small');
   assert.equal(fitWord(0), 'True to size');
   assert.equal(fitWord(0.5), 'Runs large');
+});
+
+test('the growth reference matches the WHO standard', () => {
+  const at = (sex: 'girls' | 'boys', ageMonthsOld: number, cm: number) => {
+    // A child measured at a WHO median lands on the 50th percentile; at median + 1 SD on about the 84th.
+    const dob = '2025-01-01';
+    const date = addMonths(dob, ageMonthsOld);
+    return forecast(sex, dob, [{ date, lengthIn: cm / 2.54 }], date, 0)!.percentile;
+  };
+  // (Calendar months are not exactly WHO months, so allow a point either way.)
+  for (const [sex, m, cm] of [['girls', 12, 74.015], ['boys', 6, 67.6236], ['boys', 24, 87.8161], ['girls', 18, 80.7079]] as const) {
+    assert.ok(Math.abs(at(sex, m, cm) - 50) <= 2, `${sex} ${m}`);
+  }
+  // WHO boys at 12 months: SD = 75.7488 x 0.03137 = 2.376 cm.
+  assert.ok(Math.abs(at('boys', 12, 75.7488 + 2.376) - 84) <= 1);
 });

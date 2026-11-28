@@ -24,7 +24,7 @@ export const metadata: Metadata = { title: 'Closet' };
 
 // Filters can repeat (?cat=a&cat=b). f=1 marks a submitted filter form, so ticking no status means any status, not the default.
 type Many = string | string[];
-type SP = { q?: string; fit?: Many; cat?: Many; group?: Many; gender?: Many; color?: Many; sort?: string; size?: Many; status?: Many; tag?: Many; f?: string; added?: string; photos?: string; tags?: string; updated?: string; deleted?: string; error?: string };
+type SP = { q?: string; fit?: Many; cat?: Many; group?: Many; gender?: Many; color?: Many; sort?: string; size?: Many; status?: Many; tag?: Many; pic?: Many; f?: string; added?: string; photos?: string; tags?: string; updated?: string; deleted?: string; error?: string };
 
 export default async function ClosetPage({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
@@ -66,6 +66,7 @@ export default async function ClosetPage({ searchParams }: { searchParams: Promi
   const colors = listOf(sp.color);
   // Tags are shared by all children; only ones on this child's items are offered as filters.
   const tagPicks = listOf(sp.tag);
+  const pics = listOf(sp.pic).filter((v) => v === 'yes' || v === 'no');
   const usedTagIds = new Set(rows.flatMap((r) => tagInfo.idsByItem.get(r.id) ?? []));
   const tagOptions = tagInfo.tags.filter((t) => usedTagIds.has(t.id) || tagPicks.includes(t.id));
   // Active pieces by default. Once the filters are submitted, no status ticked means any ("all" is from older links).
@@ -87,7 +88,8 @@ export default async function ClosetPage({ searchParams }: { searchParams: Promi
     .filter((i) => matchesCategory(ctx.catById.get(i.categoryId), { group: groupIds }))
     .filter((i) => !colors.length || colors.includes(colorOf.get(i.id) ?? 'none'))
     .filter((i) => !genders.length || genders.includes(genderOf.get(i.id) ?? 'none'))
-    .filter((i) => !tagPicks.length || (tagInfo.idsByItem.get(i.id) ?? []).some((t) => tagPicks.includes(t)));
+    .filter((i) => !tagPicks.length || (tagInfo.idsByItem.get(i.id) ?? []).some((t) => tagPicks.includes(t)))
+    .filter((i) => !pics.length || pics.includes(coverPath.has(i.id) ? 'yes' : 'no'));
   const sort = sp.sort ?? 'new';
   const typeName = (id: string) => ctx.catById.get(id)?.name ?? '';
   const ordered = sort === 'new' ? filtered : [...filtered].sort((a, b) =>
@@ -108,7 +110,7 @@ export default async function ClosetPage({ searchParams }: { searchParams: Promi
     return { from: null, to: null };
   };
   const isDefaultStatus = statuses.length === 1 && statuses[0] === 'active';
-  const activeFilters = [fits, groupIds, cats, tagSizes, genders, tagPicks, colors].filter((l) => l.length > 0).length + (isDefaultStatus ? 0 : 1) + (sort !== 'new' ? 1 : 0);
+  const activeFilters = [fits, groupIds, cats, tagSizes, genders, tagPicks, colors, pics].filter((l) => l.length > 0).length + (isDefaultStatus ? 0 : 1) + (sort !== 'new' ? 1 : 0);
   const rowOf = new Map(rows.map((r) => [r.id, r]));
   const fbLabel = (v: number | null | undefined) => FIT_FEEDBACK.find(([k]) => Number(k) === v)?.[1];
 
@@ -141,6 +143,7 @@ export default async function ClosetPage({ searchParams }: { searchParams: Promi
           <MultiSelect label="Gender" name="gender" defaultSelected={genders} options={[...GENDERS.map(([v, l]) => ({ value: v, label: l })), { value: 'none', label: 'Not set' }]} />
           <MultiSelect label="Status" name="status" defaultSelected={statuses} options={STATUSES.map(([v, l]) => ({ value: v, label: l }))} />
           {tagOptions.length > 0 && <MultiSelect label="Tags" name="tag" defaultSelected={tagPicks} options={tagOptions.map((t) => ({ value: t.id, label: t.name }))} />}
+          <MultiSelect label="Photo" name="pic" defaultSelected={pics} options={[{ value: 'no', label: 'No photo' }, { value: 'yes', label: 'Has a photo' }]} />
           <MultiSelect label="Color" name="color" defaultSelected={colors} options={[...COLORS.map(([v, l]) => ({ value: v, label: l })), { value: 'none', label: 'Not set' }]} />
           <select className={`${inputCls} w-auto`} name="sort" defaultValue={sort} aria-label="Sort by">
             <option value="new">Newest first</option>

@@ -418,3 +418,32 @@ export async function saveColors(formData: FormData) {
   ['/closet', '/account'].forEach((p) => revalidatePath(p));
   return redirect(withParams(page, { ok: `${rows.data.length} color${rows.data.length === 1 ? '' : 's'} saved${untagged ? ', tag taken off' : ''}.` }));
 }
+
+/**
+ * Puts photos on items that had none, from Add photos: each match is an item and a photo (as uploaded by the browser), with the
+ * color guessed from it when the item has no color yet. Photos left unmatched are deleted.
+ */
+export async function attachItemPhotos(formData: FormData) {
+  const back = safeBack(formData.get('back'), '/dashboard');
+  const stop = (m: string): never => redirect(withParams('/closet/add-photos', { error: m }));
+  let raw: unknown = [];
+  try {
+    raw = JSON.parse(String(formData.get('matches') ?? '[]'));
+  } catch {
+    raw = [];
+  }
+  const parsed = z.array(z.object({ item: z.string().uuid(), photo: z.string().min(1).max(420), color: z.enum(COLOR_VALUES).nullable().optional() })).max(100).safeParse(raw);
+  if (!parsed.success) return stop('Those photos could not be read. Try again.');
+  const unused = z.array(z.string().max(420)).max(200).safeParse(JSON.parse(String(formData.get('unused') ?? '[]')));
+  const ctx = await getContext();
+  if (!ctx.active) return stop('Add a child first.');
+  if (unused.success && unused.data.length) await discardPhotos(ctx.supabase, ctx.user.id, ctx.active.id, unused.data);
+  let attached = 0;
+  for (const m of parsed.data) {
+    if (await attachPhotos(ctx.supabase, ctx.user.id, ctx.active.id, m.item, [m.photo])) attached++;
+    if (m.color) await ctx.supabase.from('inventory_items').update({ color: m.color }).eq('id', m.item).is('color', null);
+  }
+  ['/closet', '/dashboard'].forEach((p) => revalidatePath(p));
+  if (attached < parsed.data.length) return stop(`${attached} of ${parsed.data.length} photos were added. Try the rest again.`);
+  return redirect(withParams(back, { ok: `${attached} photo${attached === 1 ? '' : 's'} added.` }));
+}

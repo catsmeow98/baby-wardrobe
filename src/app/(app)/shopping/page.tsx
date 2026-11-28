@@ -20,6 +20,7 @@ import { ReceiveOrder } from '@/components/receive-order';
 import { LocalTime } from '@/components/local-time';
 import { loadOpenOrders } from '@/lib/orders-data';
 import { loadHistory } from '@/lib/history-data';
+import { loadSizeMonths } from '@/lib/size-months';
 import { ShowMoreList } from '@/components/show-more-list';
 import { loadTrips } from '@/lib/trips-data';
 import { iconForType } from '@/lib/item-icons';
@@ -58,7 +59,7 @@ export default async function ShoppingPage({ searchParams }: { searchParams: Pro
   const passes = (s: ShoppingRow) => typeOk(s.category_id) || (!visibleIds.has(s.category_id) && !groupIds.length && !cats.length) ? sizeOk(ctx.orderOf.get(s.size_id)) : false;
   // Ordered entries that belong to an order show under Orders; Your list keeps what is still to order (and older loose orders).
   const open = shopRowsT.filter((s) => !['received', 'cancelled'].includes(s.status) && !(s.order_id && s.status !== 'needed') && passes(s));
-  const [orders, history] = await Promise.all([loadOpenOrders(ctx, child.id), loadHistory(ctx, child.id, 200)]);
+  const [orders, history, months] = await Promise.all([loadOpenOrders(ctx, child.id), loadHistory(ctx, child.id, 200), loadSizeMonths(ctx)]);
   // Plain text for pasting into a note or message: what is still to buy, from the gaps and from entries not yet ordered.
   const wanted = [
     ...gaps.map((g) => ({ n: g.remaining, type: ctx.catById.get(g.categoryId)?.name ?? 'Item', size: ctx.sizeByOrder.get(g.size) })),
@@ -142,14 +143,14 @@ export default async function ShoppingPage({ searchParams }: { searchParams: Pro
         {(
           <NeedsCart
             childId={child.id}
-            columns={needs.sizes.flatMap((n) => { const z = ctx.sizeByOrder.get(n); return z ? [{ order: n, sizeId: z.id, label: sizeName(z) }] : []; })}
+            columns={needs.sizes.flatMap((n) => { const z = ctx.sizeByOrder.get(n); return z ? [{ order: n, sizeId: z.id, label: sizeName(z), months: months[n] }] : []; })}
             rows={needs.rows.map((r) => ({ categoryId: r.categoryId, cells: Object.fromEntries(r.cells), info: Object.fromEntries(gaps.filter((g) => g.categoryId === r.categoryId).map((g) => [g.size, { goal: g.target, owned: g.owned, incoming: g.incoming }])) }))}
             types={Object.fromEntries(ctx.categories.map((c) => [c.id, { name: c.name, icon: iconForType(c) }]))}
-            sizeLabels={Object.fromEntries(ctx.sizes.map((z) => [z.id, sizeName(z)]))}
+            sizeLabels={Object.fromEntries(ctx.sizes.map((z) => [z.id, months[z.sort_order] ? `${sizeName(z)} · ${months[z.sort_order]}` : sizeName(z)]))}
             allSizes={ctx.sizes.map((z) => ({ sizeId: z.id, label: sizeName(z) }))}
             list={gaps.flatMap((g) => {
               const z = ctx.sizeByOrder.get(g.size);
-              return z ? [{ categoryId: g.categoryId, sizeId: z.id, sizeLabel: sizeName(z), goal: g.target, owned: g.owned, incoming: g.incoming, need: g.remaining }] : [];
+              return z ? [{ categoryId: g.categoryId, sizeId: z.id, sizeLabel: months[z.sort_order] ? `${sizeName(z)} · ${months[z.sort_order]}` : sizeName(z), goal: g.target, owned: g.owned, incoming: g.incoming, need: g.remaining }] : [];
             })}
           />
         )}

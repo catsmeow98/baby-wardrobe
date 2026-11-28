@@ -11,7 +11,7 @@ import { MAX_IN_CART, cartKey, cartLines, cartPieces, cartStorageKey, leftToFind
 import Link from 'next/link';
 import { closetPieces, markCartBought, receiveCart, type ClosetPiece } from '@/app/(app)/shopping/actions';
 
-export interface NeedsColumn { order: number; sizeId: string; label: string }
+export interface NeedsColumn { order: number; sizeId: string; label: string; /** When the child is expected to wear it, such as Oct-Feb. */ months?: string }
 export interface CellInfo { goal: number; owned: number; incoming: number }
 export interface NeedsRow { categoryId: string; cells: Record<number, number>; /** Goal, closet and on-order counts behind each cell, by size order. */ info?: Record<number, CellInfo> }
 export interface TypeInfo { name: string; icon: string }
@@ -210,7 +210,7 @@ export function NeedsCart({ childId, columns, rows, list, types, sizeLabels, all
           <thead>
             <tr>
               <th scope="col" className="sticky left-0 bg-surface py-2 pr-3 text-left font-medium text-muted">Item</th>
-              {columns.map((col) => <th key={col.order} scope="col" className="px-2 py-2 text-center font-medium text-muted">{col.label}</th>)}
+              {columns.map((col) => <th key={col.order} scope="col" className="px-2 py-2 text-center font-medium text-muted">{col.label}{col.months && <span className="block text-[11px] font-normal">{col.months}</span>}</th>)}
               <th scope="col" className="px-3 py-2 text-center font-semibold">Total</th>
             </tr>
           </thead>

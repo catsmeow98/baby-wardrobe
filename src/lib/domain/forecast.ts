@@ -2,9 +2,8 @@
  * Size forecast. Places length measurements on a growth curve, projects the child's length forward, and finds when
  * that length crosses into the next size on a brand's chart.
  *
- * IMPORTANT: the reference table below is an approximation of published length-for-age medians, and UPPER is a
- * generic size chart. Both must be checked against the official WHO tables and real brand charts before this is
- * presented as anything more than an estimate.
+ * The growth reference is the WHO length-for-age standard (see REF), and UPPER is Carter's size chart. A forecast is still
+ * an estimate: children cross percentiles, and brands size differently.
  */
 export type Sex = 'girls' | 'boys';
 export interface Measurement {
@@ -26,29 +25,54 @@ export interface Forecast {
   rows: ForecastRow[];
 }
 
-const REF_AGES = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 15, 18, 21, 24, 30, 36];
-const REF: Record<Sex, number[]> = {
-  girls: [49.1, 53.7, 57.1, 59.8, 62.1, 64.0, 65.7, 67.3, 68.7, 70.1, 71.5, 72.8, 74.0, 77.5, 80.7, 83.7, 86.4, 91.2, 95.1],
-  boys: [49.9, 54.7, 58.4, 61.4, 63.9, 65.9, 67.6, 69.2, 70.6, 72.0, 73.3, 74.5, 75.7, 79.1, 82.3, 85.1, 87.1, 91.9, 96.1],
+/**
+ * WHO Child Growth Standards, length-for-age: median (M, cm) and coefficient of variation (S) by month; L is 1 throughout, so
+ * SD = M x S. Birth to 24 months for both sexes, checked against the WHO LMS tables. Boys 25 to 36 months are WHO
+ * height-for-age plus 0.7 cm (WHO's own length-to-height difference), so the curve stays in lying length, the way babies are
+ * measured at home. Girls 30 and 36 months are older approximations, not yet checked against the WHO table.
+ */
+interface Ref { ages: number[]; m: number[]; s: number[] }
+const MONTHS_0_24 = Array.from({ length: 25 }, (_, i) => i);
+const REF: Record<Sex, Ref> = {
+  girls: {
+    ages: [...MONTHS_0_24, 30, 36],
+    m: [49.1477, 53.6872, 57.0673, 59.8029, 62.0899, 64.0301, 65.7311, 67.2873, 68.7498, 70.1435, 71.4818, 72.771, 74.015, 75.2176, 76.3817,
+      77.5099, 78.6055, 79.671, 80.7079, 81.7182, 82.7036, 83.6654, 84.604, 85.5202, 86.4153, 91.2, 95.1],
+    s: [0.0379, 0.0364, 0.03568, 0.0352, 0.03486, 0.03463, 0.03448, 0.03441, 0.0344, 0.03444, 0.03452, 0.03464, 0.03479, 0.03496, 0.03514,
+      0.03534, 0.03555, 0.03576, 0.03598, 0.0362, 0.03643, 0.03666, 0.03688, 0.03711, 0.03734, 0.0384, 0.0389],
+  },
+  boys: {
+    ages: [...MONTHS_0_24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36],
+    m: [49.8842, 54.7244, 58.4249, 61.4292, 63.886, 65.9026, 67.6236, 69.1645, 70.5994, 71.9687, 73.2812, 74.5388, 75.7488, 76.9186, 78.0497,
+      79.1458, 80.2113, 81.2487, 82.2587, 83.2418, 84.1996, 85.1348, 86.0477, 86.941, 87.8161,
+      88.672, 89.5065, 90.3197, 91.112, 91.8828, 92.6327, 93.3631, 94.0753, 94.7711, 95.4532, 96.1236, 96.7835],
+    s: [0.03795, 0.03557, 0.03424, 0.03328, 0.03257, 0.03204, 0.03165, 0.03139, 0.03124, 0.03117, 0.03118, 0.03125, 0.03137, 0.03154, 0.03174,
+      0.03197, 0.03222, 0.0325, 0.03279, 0.0331, 0.03342, 0.03376, 0.0341, 0.03445, 0.03479,
+      0.03542, 0.03576, 0.0361, 0.03642, 0.03674, 0.03704, 0.03733, 0.03761, 0.03787, 0.03812, 0.03836, 0.03858],
+  },
 };
-const REF_SD = [1.9, 1.9, 2.0, 2.1, 2.2, 2.3, 2.3, 2.4, 2.5, 2.6, 2.6, 2.7, 2.7, 2.9, 3.0, 3.2, 3.3, 3.5, 3.7];
-/** Largest length (inches) that fits each size group (order 0 to 9) on the standard chart. */
-export const UPPER = [21.5, 24, 26.5, 28.5, 30, 32, 34, 36.5, 39, 42];
+/**
+ * Largest length (inches) that fits each size group (order 0 to 9): Carter's current chart (carters.com, checked Nov 2026):
+ * NB to 21.5, 3M 21.5-24, 6M 24-27, 9M 27-28.5, 12M 28.5-30, 18M 30-32, 24M 32-34, 2T 35-36.5, 3T 36.5-39, 4T 39-41.5.
+ */
+export const UPPER = [21.5, 24, 27, 28.5, 30, 32, 34, 36.5, 39, 41.5];
 export const MAX_AGE_MONTHS = 36;
 
 const CM_PER_IN = 2.54;
 const DAY_MS = 864e5;
 
-function interp(values: number[], age: number): number {
+function interp(ages: number[], values: number[], age: number): number {
   const a = Math.max(0, Math.min(MAX_AGE_MONTHS, age));
-  for (let i = 1; i < REF_AGES.length; i++) {
-    if (a <= REF_AGES[i]) {
-      const t = (a - REF_AGES[i - 1]) / (REF_AGES[i] - REF_AGES[i - 1]);
+  for (let i = 1; i < ages.length; i++) {
+    if (a <= ages[i]) {
+      const t = (a - ages[i - 1]) / (ages[i] - ages[i - 1]);
       return values[i - 1] + t * (values[i] - values[i - 1]);
     }
   }
   return values[values.length - 1];
 }
+const medianCm = (sex: Sex, age: number) => interp(REF[sex].ages, REF[sex].m, age);
+const sdCm = (sex: Sex, age: number) => medianCm(sex, age) * interp(REF[sex].ages, REF[sex].s, age);
 
 const utc = (iso: string): number => {
   const [y, m, d] = iso.split('-').map(Number);
@@ -67,8 +91,8 @@ export function addMonths(date: string, n: number): string {
   return iso(Date.UTC(ty, tm, Math.min(d, last)));
 }
 
-const zOf = (sex: Sex, age: number, cm: number): number => (cm - interp(REF[sex], age)) / interp(REF_SD, age);
-const cmAt = (sex: Sex, age: number, z: number): number => interp(REF[sex], age) + z * interp(REF_SD, age);
+const zOf = (sex: Sex, age: number, cm: number): number => (cm - medianCm(sex, age)) / sdCm(sex, age);
+const cmAt = (sex: Sex, age: number, z: number): number => medianCm(sex, age) + z * sdCm(sex, age);
 
 function erf(x: number): number {
   const s = x < 0 ? -1 : 1;
