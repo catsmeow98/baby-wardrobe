@@ -117,8 +117,7 @@ export default async function ClosetPage({ searchParams }: { searchParams: Promi
           {sp.photos === 'partial' && <p role="status" className="text-sm text-warn">Items were added, but some photos could not be attached. Open an item to add them again.</p>}
         </div>
         <div className="flex gap-2">
-          <Link className={btnGhostCls} href={`/closet/bulk?back=${bk}`}>Bulk add</Link>
-          <Link className={btnCls} href={`/closet/new?back=${bk}`}>Add item</Link>
+          <Link className={btnCls} href={`/closet/bulk?back=${bk}`}>Add items</Link>
         </div>
       </div>
 
@@ -160,7 +159,7 @@ export default async function ClosetPage({ searchParams }: { searchParams: Promi
 
       {filtered.length === 0 ? (
         <div className="rounded-xl border border-dashed border-line p-8 text-center text-muted">
-          {items.length === 0 ? 'Nothing here yet. Add your first item or use bulk add.' : 'Nothing matches these filters.'}
+          {items.length === 0 ? 'Nothing here yet. Tap Add items to start.' : 'Nothing matches these filters.'}
         </div>
       ) : (
         <ul className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-3">

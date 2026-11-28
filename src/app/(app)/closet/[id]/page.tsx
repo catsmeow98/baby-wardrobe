@@ -113,7 +113,7 @@ export default async function EditItemPage({
           status: item.status, tags: tagInfo.byItem.get(item.id) ?? [], fitFeedback: item.fit_feedback, notes: item.notes,
         }}
       />
-      <p className="text-sm"><Link className="text-accent underline" href={`/closet/new?from=${item.id}&back=${bk}`}>Add another like this</Link></p>
+      <p className="text-sm"><Link className="text-accent underline" href={`/closet/bulk?from=${item.id}&back=${bk}`}>Add another like this</Link></p>
       {outfitLinks.length > 0 && (
         <p className="text-sm text-muted">
           In outfits: {outfitLinks.map((o, i) => <span key={o.id}>{i > 0 ? ', ' : ''}<Link className="text-accent underline" href={`/outfits/${o.id}`}>{o.name}</Link></span>)}

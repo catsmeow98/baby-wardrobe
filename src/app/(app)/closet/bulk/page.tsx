@@ -1,22 +1,23 @@
 import type { Metadata } from 'next';
 import { getContext } from '@/lib/context';
 import { NoChild } from '@/components/no-child';
-import { BulkBuilder } from '@/components/bulk-builder';
+import { BulkBuilder, type BulkSeed } from '@/components/bulk-builder';
 import { inputCls, labelCls } from '@/components/ui';
 import { GENDERS, STATUSES } from '@/lib/db';
 import { TagInput } from '@/components/tag-input';
 import { loadTags } from '@/lib/tags';
-import type { SizeLabelRow } from '@/lib/db';
+import type { ItemRow, SizeLabelRow } from '@/lib/db';
 import { bulkCreate } from '../actions';
 import { safeBack, safeBackAny } from '@/lib/back';
 import { loadTrips } from '@/lib/trips-data';
 import { iconForType } from '@/lib/item-icons';
 import { sizeName } from '@/lib/db';
+import { withCurrent } from '@/lib/categories';
 
-export const metadata: Metadata = { title: 'Bulk add' };
+export const metadata: Metadata = { title: 'Add items' };
 
-export default async function BulkPage({ searchParams }: { searchParams: Promise<{ error?: string; back?: string; trip?: string }> }) {
-  const { error, back: rawBack, trip: rawTrip } = await searchParams;
+export default async function BulkPage({ searchParams }: { searchParams: Promise<{ error?: string; back?: string; trip?: string; from?: string }> }) {
+  const { error, back: rawBack, trip: rawTrip, from } = await searchParams;
   // After saving, the closet (to see the new items); Exit goes back wherever bulk add was opened from.
   const back = safeBack(rawBack, '/closet');
   const exitTo = safeBackAny(rawBack, ['/closet', '/shopping', '/dashboard'], '/closet');
@@ -40,6 +41,19 @@ export default async function BulkPage({ searchParams }: { searchParams: Promise
     loadTags(ctx, []),
   ]);
   const tagNames = tags.map((t) => t.name);
+  // "Add another like this": one item filled in from an existing one (row-level security hides anyone else's).
+  const fromId = !trip && from && /^[0-9a-f-]{36}$/i.test(from) ? from : undefined;
+  const src = fromId ? ((await ctx.supabase.from('inventory_items').select('*').eq('id', fromId).maybeSingle()).data as ItemRow | null) : null;
+  const seed: BulkSeed | undefined = src ? {
+    categoryId: src.category_id,
+    name: src.name,
+    brand: src.brand_id ? (((await ctx.supabase.from('brands').select('name').eq('id', src.brand_id).maybeSingle()).data as { name: string } | null)?.name ?? '') : '',
+    tagId: src.label_id,
+    customTag: src.custom_tag,
+    thruId: src.fit_to_size_id,
+    color: src.color,
+    tags: (await loadTags(ctx, [src.id])).byItem.get(src.id) ?? [],
+  } : undefined;
   const labels = ((labelData ?? []) as SizeLabelRow[]).sort(
     (a, b) => (ctx.orderOf.get(a.size_id) ?? 0) - (ctx.orderOf.get(b.size_id) ?? 0) || a.sort_order - b.sort_order,
   );
@@ -52,7 +66,7 @@ export default async function BulkPage({ searchParams }: { searchParams: Promise
       <BulkBuilder
         userId={ctx.user.id}
         childId={ctx.active.id}
-        categories={ctx.categories}
+        categories={src ? withCurrent(ctx.categories, ctx.catById, src.category_id) : ctx.categories}
         labels={labels}
         sizes={ctx.sizes}
         brands={(brands ?? []).map((b: { name: string }) => b.name)}
@@ -63,6 +77,7 @@ export default async function BulkPage({ searchParams }: { searchParams: Promise
         tripGone={Boolean(tripId && !found)}
         error={error}
         tagNames={tagNames}
+        seed={seed}
       >
         <div className="grid gap-3 sm:grid-cols-2">
           <TagInput name="tags_shared" suggestions={tagNames} label="Tags for every item" hint="Added to each item, on top of its own tags." className={`${labelCls} sm:col-span-2`} />
@@ -70,7 +85,7 @@ export default async function BulkPage({ searchParams }: { searchParams: Promise
             <select className={inputCls} name="status" defaultValue="active">{STATUSES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
           </label>
           <label className={labelCls}>Gender (optional)
-            <select className={inputCls} name="gender" defaultValue=""><option value="">Not set</option>{GENDERS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
+            <select className={inputCls} name="gender" defaultValue={src?.gender ?? ''}><option value="">Not set</option>{GENDERS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
           </label>
         </div>
       </BulkBuilder>

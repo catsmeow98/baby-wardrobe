@@ -197,8 +197,7 @@ export async function bulkCreate(formData: FormData) {
     const text = (k: string) => String(formData.get(`${k}_${i}`) ?? '').trim();
     const name = text('name');
     const brand = text('brand');
-    const photo = formData.getAll(`photo_${i}`).map(String).filter(Boolean);
-    if (!name && !brand && photo.length === 0) continue; // an untouched row. A row with a photo is kept, even with no name.
+    // Every row was added on purpose (a photo, or Add an item without a photo), so each is kept, even with nothing typed.
     const n = `Item ${i + 1}`;
     const cat = z.string().uuid().safeParse(text('cat') === '__new' ? await typeFor(ctx, formData, `cat_${i}`, path, `${n}: `) : text('cat'));
     if (!cat.success) return fail(path, `${n}: choose an item type.`);
@@ -290,7 +289,7 @@ export async function bulkCreate(formData: FormData) {
       }
     }
   }
-  if (!rows.length && !consume.length && !cancel.length) return fail(path, 'Add at least one item: a photo, a name or a brand.');
+  if (!rows.length && !consume.length && !cancel.length) return fail(path, 'Add at least one item.');
   // Everything added from a trip remembers it, for the shopping History page.
   if (trip.success) for (const r of rows) r.trip_id = trip.data;
   // One insert, so either every row is saved or none is.

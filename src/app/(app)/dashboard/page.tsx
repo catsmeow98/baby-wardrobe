@@ -102,8 +102,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <Link className={btnCls} href="/closet/new">Add item</Link>
-        <Link className={btnGhostCls} href="/closet/bulk">Bulk add</Link>
+        <Link className={btnCls} href="/closet/bulk?back=%2Fdashboard">Add items</Link>
         <Link className={btnGhostCls} href="/survey">Goal survey</Link>
         <Link className={btnGhostCls} href="/goals">Set goals</Link>
       </div>
@@ -111,7 +110,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       {items.length === 0 && (
         <div className="rounded-xl border border-dashed border-line p-6 text-center">
           <p className="mb-3 text-muted">Your closet is empty. Add what {child.name} already has, then set goals.</p>
-          <Link className={btnGhostCls} href="/closet/bulk">Bulk add items</Link>
+          <Link className={btnGhostCls} href="/closet/bulk?back=%2Fdashboard">Add items</Link>
         </div>
       )}
 

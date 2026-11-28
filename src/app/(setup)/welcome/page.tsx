@@ -278,14 +278,9 @@ export default async function WelcomePage({ searchParams }: { searchParams: Prom
           <Why step="closet" />
           <ul className="flex flex-col gap-3">
             <li className="flex flex-col gap-1 rounded-xl border border-line bg-surface p-3">
-              <b>Add one item</b>
-              <span className="text-sm text-muted">Pick an item type from the icons, say what size it fits, and add a photo if you like.</span>
-              <Link href="/closet/new" className={`${btnGhostCls} self-start`}>Add an item</Link>
-            </li>
-            <li className="flex flex-col gap-1 rounded-xl border border-line bg-surface p-3">
-              <b>Add many at once</b>
-              <span className="text-sm text-muted">A pile of similar clothes, such as ten pairs of socks, goes in as one entry with a quantity.</span>
-              <Link href="/closet/bulk" className={`${btnGhostCls} self-start`}>Add several items</Link>
+              <b>Add items</b>
+              <span className="text-sm text-muted">Snap or choose a photo of each item (or skip the photo), then go through them one at a time: item type, size and tags. A pile of similar clothes, such as ten pairs of socks, goes in as one entry with a quantity.</span>
+              <Link href="/closet/bulk" className={`${btnGhostCls} self-start`}>Add items</Link>
             </li>
             <li className="flex flex-col gap-1 rounded-xl border border-line bg-surface p-3">
               <b>Photos</b>

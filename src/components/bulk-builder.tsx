@@ -40,6 +40,17 @@ export interface TripLineView {
   sizeLabel: string;
   icon: string;
 }
+/** "Add another like this": the item to start from, filled in as item 1. */
+export interface BulkSeed {
+  categoryId: string;
+  name: string;
+  brand: string;
+  tagId: string | null;
+  customTag: string | null;
+  thruId: string | null;
+  color: string | null;
+  tags: string[];
+}
 interface Meta { match: string; qty: number }
 const NO_META: Meta = { match: '', qty: 1 };
 
@@ -57,7 +68,7 @@ interface Row {
  * them all to bulkCreate as before. Field names carry the item's position (cat_0, name_1 and so on). The browser's Back button
  * steps back one screen.
  */
-export function BulkBuilder({ userId, childId, categories, labels, sizes, brands, defaultTagId, removeBg = false, back, error: serverError, trip, tripGone = false, tagNames = [], children }: {
+export function BulkBuilder({ userId, childId, categories, labels, sizes, brands, defaultTagId, removeBg = false, back, error: serverError, trip, tripGone = false, tagNames = [], seed, children }: {
   userId: string;
   childId: string;
   categories: CategoryRow[];
@@ -79,13 +90,15 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
   tripGone?: boolean;
   /** The account's tags, offered while typing an item's tags. */
   tagNames?: string[];
+  /** Starts with one item filled in from this, on its own screen. */
+  seed?: BulkSeed;
   /** The details shared by every item, shown on the first screen. */
   children?: React.ReactNode;
 }) {
   const router = useRouter();
-  const nextId = useRef(0);
-  const [rows, setRows] = useState<Row[]>([]);
-  const [stepId, setStepId] = useState<string>(PHOTOS);
+  const nextId = useRef(seed ? 1 : 0);
+  const [rows, setRows] = useState<Row[]>(() => (seed ? [{ id: 0, photo: null }] : []));
+  const [stepId, setStepId] = useState<string>(seed ? '0' : PHOTOS);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
@@ -144,6 +157,8 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
   // The browser's Back button steps back through the screens.
   useEffect(() => {
     window.history.replaceState({ ...window.history.state, b: PHOTOS }, '');
+    // Starting on a filled-in item: Back from it goes to the photo screen, not off the page.
+    if (seed) window.history.pushState({ ...window.history.state, b: '0' }, '');
     const onPop = (e: PopStateEvent) => {
       const b = (e.state as { b?: string } | null)?.b;
       if (b) {
@@ -247,7 +262,7 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
     const guessLeft = piecesLeft(lines, usesOf(rowsRef.current, metaRef.current));
     for (let k = 0; k < files.length; k++) {
       if (startRows + added >= MAX_ROWS) {
-        setError(`A bulk add holds up to ${MAX_ROWS} items, so the rest of the photos were skipped.`);
+        setError(`You can add up to ${MAX_ROWS} items at a time, so the rest of the photos were skipped. Save these, then add the rest.`);
         break;
       }
       setBusy(`${removeBg ? 'Processing' : 'Uploading'} photo ${k + 1} of ${files.length}…`);
@@ -367,7 +382,7 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
     if (busy !== null || rows.length > 0) {
       if (!window.confirm(trip
         ? 'Leave for now? This trip stays on your Home screen to finish later. Photos added here are not kept.'
-        : 'Leave bulk add? Your progress will be lost and nothing will be added to the closet.')) return;
+        : 'Leave adding items? Your progress will be lost and nothing will be added to the closet.')) return;
       const paths = rows.flatMap((r) => (r.photo ? pathsOf(r.photo) : []));
       if (paths.length) await createClient().storage.from(PHOTO_BUCKET).remove(paths).catch(() => undefined);
     }
@@ -395,10 +410,10 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
 
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between text-sm text-muted">
-            <span>Bulk add · {label}</span>
+            <span>Add items · {label}</span>
             <Link href={back} className="underline" onClick={exit}>Exit</Link>
           </div>
-          <div role="progressbar" aria-valuemin={0} aria-valuemax={steps.length} aria-valuenow={idx + 1} aria-label="Bulk add progress" className="h-2 overflow-hidden rounded-full bg-line">
+          <div role="progressbar" aria-valuemin={0} aria-valuemax={steps.length} aria-valuenow={idx + 1} aria-label="Add items progress" className="h-2 overflow-hidden rounded-full bg-line">
             <span className="block h-full rounded-full bg-accent transition-all" style={{ width: `${((idx + 1) / steps.length) * 100}%` }} />
           </div>
         </div>
@@ -409,7 +424,7 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
             <p className="text-muted">Choose photos of your items, one photo per item. When they have loaded you go through them one at a time to fill in the details. Quantity above 1 makes a group, like a 5-pack.</p>
           </div>
           {serverError && <p role="alert" className="text-sm font-medium text-bad">{serverError}</p>}
-          {tripGone && <p role="status" className="rounded-lg bg-warn-soft p-3 text-sm text-warn">That shopping trip is already done, so this is a plain bulk add.</p>}
+          {tripGone && <p role="status" className="rounded-lg bg-warn-soft p-3 text-sm text-warn">That shopping trip is already done, so these items are added on their own.</p>}
           {trip && (
             <div className="rounded-xl border border-accent bg-accent-soft p-3">
               <p className="text-sm">Shopping trip · <b><LocalTime iso={trip.at} /></b></p>
@@ -462,7 +477,8 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
             categories={categories} labels={labels} sizes={sizes} defaultTagId={defaultTagId} brands={brands} removeBg={removeBg} tagNames={tagNames}
             tripLines={trip ? lines : undefined} left={left} meta={meta[row.id] ?? NO_META} onMeta={(m) => setMeta((all) => ({ ...all, [row.id]: m }))}
             onChoose={(lineId) => choose(row.id, lineId)}
-            onTypeName={(n) => setRowTypes((t) => (t[row.id] === n ? t : { ...t, [row.id]: n }))} />
+            onTypeName={(n) => setRowTypes((t) => (t[row.id] === n ? t : { ...t, [row.id]: n }))}
+            seed={row.id === 0 ? seed : undefined} />
         ))}
 
         {rows.length > 0 && (
@@ -488,7 +504,7 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
                 {trip ? 'No, check the trip' : `No, add ${rows.length} item${rows.length === 1 ? '' : 's'} to closet`}
               </button>
             </div>
-            {rows.length >= MAX_ROWS && <p className="text-sm text-muted">A bulk add holds up to {MAX_ROWS} items. Save these first, then start another.</p>}
+            {rows.length >= MAX_ROWS && <p className="text-sm text-muted">You can add up to {MAX_ROWS} items at a time. Save these first, then add more.</p>}
           </section>
         )}
 
@@ -584,7 +600,7 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
   );
 }
 
-function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onReplace, onRemovePhoto, photoBusy, photoError, onEditor, onTurning, setRef, userId, childId, categories, labels, sizes, defaultTagId, brands, removeBg, tagNames, tripLines, left, meta, onMeta, onChoose, onTypeName }: {
+function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onReplace, onRemovePhoto, photoBusy, photoError, onEditor, onTurning, setRef, userId, childId, categories, labels, sizes, defaultTagId, brands, removeBg, tagNames, tripLines, left, meta, onMeta, onChoose, onTypeName, seed }: {
   row: Row;
   pos: number;
   hidden: boolean;
@@ -613,9 +629,12 @@ function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onReplace, onRemoveP
   onMeta: (m: Meta) => void;
   onChoose: (lineId: string) => void;
   onTypeName: (name: string) => void;
+  seed?: BulkSeed;
 }) {
   const line = tripLines?.find((l) => l.itemId === meta.match);
-  const [tag, setTag] = useState<TagValue>(() => ({ tagId: line?.labelId ?? defaultTagId, custom: false, text: '' }));
+  const [tag, setTag] = useState<TagValue>(() => (seed
+    ? seed.customTag ? { tagId: '', custom: true, text: seed.customTag.replace(/M$/i, '') } : { tagId: seed.tagId ?? '', custom: false, text: '' }
+    : { tagId: line?.labelId ?? defaultTagId, custom: false, text: '' }));
   const [editing, setEditingState] = useState(false);
   const setEditing = (open: boolean) => {
     setEditingState(open);
@@ -625,7 +644,7 @@ function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onReplace, onRemoveP
   const [opening, setOpening] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   // The chosen item type, for the placeholder icon of an item without a photo. Starts where the picker starts.
-  const [type, setType] = useState<CategoryRow | undefined>(() => (line && categories.find((c) => c.id === line.categoryId)) || groupCategories(categories)[0]?.items[0]);
+  const [type, setType] = useState<CategoryRow | undefined>(() => (line && categories.find((c) => c.id === line.categoryId)) || (seed && categories.find((c) => c.id === seed.categoryId)) || groupCategories(categories)[0]?.items[0]);
   useEffect(() => onTypeName(type?.name ?? 'New item type'), [type?.name]); // eslint-disable-line react-hooks/exhaustive-deps
   // Whenever this item's trip line changes (its own tap, or a swap from another item), fill in that type and tag size.
   const firstMatch = useRef(true);
@@ -646,8 +665,8 @@ function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onReplace, onRemoveP
   const diffKey = `${meta.match}|${type?.id ?? ''}|${tag.custom ? `c:${tag.text}` : tag.tagId}`;
   const [sameOk, setSameOk] = useState('');
   // Color: the guess from the photo fills it in until the color is picked by hand.
-  const [color, setColor] = useState('');
-  const picked = useRef(false);
+  const [color, setColor] = useState(seed?.color ?? '');
+  const picked = useRef(Boolean(seed?.color));
   useEffect(() => {
     if (!picked.current) setColor(row.color ?? '');
   }, [row.color]);
@@ -755,12 +774,12 @@ function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onReplace, onRemoveP
         </div>
       )}
       {/* Re-made when the trip line changes, so the item type follows "Which one is this?". */}
-      <CategoryPicker key={`${row.id}:${meta.match}`} categories={categories} name={`cat_${pos}`} defaultId={line?.categoryId ?? type?.id} className={`${labelCls} sm:col-span-2`} allowNew onTypeChange={setType} />
+      <CategoryPicker key={`${row.id}:${meta.match}`} categories={categories} name={`cat_${pos}`} defaultId={line?.categoryId ?? seed?.categoryId ?? type?.id} className={`${labelCls} sm:col-span-2`} allowNew onTypeChange={setType} />
       <label className={`${labelCls} sm:col-span-2`}>Name (optional)
-        <input className={inputCls} name={`name_${pos}`} maxLength={160} />
+        <input className={inputCls} name={`name_${pos}`} maxLength={160} defaultValue={seed?.name ?? ''} />
       </label>
       <label className={`${labelCls} sm:col-span-2`}>Brand
-        <BrandSelect brands={brands} name={`brand_${pos}`} />
+        <BrandSelect brands={brands} name={`brand_${pos}`} defaultValue={seed?.brand ?? ''} />
       </label>
       <label className={`${labelCls} sm:col-span-2`}>Color
         <select className={inputCls} name={`color_${pos}`} value={color} onChange={(e) => { picked.current = true; setColor(e.target.value); }}>
@@ -783,7 +802,7 @@ function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onReplace, onRemoveP
         </div>
       )}
       <label className={`${labelCls} sm:col-span-2`}>Fits through
-        <select className={inputCls} name={`thru_${pos}`} defaultValue="">
+        <select className={inputCls} name={`thru_${pos}`} defaultValue={seed?.thruId ?? ''}>
           <option value="">{tag.custom ? 'Same as the tag range' : 'Same as tag size'}</option>
           {sizes.map((s) => <option key={s.id} value={s.id}>{sizeName(s)}</option>)}
         </select>
@@ -792,7 +811,7 @@ function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onReplace, onRemoveP
         <input className={inputCls} type="number" name={`qty_${pos}`} min={1} max={999} value={meta.qty || ''}
           onChange={(e) => onMeta({ match: meta.match, qty: Math.max(0, Math.min(999, Math.round(Number(e.target.value) || 0))) })} />
       </label>
-      <TagInput name={`tags_${pos}`} suggestions={tagNames} className={`${labelCls} sm:col-span-6`} />
+      <TagInput name={`tags_${pos}`} suggestions={tagNames} defaultTags={seed?.tags} className={`${labelCls} sm:col-span-6`} />
       {!row.photo && (
         <div className={`${labelCls} sm:col-span-6`}>
           Photo (optional)
