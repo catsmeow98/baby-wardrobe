@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { BrandInput, ChoicePills, ColorField } from '@/components/pickers';
 import { CategoryPicker } from '@/components/category-picker';
-import { PhotoPicker } from '@/components/photo-picker';
+import { FormCard, MoreCard } from '@/components/form-card';
 import { btnCls, inputCls, labelCls } from '@/components/ui';
 import { FitFields } from '@/components/fit-fields';
 import { GENDERS, STATUSES } from '@/lib/db';
@@ -37,58 +37,59 @@ interface Props {
   submitLabel: string;
   /** The closet address (filters included) to return to after saving. */
   back?: string;
-  /** Shows a photo field. Only for a new item, since existing items add photos from their own Photos section. */
-  photos?: { userId: string; childId: string; removeBg?: boolean };
+  /** Recent item types and most-used brands, as shortcuts. */
+  hints?: { recentTypeIds: string[]; topBrands: string[] };
   /** The account's tags, offered while typing. */
   tagNames?: string[];
 }
 
-export function ItemForm({ action, categories, sizes, labels, brands, defaults: d = {}, submitLabel, photos, back, tagNames = [] }: Props) {
+export function ItemForm({ action, categories, sizes, labels, brands, defaults: d = {}, submitLabel, back, tagNames = [], hints = { recentTypeIds: [], topBrands: [] } }: Props) {
+  const summary = [`Quantity ${d.quantity ?? 1}`, d.tags?.length ? `Tags: ${d.tags.join(', ')}` : null, STATUSES.find(([v]) => v === (d.status ?? 'active'))?.[1]].filter(Boolean).join(' · ');
   return (
-    <form action={action} className="flex flex-col gap-4 rounded-xl border border-line bg-surface p-4">
+    <form action={action} className="flex flex-col gap-3">
       {d.id && <input type="hidden" name="id" value={d.id} />}
       {back && <input type="hidden" name="back" value={back} />}
-      <div className="grid gap-4 sm:grid-cols-2">
-        <label className={`${labelCls} sm:col-span-2`}>
-          Name (optional)
-          <input className={inputCls} name="name" maxLength={160} defaultValue={d.name ?? ''} placeholder="Made from brand and item type if left blank" />
-        </label>
-        <CategoryPicker categories={categories} name="categoryId" defaultId={d.categoryId} allowNew className={`${labelCls} sm:col-span-2`} />
-        <span className="-mt-2 text-xs text-muted sm:col-span-2">Not listed? Tap &quot;+ New item type&quot;, or <Link className="text-accent underline" href="/categories">manage your item types</Link>.</span>
-        <div className={labelCls}><BrandInput brands={brands} name="brand" defaultValue={d.brand ?? ''} /></div>
-        <label className={labelCls}>
-          Quantity
+      <label className={labelCls}>Name
+        <input className={inputCls} name="name" maxLength={160} defaultValue={d.name ?? ''} placeholder="Optional: made from brand and item type" />
+      </label>
+      <FormCard title="What is it">
+        <CategoryPicker categories={categories} name="categoryId" defaultId={d.categoryId} allowNew recentIds={hints.recentTypeIds} />
+        <span className="-mt-1 text-xs text-muted">Not listed? Tap + New type, or <Link className="text-accent underline" href="/categories">manage your item types</Link>.</span>
+        <div className={labelCls}><BrandInput brands={brands} name="brand" defaultValue={d.brand ?? ''} top={hints.topBrands} /></div>
+      </FormCard>
+      <FormCard title="Size">
+        <div className="grid grid-cols-2 gap-2.5">
+          <FitFields
+            labels={labels}
+            sizes={sizes}
+            defaults={{
+              tagId: d.tagId ?? '',
+              customTag: d.customTag ?? '',
+              fitFromId: d.fitFromId ?? '',
+              fitToId: d.fitToId ?? '',
+              fitFeedback: d.fitFeedback === null || d.fitFeedback === undefined ? '' : String(d.fitFeedback),
+            }}
+          />
+        </div>
+      </FormCard>
+      <FormCard title="How it looks">
+        <ColorField name="color" defaultValue={d.color ?? ''} />
+      </FormCard>
+      {/* Open when editing, since status is what changes most often on an item. */}
+      <MoreCard summary={summary} open={Boolean(d.id)}>
+        <label className={`${labelCls} w-28`}>Quantity
           <input className={inputCls} type="number" name="quantity" min={1} max={999} defaultValue={d.quantity ?? 1} required />
-          <span className="text-xs">Above 1 makes a group, like a 5-pack.</span>
         </label>
-        <FitFields
-          labels={labels}
-          sizes={sizes}
-          defaults={{
-            tagId: d.tagId ?? '',
-            customTag: d.customTag ?? '',
-            fitFromId: d.fitFromId ?? '',
-            fitToId: d.fitToId ?? '',
-            fitFeedback: d.fitFeedback === null || d.fitFeedback === undefined ? '' : String(d.fitFeedback),
-          }}
-        />
-        <div className="sm:col-span-2"><ColorField name="color" defaultValue={d.color ?? ''} /></div>
-        <div className="sm:col-span-2"><ChoicePills name="gender" label="Gender" options={[['', 'Not set'], ...GENDERS]} defaultValue={d.gender ?? ''} /></div>
-        <div className="sm:col-span-2"><ChoicePills name="status" label="Status" options={STATUSES} defaultValue={d.status ?? 'active'} /></div>
-        <TagInput name="tags" suggestions={tagNames} defaultTags={d.tags} className={`${labelCls} sm:col-span-2`}
+        <span className="-mt-3 text-xs text-muted">Above 1 makes a group, like a 5-pack.</span>
+        <ChoicePills name="status" label="Status" options={STATUSES} defaultValue={d.status ?? 'active'} />
+        <ChoicePills name="gender" label="Gender" options={[['', 'Not set'], ...GENDERS]} defaultValue={d.gender ?? ''} />
+        <TagInput name="tags" suggestions={tagNames} defaultTags={d.tags} className={labelCls}
           hint="Anything you like: a season, a holiday, hand-me-down, stained." />
-        <label className={`${labelCls} sm:col-span-2`}>
-          Notes
+        <label className={labelCls}>Notes
           <textarea className={inputCls} name="notes" rows={2} maxLength={1000} defaultValue={d.notes ?? ''} placeholder="Runs small, long torso, and so on" />
         </label>
-        {photos && (
-          <div className={`${labelCls} sm:col-span-2`}>
-            Photos (optional)
-            <PhotoPicker userId={photos.userId} childId={photos.childId} name="photoPath" removeBg={photos.removeBg} />
-          </div>
-        )}
-      </div>
-      <StickyActions className="-mx-4 -mb-4 rounded-b-xl px-4">
+      </MoreCard>
+      <StickyActions className="-mx-4 px-4">
         <button className={btnCls} type="submit">{submitLabel}</button>
         {back && <Link className="text-sm text-accent underline" href={back}>Cancel</Link>}
       </StickyActions>

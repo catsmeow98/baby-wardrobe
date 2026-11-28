@@ -16,6 +16,7 @@ import { CategoryPicker } from '@/components/category-picker';
 import { TagInput } from '@/components/tag-input';
 import { TagSizeField, type TagValue } from '@/components/tag-size-field';
 import { labelCls } from '@/components/ui';
+import { FormCard, MoreCard } from '@/components/form-card';
 import { sizeName, type CategoryRow, type SizeLabelRow, type SizeRow } from '@/lib/db';
 
 export interface PhotoLessItem {
@@ -28,9 +29,9 @@ interface Shot { key: number; field: string; preview: string; item: string; colo
  * Photos for items that have none: snap or choose photos, then pick which item each one is (each item once). Saving puts the
  * photos on those items; photos not matched to an item are deleted.
  */
-export function AddPhotos({ items, userId, childId, removeBg, back, categories, labels, sizes, brands, tagNames }: {
+export function AddPhotos({ items, userId, childId, removeBg, back, categories, labels, sizes, brands, tagNames, pickerHints }: {
   items: PhotoLessItem[]; userId: string; childId: string; removeBg: boolean; back: string;
-  categories: CategoryRow[]; labels: SizeLabelRow[]; sizes: SizeRow[]; brands: string[]; tagNames: string[];
+  categories: CategoryRow[]; labels: SizeLabelRow[]; sizes: SizeRow[]; brands: string[]; tagNames: string[]; pickerHints: { recentTypeIds: string[]; topBrands: string[] };
 }) {
   const [shots, setShots] = useState<Shot[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
@@ -118,7 +119,7 @@ export function AddPhotos({ items, userId, childId, removeBg, back, categories, 
               {s.item && (() => {
                 const it = items.find((i) => i.id === s.item)!;
                 // Re-made when the photo is matched to another item, so the fields start from that item.
-                return <Details key={`${s.key}:${s.item}`} k={s.key} item={it} guess={s.color} hints={s.hints} categories={categories} labels={labels} sizes={sizes} brands={brands} tagNames={tagNames} />;
+                return <Details key={`${s.key}:${s.item}`} k={s.key} item={it} guess={s.color} hints={s.hints} categories={categories} labels={labels} sizes={sizes} brands={brands} tagNames={tagNames} hints2={pickerHints} />;
               })()}
             </li>
           ))}
@@ -137,8 +138,8 @@ export function AddPhotos({ items, userId, childId, removeBg, back, categories, 
 }
 
 /** The matched item's details, filled in from the item, to change while its photo is added. Field names carry the photo's key. */
-function Details({ k, item, guess, hints, categories, labels, sizes, brands, tagNames }: {
-  k: number; item: PhotoLessItem; guess: string | null; hints: string[];
+function Details({ k, item, guess, hints, categories, labels, sizes, brands, tagNames, hints2 }: {
+  k: number; item: PhotoLessItem; guess: string | null; hints: string[]; hints2: { recentTypeIds: string[]; topBrands: string[] };
   categories: CategoryRow[]; labels: SizeLabelRow[]; sizes: SizeRow[]; brands: string[]; tagNames: string[];
 }) {
   const [tag, setTag] = useState<TagValue>(() => (item.customTag
@@ -147,27 +148,32 @@ function Details({ k, item, guess, hints, categories, labels, sizes, brands, tag
   // The item's own color stays; an item with none starts from a sure guess from the photo.
   const [color, setColor] = useState(item.color ?? guess ?? '');
   return (
-    <details open className="rounded-lg border border-line p-3">
-      <summary className="cursor-pointer text-sm font-medium">Details</summary>
-      <div className="mt-2 grid gap-3 sm:grid-cols-2">
-        <label className={`${labelCls} sm:col-span-2`}>Name
-          <input className={inputCls} name={`name_${k}`} defaultValue={item.name} maxLength={160} />
-        </label>
-        <CategoryPicker categories={categories} name={`cat_${k}`} defaultId={item.categoryId} className={`${labelCls} sm:col-span-2`} allowNew />
-        <div className={labelCls}><BrandInput brands={brands} name={`brand_${k}`} defaultValue={item.brand} /></div>
-        <div className={`${labelCls} sm:col-span-2`}>
-          <ColorPills name={`color_${k}`} value={color} onChange={setColor} hints={item.color ? [] : hints}
-            note={!item.color && guess && color === guess ? 'Guessed from the photo' : undefined} />
+    <div className="flex flex-col gap-3">
+      <label className={labelCls}>Name
+        <input className={inputCls} name={`name_${k}`} defaultValue={item.name} maxLength={160} />
+      </label>
+      <FormCard title="What is it">
+        <CategoryPicker categories={categories} name={`cat_${k}`} defaultId={item.categoryId} allowNew recentIds={hints2.recentTypeIds} />
+        <div className={labelCls}><BrandInput brands={brands} name={`brand_${k}`} defaultValue={item.brand} top={hints2.topBrands} /></div>
+      </FormCard>
+      <FormCard title="Size">
+        <div className="grid grid-cols-2 gap-2.5">
+          <TagSizeField labels={labels} value={tag} onChange={setTag} tagName={`tag_${k}`} customName={`ctag_${k}`} className={labelCls} />
+          <label className={labelCls}>Fits through
+            <select className={inputCls} name={`thru_${k}`} defaultValue={item.thruId ?? ''}>
+              <option value="">{tag.custom ? 'Same as the tag range' : 'Same as tag'}</option>
+              {sizes.map((z) => <option key={z.id} value={z.id}>{sizeName(z)}</option>)}
+            </select>
+          </label>
         </div>
-        <TagSizeField labels={labels} value={tag} onChange={setTag} tagName={`tag_${k}`} customName={`ctag_${k}`} className={labelCls} />
-        <label className={labelCls}>Fits through
-          <select className={inputCls} name={`thru_${k}`} defaultValue={item.thruId ?? ''}>
-            <option value="">{tag.custom ? 'Same as the tag range' : 'Same as tag size'}</option>
-            {sizes.map((z) => <option key={z.id} value={z.id}>{sizeName(z)}</option>)}
-          </select>
-        </label>
-        <TagInput name={`tags_${k}`} suggestions={tagNames} defaultTags={item.tags} className={`${labelCls} sm:col-span-2`} />
-      </div>
-    </details>
+      </FormCard>
+      <FormCard title="How it looks">
+        <ColorPills name={`color_${k}`} value={color} onChange={setColor} hints={item.color ? [] : hints}
+          note={!item.color && guess && color === guess ? 'from the photo' : undefined} />
+      </FormCard>
+      <MoreCard summary={item.tags.length ? `Tags: ${item.tags.join(', ')}` : 'Tags'}>
+        <TagInput name={`tags_${k}`} suggestions={tagNames} defaultTags={item.tags} className={labelCls} />
+      </MoreCard>
+    </div>
   );
 }

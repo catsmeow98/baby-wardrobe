@@ -7,6 +7,7 @@ import { sizeName, type ItemRow, type SizeLabelRow } from '@/lib/db';
 import { iconForType } from '@/lib/item-icons';
 import { safeBack } from '@/lib/back';
 import { loadTags } from '@/lib/tags';
+import { loadPickerHints } from '@/lib/picker-hints';
 import { withCurrent } from '@/lib/categories';
 
 export const metadata: Metadata = { title: 'Add photos' };
@@ -17,12 +18,13 @@ export default async function AddPhotosPage({ searchParams }: { searchParams: Pr
   const back = safeBack(rawBack, '/dashboard');
   const ctx = await getContext();
   if (!ctx.active) return <NoChild />;
-  const [{ data: rows }, { data: photoRows }, { data: labelData }, { data: brandData }, tagInfo] = await Promise.all([
+  const [{ data: rows }, { data: photoRows }, { data: labelData }, { data: brandData }, tagInfo, pickerHints] = await Promise.all([
     ctx.supabase.from('inventory_items').select('*').eq('child_id', ctx.active.id).eq('needs_details', false).order('created_at'),
     ctx.supabase.from('inventory_photos').select('inventory_item_id'),
     ctx.supabase.from('size_labels').select('id, size_id, label, sort_order'),
     ctx.supabase.from('brands').select('id, name').order('name'),
     loadTags(ctx),
+    loadPickerHints(ctx),
   ]);
   const labels = ((labelData ?? []) as SizeLabelRow[]).sort(
     (a, b) => (ctx.orderOf.get(a.size_id) ?? 0) - (ctx.orderOf.get(b.size_id) ?? 0) || a.sort_order - b.sort_order,
@@ -60,7 +62,7 @@ export default async function AddPhotosPage({ searchParams }: { searchParams: Pr
       {items.length > 0 && (
         <AddPhotos items={items} userId={ctx.user.id} childId={ctx.active.id} removeBg={ctx.settings.removeBackground} back={back}
           categories={items.reduce((cs, i) => withCurrent(cs, ctx.catById, i.categoryId), ctx.categories)} labels={labels} sizes={ctx.sizes}
-          brands={brands.map((b) => b.name)} tagNames={tagInfo.tags.map((t) => t.name)} />
+          brands={brands.map((b) => b.name)} tagNames={tagInfo.tags.map((t) => t.name)} pickerHints={pickerHints} />
       )}
     </>
   );

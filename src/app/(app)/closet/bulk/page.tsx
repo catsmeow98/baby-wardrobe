@@ -7,6 +7,7 @@ import { GENDERS, STATUSES } from '@/lib/db';
 import { TagInput } from '@/components/tag-input';
 import { ChoicePills } from '@/components/pickers';
 import { loadTags } from '@/lib/tags';
+import { loadPickerHints } from '@/lib/picker-hints';
 import type { ItemRow, SizeLabelRow } from '@/lib/db';
 import { bulkCreate } from '../actions';
 import { safeBack, safeBackAny } from '@/lib/back';
@@ -36,10 +37,11 @@ export default async function BulkPage({ searchParams }: { searchParams: Promise
       return { itemId: l.itemId, categoryId: l.categoryId, sizeId: l.sizeId, labelId: l.labelId, qty: l.qty, typeName: c?.name ?? 'Item', sizeLabel: z ? sizeName(z) : '', icon: iconForType(c) };
     }),
   };
-  const [{ data: labelData }, { data: brands }, { tags }] = await Promise.all([
+  const [{ data: labelData }, { data: brands }, { tags }, pickerHints] = await Promise.all([
     ctx.supabase.from('size_labels').select('id, size_id, label, sort_order'),
     ctx.supabase.from('brands').select('name').order('name'),
     loadTags(ctx, []),
+    loadPickerHints(ctx),
   ]);
   const tagNames = tags.map((t) => t.name);
   // A trip's name becomes a tag on everything added from it ("Old Navy sale", the same for every part of an order). A name
@@ -83,6 +85,7 @@ export default async function BulkPage({ searchParams }: { searchParams: Promise
         error={error}
         tagNames={tagNames}
         seed={seed}
+        pickerHints={pickerHints}
         sharedNote={tripTag ? `Every item gets the tag ${tripTag}.` : undefined}
       >
         <div className="grid gap-3 sm:grid-cols-2">

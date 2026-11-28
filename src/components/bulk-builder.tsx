@@ -20,6 +20,7 @@ import { joinPhotoField, pathsOf } from '@/lib/photo-paths';
 import { PHOTO_BUCKET } from '@/lib/photos';
 import { detectColor } from '@/lib/color-detect';
 import { TagInput } from '@/components/tag-input';
+import { FormCard, MoreCard } from '@/components/form-card';
 import { btnCls, btnGhostCls, inputCls, labelCls } from '@/components/ui';
 import { GENDERS, STATUSES, sizeName } from '@/lib/db';
 import type { CategoryRow, SizeLabelRow, SizeRow } from '@/lib/db';
@@ -52,6 +53,8 @@ export interface BulkSeed {
   tags: string[];
 }
 interface Meta { match: string; qty: number }
+export interface PickerHints { recentTypeIds: string[]; topBrands: string[] }
+const NO_HINTS: PickerHints = { recentTypeIds: [], topBrands: [] };
 const NO_META: Meta = { match: '', qty: 1 };
 
 interface Row {
@@ -70,7 +73,7 @@ interface Row {
  * them all to bulkCreate as before. Field names carry the item's position (cat_0, name_1 and so on). The browser's Back button
  * steps back one screen.
  */
-export function BulkBuilder({ userId, childId, categories, labels, sizes, brands, defaultTagId, removeBg = false, back, error: serverError, trip, tripGone = false, tagNames = [], seed, sharedNote, children }: {
+export function BulkBuilder({ userId, childId, categories, labels, sizes, brands, defaultTagId, removeBg = false, back, error: serverError, trip, tripGone = false, tagNames = [], seed, sharedNote, pickerHints = NO_HINTS, children }: {
   userId: string;
   childId: string;
   categories: CategoryRow[];
@@ -94,6 +97,8 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
   tagNames?: string[];
   /** Starts with one item filled in from this, on its own screen. */
   seed?: BulkSeed;
+  /** Recent item types and most-used brands, as shortcuts on each item. */
+  pickerHints?: PickerHints;
   /** A line shown under "Details for every item", so a preset there (such as the trip's tag) is not missed. */
   sharedNote?: string;
   /** The details shared by every item, shown on the first screen. */
@@ -489,7 +494,7 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
             tripLines={trip ? lines : undefined} left={left} meta={meta[row.id] ?? NO_META} onMeta={(m) => setMeta((all) => ({ ...all, [row.id]: m }))}
             onChoose={(lineId) => choose(row.id, lineId)}
             onTypeName={(n) => setRowTypes((t) => (t[row.id] === n ? t : { ...t, [row.id]: n }))}
-            seed={row.id === 0 ? seed : undefined} />
+            seed={row.id === 0 ? seed : undefined} pickerHints={pickerHints} />
         ))}
 
         {rows.length > 0 && (
@@ -613,7 +618,7 @@ export function BulkBuilder({ userId, childId, categories, labels, sizes, brands
   );
 }
 
-function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onReplace, onRemovePhoto, photoBusy, photoError, onEditor, onTurning, setRef, userId, childId, categories, labels, sizes, defaultTagId, brands, removeBg, tagNames, tripLines, left, meta, onMeta, onChoose, onTypeName, seed }: {
+function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onReplace, onRemovePhoto, photoBusy, photoError, onEditor, onTurning, setRef, userId, childId, categories, labels, sizes, defaultTagId, brands, removeBg, tagNames, tripLines, left, meta, onMeta, onChoose, onTypeName, seed, pickerHints }: {
   row: Row;
   pos: number;
   hidden: boolean;
@@ -643,6 +648,7 @@ function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onReplace, onRemoveP
   onChoose: (lineId: string) => void;
   onTypeName: (name: string) => void;
   seed?: BulkSeed;
+  pickerHints: PickerHints;
 }) {
   const line = tripLines?.find((l) => l.itemId === meta.match);
   const [tag, setTag] = useState<TagValue>(() => (seed
@@ -726,25 +732,27 @@ function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onReplace, onRemoveP
     setEditing(true);
   }
   return (
-    <fieldset ref={setRef} hidden={hidden} className="grid gap-3 sm:grid-cols-6">
+    <fieldset ref={setRef} hidden={hidden} className="flex min-w-0 flex-col gap-3">
       <legend className="mb-1 font-display text-2xl font-bold">Item {pos + 1}</legend>
       {row.photo && (
-        <div className="relative flex flex-col items-center gap-1 sm:col-span-6">
+        <div className="flex flex-col items-center gap-1.5">
           <input type="hidden" name={`photo_${pos}`} value={joinPhotoField(row.photo.path, row.photo.originalPath)} />
-          {/* The frame stays put; only the picture turns inside it (scaled to fit when sideways), so nothing jumps. */}
-          <div ref={frame} className="h-72 w-full overflow-hidden rounded-xl border border-line bg-surface">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={row.photo.preview} alt={`Photo for item ${pos + 1}`} style={turns.styleIn(frame.current?.clientWidth, frame.current?.clientHeight)} className="size-full object-contain" />
+          <div className="relative w-full">
+            {/* The frame stays put; only the picture turns inside it (scaled to fit when sideways), so nothing jumps. */}
+            <div ref={frame} className="h-72 w-full overflow-hidden rounded-xl border border-line bg-surface">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={row.photo.preview} alt={`Photo for item ${pos + 1}`} style={turns.styleIn(frame.current?.clientWidth, frame.current?.clientHeight)} className="size-full object-contain" />
+            </div>
+            <div className="absolute bottom-2 right-2 flex gap-1.5">
+              <button type="button" className="flex size-11 items-center justify-center rounded-full border border-line bg-surface text-lg" disabled={opening} onClick={() => turns.turn(-1)} aria-label="Turn left">↺</button>
+              <button type="button" className="flex size-11 items-center justify-center rounded-full border border-line bg-surface text-lg" disabled={opening} onClick={() => turns.turn(1)} aria-label="Turn right">↻</button>
+            </div>
           </div>
-          <div className="flex gap-4">
-            <button type="button" className="text-sm text-accent underline" disabled={opening} onClick={() => turns.turn(-1)} aria-label="Turn left">↺ Left</button>
-            <button type="button" className="text-sm text-accent underline" disabled={opening} onClick={() => turns.turn(1)} aria-label="Turn right">Right ↻</button>
+          <div className="flex flex-wrap justify-center gap-x-4 gap-y-1">
             <button type="button" className="text-sm text-accent underline" disabled={opening || turning} onClick={openEditor}>{opening ? 'Opening…' : 'Edit photo'}</button>
-          </div>
-          <div className="flex flex-wrap justify-center gap-4">
             <button type="button" className="text-sm text-accent underline" disabled={photoBusy !== null || turning} onClick={() => setSnapping(true)}>Retake</button>
             <button type="button" className="text-sm text-accent underline" disabled={photoBusy !== null || turning} onClick={() => chooser.current?.click()}>Choose another</button>
-            <button type="button" className="text-sm text-bad underline" disabled={photoBusy !== null || turning} onClick={onRemovePhoto}>Remove photo</button>
+            <button type="button" className="text-sm text-bad underline" disabled={photoBusy !== null || turning} onClick={onRemovePhoto}>Remove</button>
           </div>
           {photoBusy && <p role="status" className="text-xs text-muted">{photoBusy}</p>}
           {photoError && <p role="alert" className="text-sm text-bad">{photoError}</p>}
@@ -753,8 +761,20 @@ function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onReplace, onRemoveP
           {editing && <PhotoEditor blob={row.photo.blob} original={original} onSave={async (r, o) => { await onSavePhoto(r, o); setEditing(false); }} onCancel={() => setEditing(false)} />}
         </div>
       )}
+      {!row.photo && (
+        <div className="flex flex-col items-center gap-2">
+          <span className="flex size-32 items-center justify-center rounded-xl border border-line bg-surface text-accent"><TypeIcon type={type} size={72} /></span>
+          <div className="flex flex-wrap justify-center gap-3">
+            <button type="button" className={btnGhostCls} disabled={photoBusy !== null} onClick={() => setSnapping(true)}>Take a photo</button>
+            <button type="button" className={btnGhostCls} disabled={photoBusy !== null} onClick={() => chooser.current?.click()}>Choose a photo</button>
+          </div>
+          {photoBusy && <p role="status" className="text-xs text-muted">{photoBusy}</p>}
+          {photoError && <p role="alert" className="text-sm text-bad">{photoError}</p>}
+        </div>
+      )}
+      {photoTools}
       {tripLines && (
-        <div className="flex flex-col gap-2 rounded-xl border border-accent bg-accent-soft p-3 sm:col-span-6">
+        <div className="flex flex-col gap-2 rounded-xl border border-accent bg-accent-soft p-3">
           <input type="hidden" name={`match_${pos}`} value={meta.match} />
           <p className="font-medium">Which one is this?</p>
           <div className="flex flex-wrap gap-2">
@@ -781,62 +801,53 @@ function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onReplace, onRemoveP
           )}
         </div>
       )}
-      {!row.photo && (
-        <div className="flex justify-center sm:col-span-6">
-          <span className="flex size-32 items-center justify-center rounded-xl border border-line bg-surface text-accent"><TypeIcon type={type} size={72} /></span>
-        </div>
-      )}
-      <label className={`${labelCls} sm:col-span-6`}>Name (optional)
-        <input className={inputCls} name={`name_${pos}`} maxLength={160} defaultValue={seed?.name ?? ''} placeholder="Made from brand and item type if left blank" />
+      <label className={labelCls}>Name
+        <input className={inputCls} name={`name_${pos}`} maxLength={160} defaultValue={seed?.name ?? ''} placeholder="Optional: made from brand and item type" />
       </label>
-      {/* Re-made when the trip line changes, so the item type follows "Which one is this?". */}
-      <CategoryPicker key={`${row.id}:${meta.match}`} categories={categories} name={`cat_${pos}`} defaultId={line?.categoryId ?? seed?.categoryId ?? type?.id} className={`${labelCls} sm:col-span-6`} allowNew onTypeChange={setType} />
-      <div className={`${labelCls} sm:col-span-3`}><BrandInput brands={brands} name={`brand_${pos}`} defaultValue={seed?.brand ?? ''} /></div>
-      <div className={`${labelCls} sm:col-span-6`}>
+      <FormCard title="What is it">
+        {/* Re-made when the trip line changes, so the item type follows "Which one is this?". */}
+        <CategoryPicker key={`${row.id}:${meta.match}`} categories={categories} name={`cat_${pos}`} defaultId={line?.categoryId ?? seed?.categoryId ?? type?.id} allowNew onTypeChange={setType} recentIds={pickerHints.recentTypeIds} />
+        <div className={labelCls}><BrandInput brands={brands} name={`brand_${pos}`} defaultValue={seed?.brand ?? ''} top={pickerHints.topBrands} /></div>
+      </FormCard>
+      <FormCard title="Size">
+        <div className="grid grid-cols-2 gap-2.5">
+          <TagSizeField labels={labels} value={tag} onChange={setTag} tagName={`tag_${pos}`} customName={`ctag_${pos}`} className={labelCls} />
+          <label className={labelCls}>Fits through
+            <select className={inputCls} name={`thru_${pos}`} defaultValue={seed?.thruId ?? ''}>
+              <option value="">{tag.custom ? 'Same as the tag range' : 'Same as tag'}</option>
+              {sizes.map((s) => <option key={s.id} value={s.id}>{sizeName(s)}</option>)}
+            </select>
+          </label>
+        </div>
+        {line && differs && sameOk !== diffKey && (
+          <div role="alert" className="flex flex-col gap-2 rounded-xl border border-warn bg-warn-soft p-3 text-sm text-warn">
+            <p>
+              <b>Is this the same item?</b> It is matched to the {line.typeName} {line.sizeLabel} you bought, but now says{' '}
+              {[type && type.id !== line.categoryId ? type.name : null, line.sizeId && tagSize !== line.sizeId ? (tag.custom ? `tag ${tag.text || '(custom)'}` : `size ${(sizes.find((z) => z.id === tagSize) ? sizeName(sizes.find((z) => z.id === tagSize)!) : null) ?? labels.find((l) => l.id === tag.tagId)?.label ?? 'another size'}`) : null].filter(Boolean).join(', ')}.
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <button type="button" className="font-medium underline" onClick={() => setSameOk(diffKey)}>Yes, it is that piece</button>
+              <button type="button" className="font-medium underline" onClick={() => onMeta({ match: '', qty: meta.qty })}>No, it is something else</button>
+            </div>
+          </div>
+        )}
+      </FormCard>
+      <FormCard title="How it looks">
         <ColorPills name={`color_${pos}`} value={color} hints={row.hints} onChange={(v) => { picked.current = true; setColor(v); }}
-          note={!picked.current && row.color && color === row.color ? 'Guessed from the photo' : undefined} />
-      </div>
-      <TagSizeField labels={labels} value={tag} onChange={setTag} tagName={`tag_${pos}`} customName={`ctag_${pos}`} className={`${labelCls} sm:col-span-2`} />
-      {line && differs && sameOk !== diffKey && (
-        <div role="alert" className="flex flex-col gap-2 rounded-xl border border-warn bg-warn-soft p-3 text-sm text-warn sm:col-span-6">
-          <p>
-            <b>Is this the same item?</b> It is matched to the {line.typeName} {line.sizeLabel} you bought, but now says{' '}
-            {[type && type.id !== line.categoryId ? type.name : null, line.sizeId && tagSize !== line.sizeId ? (tag.custom ? `tag ${tag.text || '(custom)'}` : `size ${(sizes.find((z) => z.id === tagSize) ? sizeName(sizes.find((z) => z.id === tagSize)!) : null) ?? labels.find((l) => l.id === tag.tagId)?.label ?? 'another size'}`) : null].filter(Boolean).join(', ')}.
-          </p>
-          <div className="flex flex-wrap gap-3">
-            <button type="button" className="font-medium underline" onClick={() => setSameOk(diffKey)}>Yes, it is that piece</button>
-            <button type="button" className="font-medium underline" onClick={() => onMeta({ match: '', qty: meta.qty })}>No, it is something else</button>
-          </div>
-        </div>
-      )}
-      <label className={`${labelCls} sm:col-span-2`}>Fits through
-        <select className={inputCls} name={`thru_${pos}`} defaultValue={seed?.thruId ?? ''}>
-          <option value="">{tag.custom ? 'Same as the tag range' : 'Same as tag size'}</option>
-          {sizes.map((s) => <option key={s.id} value={s.id}>{sizeName(s)}</option>)}
-        </select>
-      </label>
-      <label className={labelCls}>Quantity
-        <input className={inputCls} type="number" name={`qty_${pos}`} min={1} max={999} value={meta.qty || ''}
-          onChange={(e) => onMeta({ match: meta.match, qty: Math.max(0, Math.min(999, Math.round(Number(e.target.value) || 0))) })} />
-      </label>
-      <TagInput name={`tags_${pos}`} suggestions={tagNames} defaultTags={seed?.tags} className={`${labelCls} sm:col-span-6`}
-        hint="Tags for every item (on the first screen) are added too." />
-      {/* Blank follows the choice for every item on the first screen; anything picked here wins for this item. */}
-      <div className={`${labelCls} sm:col-span-6`}><ChoicePills name={`gender_${pos}`} label="Gender" options={[['', 'Same as every item'], ['none', 'Not set'], ...GENDERS]} /></div>
-      <div className={`${labelCls} sm:col-span-6`}><ChoicePills name={`status_${pos}`} label="Status" options={[['', 'Same as every item'], ...STATUSES]} /></div>
-      {!row.photo && (
-        <div className={`${labelCls} sm:col-span-6`}>
-          Photo (optional)
-          <div className="flex flex-wrap items-center gap-3">
-            <button type="button" className={btnGhostCls} disabled={photoBusy !== null} onClick={() => setSnapping(true)}>Take a photo</button>
-            <button type="button" className={btnGhostCls} disabled={photoBusy !== null} onClick={() => chooser.current?.click()}>Choose a photo</button>
-          </div>
-          {photoBusy && <p role="status" className="text-xs font-normal text-muted">{photoBusy}</p>}
-          {photoError && <p role="alert" className="text-sm text-bad">{photoError}</p>}
-        </div>
-      )}
-      {photoTools}
-      <div className="sm:col-span-6">
+          note={!picked.current && row.color && color === row.color ? 'from the photo' : undefined} />
+      </FormCard>
+      <MoreCard summary={`Quantity ${meta.qty || 1} · tags, gender and status`}>
+        <label className={`${labelCls} w-28`}>Quantity
+          <input className={inputCls} type="number" name={`qty_${pos}`} min={1} max={999} value={meta.qty || ''}
+            onChange={(e) => onMeta({ match: meta.match, qty: Math.max(0, Math.min(999, Math.round(Number(e.target.value) || 0))) })} />
+        </label>
+        <TagInput name={`tags_${pos}`} suggestions={tagNames} defaultTags={seed?.tags} className={labelCls}
+          hint="Tags for every item (on the first screen) are added too." />
+        {/* Blank follows the choice for every item on the first screen; anything picked here wins for this item. */}
+        <ChoicePills name={`gender_${pos}`} label="Gender" options={[['', 'Same as every item'], ['none', 'Not set'], ...GENDERS]} />
+        <ChoicePills name={`status_${pos}`} label="Status" options={[['', 'Same as every item'], ...STATUSES]} />
+      </MoreCard>
+      <div>
         <button type="button" className="text-sm text-bad underline" onClick={onRemove}>Remove this item</button>
       </div>
     </fieldset>
