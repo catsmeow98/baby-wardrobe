@@ -66,7 +66,7 @@ declare c uuid; s uuid; p uuid;
 begin
   perform t.as_user('T');
   select id into c from public.children where name = 'Trip kid';
-  insert into public.shopping_items (child_id, category_id, size_id, quantity_needed) values (c, t.cat('Hat'), t.size('0-3M'), 1) returning id into s;
+  insert into public.shopping_items (child_id, category_id, size_id, quantity_needed) values (c, t.cat('Warm hat / beanie'), t.size('0-3M'), 1) returning id into s;
   perform public.order_shopping_item(s, 1);
   p := public.receive_shopping_item(s, 1);
   perform t.ok((select trip_id from public.shopping_receipts where inventory_item_id = p) is null, 'receive without a trip still works');

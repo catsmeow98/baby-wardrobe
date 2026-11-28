@@ -48,7 +48,8 @@ export const CATEGORY_NAMES = {
   bunting: 'Bunting',
   snowsuit: 'Snowsuit',
   socks: 'Socks',
-  hat: 'Hat',
+  hat: 'Warm hat / beanie',
+  sunhat: 'Sun hat',
   mittens: 'Mittens',
   bib: 'Bib',
   shoes: 'Shoes',
@@ -70,7 +71,7 @@ export const CHIP_GROUPS: readonly { label: string; keys: readonly CatKey[] }[] 
   { label: 'Sleep', keys: ['footy', 'footless', 'pjs', 'gown', 'sack', 'swaddle'] },
   { label: 'Outfits', keys: ['romper', 'dress', 'ldress', 'lovr', 'sovr', 'set'] },
   { label: 'Outerwear', keys: ['sweater', 'cardigan', 'pullover', 'coat', 'jacket', 'bunting', 'snowsuit'] },
-  { label: 'Accessories', keys: ['socks', 'hat', 'mittens', 'bib'] },
+  { label: 'Accessories', keys: ['socks', 'hat', 'sunhat', 'mittens', 'bib'] },
   { label: 'Footwear', keys: ['shoes', 'booties', 'boots'] },
   { label: 'Swim', keys: ['swim', 'rash'] },
 ];
@@ -107,7 +108,7 @@ export interface PickOption {
 }
 export const defaultOptions = (): PickOption[] => CHIP_GROUPS.flatMap((g) => g.keys.map((k) => ({ key: k, name: CATEGORY_NAMES[k], group: g.label })));
 /** Built-in pieces that depend on the weather, offered in the outerwear and seasonal question. */
-export const GEAR_KEYS: readonly CatKey[] = ['coat', 'jacket', 'cardigan', 'pullover', 'bunting', 'snowsuit', 'mittens', 'hat', 'swim', 'rash'];
+export const GEAR_KEYS: readonly CatKey[] = ['coat', 'jacket', 'cardigan', 'pullover', 'bunting', 'snowsuit', 'mittens', 'hat', 'sunhat', 'swim', 'rash'];
 export const defaultGearOptions = (): PickOption[] => defaultOptions().filter((o) => (GEAR_KEYS as readonly string[]).includes(o.key));
 
 export type Occasion = 'sleep' | 'day' | 'dressy';
@@ -300,7 +301,8 @@ const GEAR: Partial<Record<CatKey, readonly MonthClass[]>> = {
   bunting: ['cold'],
   snowsuit: ['cold'],
   mittens: ['cold'],
-  hat: ['cold', 'cool', 'warm'],
+  hat: ['cold', 'cool'],
+  sunhat: ['warm', 'mild'],
   swim: ['warm'],
   rash: ['warm'],
 };

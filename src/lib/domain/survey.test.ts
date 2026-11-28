@@ -186,11 +186,11 @@ test('September to January: 2 light jackets, 2 coats, 1 snowsuit', () => {
 test('summer: swimsuits and a sun hat get 2, and a jacket chosen in a warm window still gets 1', () => {
   const a = base();
   const win = { ...sizeWindow(0, 6), monthIdx: [5, 6, 7], months: 'June to August', short: 'Jun-Aug' };
-  a.stages[6].gear = ['swim', 'hat', 'jacket'];
+  a.stages[6].gear = ['swim', 'sunhat', 'jacket'];
   const r = suggest(a, 6, 'summer', win);
   const q = (k: string) => r.rows.find((x) => x.key === k)!.qty;
   assert.equal(q('swim'), 2);
-  assert.equal(q('hat'), 2);
+  assert.equal(q('sunhat'), 2);
   assert.equal(q('jacket'), 1);
   assert.match(r.rows.find((x) => x.key === 'jacket')!.why, /at least 1/);
 });
@@ -323,11 +323,11 @@ test('a location\'s own month labels replace the fixed calendar', () => {
   assert.ok(!suggestGear([10, 11, 0], 6, false, false, table).includes('snowsuit'));
 });
 
-test('the 38 built-in item types each sit in exactly one chip group and have an icon', async () => {
+test('the 39 built-in item types each sit in exactly one chip group and have an icon', async () => {
   const { CHIP_GROUPS } = await import('./survey');
   const { ITEM_ICONS } = await import('../item-icons');
   const listed = CHIP_GROUPS.flatMap((g) => g.keys);
-  assert.equal(CAT_KEYS.length, 38);
+  assert.equal(CAT_KEYS.length, 39);
   assert.deepEqual([...listed].sort(), [...CAT_KEYS].sort());
   for (const k of CAT_KEYS) assert.ok(ITEM_ICONS[k]?.length > 0, `icon for ${k}`);
   assert.equal(CATEGORY_NAMES.top, 'Short-sleeve top');

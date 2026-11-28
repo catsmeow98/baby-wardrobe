@@ -5,10 +5,10 @@ do $$
 declare cF uuid; custom uuid; ch uuid;
 begin
   reset role;
-  perform t.ok((select count(*) from public.categories where owner_id is null) = 38, '38 built-in categories');
+  perform t.ok((select count(*) from public.categories where owner_id is null) = 39, '39 built-in categories');
   perform t.ok((select count(*) from public.categories where owner_id is null and group_id is null) = 0, 'every built-in item has a category');
-  perform t.ok((select count(distinct sort_order) from public.categories where owner_id is null) = 38, 'built-in order is unique');
-  perform t.ok(exists (select 1 from public.categories where owner_id is null and name in ('Sleep sack', 'Footy sleeper', 'Dress shirt', 'Bunting', 'Snowsuit', 'Socks', 'Hat', 'Coat')), 'individual items exist');
+  perform t.ok((select count(distinct sort_order) from public.categories where owner_id is null) = 39, 'built-in order is unique');
+  perform t.ok(exists (select 1 from public.categories where owner_id is null and name in ('Sleep sack', 'Footy sleeper', 'Dress shirt', 'Bunting', 'Snowsuit', 'Socks', 'Warm hat / beanie', 'Coat')), 'individual items exist');
   perform t.ok(not exists (select 1 from public.categories where owner_id is null and name in ('Outfits', 'Outerwear', 'Accessories', 'Swaddles', 'Sleep sacks')), 'grouped and plural names are gone');
   perform t.ok((select count(*) from public.categories where owner_id is null and name like 'Other %') = 0, 'the catch-all Other types are retired');
 
@@ -17,7 +17,7 @@ begin
   perform t.as_user('F');
   insert into public.categories (name, owner_id, sort_order) values ('Costume', t.fxv('F'), 1000) returning id into custom;
   perform t.ok((select count(*) from public.categories where owner_id = t.fxv('F')) = 1, 'a person can add a custom category');
-  perform t.fails($q$insert into public.categories (name, owner_id) values ('hat', auth.uid())$q$, 'a custom name cannot copy a built-in item, even in another case', '23505');
+  perform t.fails($q$insert into public.categories (name, owner_id) values ('sun HAT', auth.uid())$q$, 'a custom name cannot copy a built-in item, even in another case', '23505');
   perform t.fails($q$insert into public.categories (name, owner_id) values ('COSTUME', auth.uid())$q$, 'a person cannot add the same custom name twice', '23505');
   perform t.fails($q$update public.categories set name = 'Dress' where owner_id = auth.uid()$q$, 'renaming to a built-in name is rejected', '23505');
   perform t.fails($q$insert into public.categories (name, owner_id) values ('   ', auth.uid())$q$, 'a blank name is rejected', '23514');

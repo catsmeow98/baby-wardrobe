@@ -32,7 +32,7 @@ begin
   perform t.ok((select count(*) from public.shopping_receipts where trip_id = trip2) = 2, 'one trip for the delivery');
 
   -- A whole order in one go keeps its name.
-  o2 := public.place_order(c, 'Target', jsonb_build_array(jsonb_build_object('category_id', t.cat('Hat'), 'size_id', t.size('0-3M'), 'qty', 1)));
+  o2 := public.place_order(c, 'Target', jsonb_build_array(jsonb_build_object('category_id', t.cat('Warm hat / beanie'), 'size_id', t.size('0-3M'), 'qty', 1)));
   select id into b from public.shopping_items where order_id = o2;
   perform t.fails(format($q$select public.receive_order(%L, %L::jsonb, %L)$q$, o2, jsonb_build_array(jsonb_build_object('item', s1, 'qty', 1)), trip3), 'an item from another order is refused', '22023');
   perform t.fails(format($q$select public.receive_order(%L, %L::jsonb, %L)$q$, o2, jsonb_build_array(jsonb_build_object('item', b, 'qty', 2)), trip3), 'more than ordered is refused', '22023');
