@@ -163,3 +163,48 @@ export async function analyzeColor(blob: Blob): Promise<ColorAnalysis | null> {
     return null;
   }
 }
+
+/**
+ * The light in a photo, read from its background: the original photo (with background) and the cutout, drawn at the same small
+ * size; the pixels the cutout leaves clear are the background. Gives the background's average and median colour and the
+ * scene's bright end (98th percentile per channel). For tuning.
+ */
+export async function analyzeBackground(cutoutBlob: Blob, originalBlob: Blob): Promise<{ mean: [number, number, number]; median: [number, number, number]; bright: [number, number, number]; share: number } | null> {
+  try {
+    const [cut, orig] = await Promise.all([createImageBitmap(cutoutBlob), createImageBitmap(originalBlob)]);
+    const scale = Math.min(1, SIDE / Math.max(orig.width, orig.height));
+    const w = Math.max(1, Math.round(orig.width * scale));
+    const h = Math.max(1, Math.round(orig.height * scale));
+    const read = (bmp: ImageBitmap) => {
+      const c = document.createElement('canvas');
+      c.width = w;
+      c.height = h;
+      const x = c.getContext('2d', { willReadFrequently: true })!;
+      x.drawImage(bmp, 0, 0, w, h);
+      return x.getImageData(0, 0, w, h).data;
+    };
+    const cp = read(cut);
+    const op = read(orig);
+    cut.close();
+    orig.close();
+    const rs: number[] = [], gs: number[] = [], bs: number[] = [];
+    const all: [number[], number[], number[]] = [[], [], []];
+    for (let i = 0; i < op.length; i += 4) {
+      all[0].push(op[i]); all[1].push(op[i + 1]); all[2].push(op[i + 2]);
+      if (cp[i + 3] > 30) continue;
+      rs.push(op[i]); gs.push(op[i + 1]); bs.push(op[i + 2]);
+    }
+    if (rs.length < 30) return null;
+    const avg = (a: number[]) => Math.round(a.reduce((s, v) => s + v, 0) / a.length);
+    const pct = (a: number[], p: number) => [...a].sort((x, y) => x - y)[Math.min(a.length - 1, Math.floor(a.length * p))];
+    return {
+      mean: [avg(rs), avg(gs), avg(bs)],
+      median: [pct(rs, 0.5), pct(gs, 0.5), pct(bs, 0.5)],
+      bright: [pct(all[0], 0.98), pct(all[1], 0.98), pct(all[2], 0.98)],
+      share: Math.round((rs.length / (op.length / 4)) * 100) / 100,
+    };
+  } catch (e) {
+    console.error('Background could not be read', e);
+    return null;
+  }
+}

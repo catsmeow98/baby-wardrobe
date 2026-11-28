@@ -5,7 +5,7 @@ import { CopyButton } from '@/components/copy-button';
 import { ColorDot } from '@/components/color-dot';
 import { StickyActions } from '@/components/sticky-actions';
 import { btnCls, inputCls } from '@/components/ui';
-import { analyzeColor, type ColorAnalysis } from '@/lib/color-detect';
+import { analyzeBackground, analyzeColor, type ColorAnalysis } from '@/lib/color-detect';
 import { createClient } from '@/lib/supabase/client';
 import { PHOTO_BUCKET } from '@/lib/photos';
 import { COLORS } from '@/lib/db';
@@ -17,6 +17,7 @@ const colorName = (v: string | null | undefined) => (v ? (COLORS.find(([k]) => k
 /** Each item's photo, saved color, the guess and what it was based on; a color to pick; one save for all; a report to copy. */
 export function ColorCheck({ tagId, tagName, items }: { tagId: string; tagName: string; items: Item[] }) {
   const [found, setFound] = useState<Record<string, ColorAnalysis | null>>({});
+  const [bgs, setBgs] = useState<Record<string, Awaited<ReturnType<typeof analyzeBackground>>>>({});
   const [picked, setPicked] = useState<Record<string, string>>(() => Object.fromEntries(items.map((i) => [i.id, i.color ?? ''])));
   const [busy, setBusy] = useState(false);
 
@@ -30,7 +31,17 @@ export function ColorCheck({ tagId, tagName, items }: { tagId: string; tagName: 
         if (!i.path) { setFound((f) => ({ ...f, [i.id]: null })); continue; }
         const { data } = await supabase.storage.from(PHOTO_BUCKET).download(i.path);
         const a = data ? await analyzeColor(data) : null;
-        if (!stop) setFound((f) => ({ ...f, [i.id]: a }));
+        // The original with its background sits beside a cutout ("x.png" and "x-o.jpg"); its background shows the light.
+        let bg: Awaited<ReturnType<typeof analyzeBackground>> = null;
+        if (data && i.path.endsWith('.png')) {
+          const stem = i.path.slice(0, -4);
+          const orig = (await supabase.storage.from(PHOTO_BUCKET).download(`${stem}-o.jpg`)).data ?? (await supabase.storage.from(PHOTO_BUCKET).download(`${stem}-o.png`)).data;
+          if (orig) bg = await analyzeBackground(data, orig);
+        }
+        if (!stop) {
+          setBgs((b) => ({ ...b, [i.id]: bg }));
+          setFound((f) => ({ ...f, [i.id]: a }));
+        }
       }
     })();
     return () => { stop = true; };
@@ -40,8 +51,9 @@ export function ColorCheck({ tagId, tagName, items }: { tagId: string; tagName: 
   const report = JSON.stringify(items.map((i) => {
     const a = found[i.id];
     return {
-      saved: i.color, correct: picked[i.id] || null, guess: a?.color ?? null, cutout: a?.cutout ?? null,
-      buckets: a?.buckets.slice(0, 6).map((b) => [b.name, b.share, ...b.rgb]), clusters: a?.clusters,
+      correct: picked[i.id] || null, guess: a?.color ?? null,
+      buckets: a?.buckets.slice(0, 4).map((b) => [b.name, b.share, ...b.rgb]), clusters: a?.clusters.slice(0, 10),
+      bg: bgs[i.id] ? [...bgs[i.id]!.mean, ...bgs[i.id]!.median, ...bgs[i.id]!.bright, bgs[i.id]!.share] : null,
     };
   }));
   const changed = items.filter((i) => (picked[i.id] || null) !== i.color).length;
