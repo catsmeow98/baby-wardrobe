@@ -8,6 +8,8 @@ import { btnCls, btnGhostCls, inputCls, labelCls } from '@/components/ui';
 import { sizeName } from '@/lib/db';
 import { fitWord, sizeFor, transition, MAX_AGE_MONTHS } from '@/lib/domain';
 import { forecastFor, loadBrands, loadMeasurements, todayIso } from '@/lib/forecast-data';
+import { ForecastChart } from '@/components/forecast-chart';
+import type { Sex } from '@/lib/domain';
 import { addMeasurement, clearRatings, deleteMeasurement, saveBrandOffset } from './actions';
 
 export const metadata: Metadata = { title: 'Forecast' };
@@ -32,6 +34,8 @@ export default async function ForecastPage({ searchParams }: { searchParams: Pro
     const s = ctx.sizeByOrder.get(order);
     return s ? sizeName(s) : '';
   };
+  // The charts to compare: the standard one, and each brand whose fit differs from it.
+  const charts = f ? [{ id: null as string | null, name: 'Standard US chart', offset: 0 }, ...brands.filter((b) => Math.abs(b.offset) >= 0.01).map((b) => ({ id: b.id as string | null, name: `${b.name}, ${b.offset > 0 ? 'runs large' : 'runs small'}`, offset: b.offset }))] : [];
   const href = (b: string | null, h: number) => `/forecast?${b ? `brand=${b}&` : ''}h=${h}`;
   const ready = Boolean(child.birth_date && child.growth_reference);
 
@@ -44,7 +48,7 @@ export default async function ForecastPage({ searchParams }: { searchParams: Pro
       <FormMessage error={sp.error} message={sp.ok} />
 
       <p className="rounded-lg bg-warn-soft p-3 text-sm text-warn">
-        This is an estimate, not a prediction. It uses a simplified growth reference and a generic size chart, so real sizes will vary. Check fit before buying ahead.
+        This is an estimate, not a prediction. It uses the WHO growth standard and Carter&apos;s size chart, but children change percentiles and brands size differently. Check fit before buying ahead.
       </p>
 
       {!ready && (
@@ -86,6 +90,30 @@ export default async function ForecastPage({ searchParams }: { searchParams: Pro
 
       {f && t && (
         <section className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-4">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="font-display text-lg font-bold">Where {child.name} is tracking</h2>
+            <span className="text-sm text-muted">{f.percentile}th percentile for length</span>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {charts.map((c) => {
+              const ct = transition(f, c.offset);
+              const on = (brand?.id ?? null) === c.id;
+              return (
+                <Link key={c.id ?? 'standard'} href={href(c.id, horizon)} aria-current={on ? 'true' : undefined}
+                  className={`flex flex-col gap-1 rounded-xl border p-4 ${on ? 'border-accent ring-1 ring-accent' : 'border-line'}`}>
+                  <span className="text-xs uppercase tracking-wide text-muted">{c.name}</span>
+                  <b className="font-display text-2xl">{nameOf(ct.now)}</b>
+                  <span className="text-sm text-muted">
+                    {ct.next ? <>Next: <b className="text-ink">{nameOf(ct.next.size)}</b> around {month(ct.next.date)}</> : <>Stays in this size through {month(ct.end)}</>}
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
+          <ForecastChart f={f} sex={child.growth_reference as Sex} offset={offset} sizeLabel={nameOf} />
+          <p className="text-sm text-muted">
+            Grey lines are the 3rd, 50th and 97th percentiles. Dots are measurements. The dashed line is the projection and the shaded band its likely range, which widens as time passes since the last measurement. Orange dashed lines show where the {brand ? brand.name : 'standard US'} chart moves up a size; tap a card to switch charts.
+          </p>
           <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Brand chart">
             <span className="text-sm text-muted">Size chart</span>
             <Link href={href(null, horizon)} aria-current={!brand ? 'true' : undefined}
@@ -111,7 +139,9 @@ export default async function ForecastPage({ searchParams }: { searchParams: Pro
           </p>
           {f.rows[f.rows.length - 1].age >= MAX_AGE_MONTHS - 0.01 && <p className="text-sm text-muted">The growth reference ends at {MAX_AGE_MONTHS} months, so the forecast stops there.</p>}
 
-          <div className="overflow-x-auto">
+          <details>
+          <summary className="cursor-pointer text-sm font-medium text-accent">Month by month</summary>
+          <div className="mt-2 overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="text-muted"><tr><th className="py-1.5 pr-3 font-medium">Month</th><th className="pr-3 font-medium">Age</th><th className="pr-3 font-medium">Likely length</th><th className="font-medium">Size</th></tr></thead>
               <tbody>
@@ -130,6 +160,7 @@ export default async function ForecastPage({ searchParams }: { searchParams: Pro
               </tbody>
             </table>
           </div>
+          </details>
           {child.current_size_id && ctx.currentSize !== null && ctx.currentSize !== t.now && (
             <p className="text-sm text-muted">
               {child.name} is set to {nameOf(ctx.currentSize)}, but this chart puts their current length in {nameOf(t.now)}. Update the measurement or the size if one is out of date.

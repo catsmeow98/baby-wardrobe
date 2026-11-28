@@ -27,19 +27,21 @@ export interface Forecast {
 
 /**
  * WHO Child Growth Standards, length-for-age: median (M, cm) and coefficient of variation (S) by month; L is 1 throughout, so
- * SD = M x S. Birth to 24 months for both sexes, checked against the WHO LMS tables. Boys 25 to 36 months are WHO
+ * SD = M x S. Birth to 24 months for both sexes, checked against the WHO LMS tables. 25 to 36 months (both sexes) are WHO
  * height-for-age plus 0.7 cm (WHO's own length-to-height difference), so the curve stays in lying length, the way babies are
- * measured at home. Girls 30 and 36 months are older approximations, not yet checked against the WHO table.
+ * measured at home.
  */
 interface Ref { ages: number[]; m: number[]; s: number[] }
 const MONTHS_0_24 = Array.from({ length: 25 }, (_, i) => i);
 const REF: Record<Sex, Ref> = {
   girls: {
-    ages: [...MONTHS_0_24, 30, 36],
+    ages: [...MONTHS_0_24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36],
     m: [49.1477, 53.6872, 57.0673, 59.8029, 62.0899, 64.0301, 65.7311, 67.2873, 68.7498, 70.1435, 71.4818, 72.771, 74.015, 75.2176, 76.3817,
-      77.5099, 78.6055, 79.671, 80.7079, 81.7182, 82.7036, 83.6654, 84.604, 85.5202, 86.4153, 91.2, 95.1],
+      77.5099, 78.6055, 79.671, 80.7079, 81.7182, 82.7036, 83.6654, 84.604, 85.5202, 86.4153,
+      87.2904, 88.1462, 88.983, 89.8004, 90.5991, 91.3797, 92.143, 92.8906, 93.6239, 94.3444, 95.0533, 95.7515],
     s: [0.0379, 0.0364, 0.03568, 0.0352, 0.03486, 0.03463, 0.03448, 0.03441, 0.0344, 0.03444, 0.03452, 0.03464, 0.03479, 0.03496, 0.03514,
-      0.03534, 0.03555, 0.03576, 0.03598, 0.0362, 0.03643, 0.03666, 0.03688, 0.03711, 0.03734, 0.0384, 0.0389],
+      0.03534, 0.03555, 0.03576, 0.03598, 0.0362, 0.03643, 0.03666, 0.03688, 0.03711, 0.03734,
+      0.03786, 0.03808, 0.0383, 0.03851, 0.03872, 0.03893, 0.03913, 0.03933, 0.03952, 0.03971, 0.03989, 0.04006],
   },
   boys: {
     ages: [...MONTHS_0_24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36],
@@ -93,6 +95,8 @@ export function addMonths(date: string, n: number): string {
 
 const zOf = (sex: Sex, age: number, cm: number): number => (cm - medianCm(sex, age)) / sdCm(sex, age);
 const cmAt = (sex: Sex, age: number, z: number): number => medianCm(sex, age) + z * sdCm(sex, age);
+/** Length in inches at an age (months) and z-score on the growth reference: z 0 is the 50th percentile, ±1.881 the 3rd and 97th. */
+export const lengthAt = (sex: Sex, age: number, z: number): number => cmAt(sex, age, z) / CM_PER_IN;
 
 function erf(x: number): number {
   const s = x < 0 ? -1 : 1;
