@@ -20,6 +20,7 @@ import { ReceiveOrder } from '@/components/receive-order';
 import { LocalTime } from '@/components/local-time';
 import { loadOpenOrders } from '@/lib/orders-data';
 import { loadHistory } from '@/lib/history-data';
+import { ShowMoreList } from '@/components/show-more-list';
 import { loadTrips } from '@/lib/trips-data';
 import { iconForType } from '@/lib/item-icons';
 
@@ -57,7 +58,7 @@ export default async function ShoppingPage({ searchParams }: { searchParams: Pro
   const passes = (s: ShoppingRow) => typeOk(s.category_id) || (!visibleIds.has(s.category_id) && !groupIds.length && !cats.length) ? sizeOk(ctx.orderOf.get(s.size_id)) : false;
   // Ordered entries that belong to an order show under Orders; Your list keeps what is still to order (and older loose orders).
   const open = shopRowsT.filter((s) => !['received', 'cancelled'].includes(s.status) && !(s.order_id && s.status !== 'needed') && passes(s));
-  const [orders, history] = await Promise.all([loadOpenOrders(ctx, child.id), loadHistory(ctx, child.id)]);
+  const [orders, history] = await Promise.all([loadOpenOrders(ctx, child.id), loadHistory(ctx, child.id, 200)]);
   // Plain text for pasting into a note or message: what is still to buy, from the gaps and from entries not yet ordered.
   const wanted = [
     ...gaps.map((g) => ({ n: g.remaining, type: ctx.catById.get(g.categoryId)?.name ?? 'Item', size: ctx.sizeByOrder.get(g.size) })),
@@ -159,8 +160,9 @@ export default async function ShoppingPage({ searchParams }: { searchParams: Pro
         {history.length === 0 ? (
           <p className="py-3 text-sm text-muted">Finished orders and store trips show here.</p>
         ) : (
-          <ul className="flex flex-col">
-            {history.map((h) => (
+          <ShowMoreList
+            className="flex flex-col"
+            items={history.map((h) => (
               <li key={h.key} className="border-t border-line py-3 first:border-t-0">
                 <p>
                   {h.kind === 'earlier'
@@ -183,7 +185,7 @@ export default async function ShoppingPage({ searchParams }: { searchParams: Pro
                 </p>
               </li>
             ))}
-          </ul>
+          />
         )}
       </section>
     </>
