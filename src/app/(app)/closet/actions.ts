@@ -420,30 +420,75 @@ export async function saveColors(formData: FormData) {
 }
 
 /**
- * Puts photos on items that had none, from Add photos: each match is an item and a photo (as uploaded by the browser), with the
- * color guessed from it when the item has no color yet. Photos left unmatched are deleted.
+ * Puts photos on items that had none, from Add photos, and saves each item's details as changed there (type, name, brand,
+ * color, tag size, fits through, tags). Field names carry the photo's key. Photos left unmatched are deleted.
  */
 export async function attachItemPhotos(formData: FormData) {
   const back = safeBack(formData.get('back'), '/dashboard');
-  const stop = (m: string): never => redirect(withParams('/closet/add-photos', { error: m }));
-  let raw: unknown = [];
-  try {
-    raw = JSON.parse(String(formData.get('matches') ?? '[]'));
-  } catch {
-    raw = [];
-  }
-  const parsed = z.array(z.object({ item: z.string().uuid(), photo: z.string().min(1).max(420), color: z.enum(COLOR_VALUES).nullable().optional() })).max(100).safeParse(raw);
+  const path = '/closet/add-photos';
+  const stop = (m: string): never => redirect(withParams(path, { error: m }));
+  const json = (k: string): unknown => {
+    try {
+      return JSON.parse(String(formData.get(k) ?? '[]'));
+    } catch {
+      return [];
+    }
+  };
+  const parsed = z.array(z.object({ key: z.number().int().min(0), item: z.string().uuid(), photo: z.string().min(1).max(420) })).max(100).safeParse(json('matches'));
   if (!parsed.success) return stop('Those photos could not be read. Try again.');
-  const unused = z.array(z.string().max(420)).max(200).safeParse(JSON.parse(String(formData.get('unused') ?? '[]')));
+  const unused = z.array(z.string().max(420)).max(200).safeParse(json('unused'));
   const ctx = await getContext();
   if (!ctx.active) return stop('Add a child first.');
+  const { data: labelData } = await ctx.supabase.from('size_labels').select('id, size_id');
+  const labelOrder = new Map((labelData ?? []).map((l: { id: string; size_id: string }) => [l.id, ctx.orderOf.get(l.size_id) ?? null]));
+
+  // Check every item's details first, so nothing is half saved.
+  const updates: { item: string; photo: string; row: Record<string, unknown>; tags: string[] }[] = [];
+  for (const [n, m] of parsed.data.entries()) {
+    const text = (f: string) => String(formData.get(`${f}_${m.key}`) ?? '').trim();
+    const label = `Photo ${n + 1}: `;
+    const cat = z.string().uuid().safeParse(text('cat') === '__new' ? await typeFor(ctx, formData, `cat_${m.key}`, path, label) : text('cat'));
+    if (!cat.success) return stop(`${label}choose an item type.`);
+    const tag = z.string().uuid().safeParse(text('tag') || undefined);
+    const thru = z.string().uuid().safeParse(text('thru') || undefined);
+    let tagO = tag.success ? (labelOrder.get(tag.data) ?? null) : null;
+    let tagTo: number | null = null;
+    let customTag: string | null = null;
+    if (!tag.success && text('ctag')) {
+      const custom = parseTagRange(text('ctag'));
+      if ('error' in custom) return stop(`${label}${custom.error}`);
+      tagO = custom.fitFrom;
+      tagTo = custom.fitTo;
+      customTag = custom.label;
+    }
+    const range = resolveFitRange(tagO, null, thru.success ? (ctx.orderOf.get(thru.data) ?? null) : null, tagTo);
+    if ('error' in range) return stop(`${label}${range.error}`);
+    const brand = text('brand');
+    updates.push({
+      item: m.item,
+      photo: m.photo,
+      tags: parseTags(formData.get(`tags_${m.key}`)),
+      row: {
+        name: autoName(text('name'), brand, ctx.catById.get(cat.data)?.name ?? 'Item'),
+        category_id: cat.data,
+        brand_id: await brandId(ctx, brand),
+        color: z.enum(COLOR_VALUES).safeParse(text('color')).data ?? null,
+        label_id: tag.success ? tag.data : null,
+        custom_tag: customTag,
+        fit_from_size_id: range.fitFrom === null ? null : (ctx.sizeByOrder.get(range.fitFrom)?.id ?? null),
+        fit_to_size_id: range.fitTo === null ? null : (ctx.sizeByOrder.get(range.fitTo)?.id ?? null),
+      },
+    });
+  }
   if (unused.success && unused.data.length) await discardPhotos(ctx.supabase, ctx.user.id, ctx.active.id, unused.data);
   let attached = 0;
-  for (const m of parsed.data) {
-    if (await attachPhotos(ctx.supabase, ctx.user.id, ctx.active.id, m.item, [m.photo])) attached++;
-    if (m.color) await ctx.supabase.from('inventory_items').update({ color: m.color }).eq('id', m.item).is('color', null);
+  for (const u of updates) {
+    const { error } = await ctx.supabase.from('inventory_items').update(u.row).eq('id', u.item);
+    if (error) return stop(`${attached} of ${updates.length} saved. An item's details could not be saved; check its sizes and try again.`);
+    await saveTags(ctx, [{ item: u.item, tags: u.tags }]);
+    if (await attachPhotos(ctx.supabase, ctx.user.id, ctx.active.id, u.item, [u.photo])) attached++;
   }
   ['/closet', '/dashboard'].forEach((p) => revalidatePath(p));
-  if (attached < parsed.data.length) return stop(`${attached} of ${parsed.data.length} photos were added. Try the rest again.`);
+  if (attached < updates.length) return stop(`${attached} of ${updates.length} photos were added. Try the rest again.`);
   return redirect(withParams(back, { ok: `${attached} photo${attached === 1 ? '' : 's'} added.` }));
 }

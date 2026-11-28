@@ -11,15 +11,27 @@ import { uploadPhoto } from '@/lib/photo-upload';
 import { joinPhotoField } from '@/lib/photo-paths';
 import { detectColor } from '@/lib/color-detect';
 import { attachItemPhotos } from '@/app/(app)/closet/actions';
+import { BrandSelect } from '@/components/brand-select';
+import { CategoryPicker } from '@/components/category-picker';
+import { TagInput } from '@/components/tag-input';
+import { TagSizeField, type TagValue } from '@/components/tag-size-field';
+import { labelCls } from '@/components/ui';
+import { COLORS, sizeName, type CategoryRow, type SizeLabelRow, type SizeRow } from '@/lib/db';
 
-export interface PhotoLessItem { id: string; name: string; typeName: string; icon: string; size: string; hasColor: boolean }
-interface Shot { key: number; field: string; preview: string; item: string; color: string | null }
+export interface PhotoLessItem {
+  id: string; name: string; typeName: string; icon: string; size: string; hasColor: boolean;
+  categoryId: string; brand: string; color: string | null; labelId: string | null; customTag: string | null; thruId: string | null; tags: string[];
+}
+interface Shot { key: number; field: string; preview: string; item: string; color: string | null; hints: string[] }
 
 /**
  * Photos for items that have none: snap or choose photos, then pick which item each one is (each item once). Saving puts the
  * photos on those items; photos not matched to an item are deleted.
  */
-export function AddPhotos({ items, userId, childId, removeBg, back }: { items: PhotoLessItem[]; userId: string; childId: string; removeBg: boolean; back: string }) {
+export function AddPhotos({ items, userId, childId, removeBg, back, categories, labels, sizes, brands, tagNames }: {
+  items: PhotoLessItem[]; userId: string; childId: string; removeBg: boolean; back: string;
+  categories: CategoryRow[]; labels: SizeLabelRow[]; sizes: SizeRow[]; brands: string[]; tagNames: string[];
+}) {
   const [shots, setShots] = useState<Shot[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -44,7 +56,7 @@ export function AddPhotos({ items, userId, childId, removeBg, back }: { items: P
           // Starts on the first item not yet matched, in list order.
           const taken = new Set(shotsRef.current.map((s) => s.item));
           const first = items.find((i) => !taken.has(i.id))?.id ?? '';
-          const shot = { key: nextKey.current++, field: joinPhotoField(ref.path, ref.originalPath), preview: URL.createObjectURL(done.blob), item: first, color: guess.color };
+          const shot = { key: nextKey.current++, field: joinPhotoField(ref.path, ref.originalPath), preview: URL.createObjectURL(done.blob), item: first, color: guess.color, hints: guess.hints };
           shotsRef.current = [...shotsRef.current, shot];
           setShots((l) => [...l, shot]);
         } catch (e) {
@@ -60,7 +72,7 @@ export function AddPhotos({ items, userId, childId, removeBg, back }: { items: P
   return (
     <form action={attachItemPhotos} onSubmit={() => setSaving(true)} className="flex flex-col gap-4">
       <input type="hidden" name="back" value={back} />
-      <input type="hidden" name="matches" value={JSON.stringify(matched.map((s) => ({ item: s.item, photo: s.field, color: items.find((i) => i.id === s.item)?.hasColor ? null : s.color })))} />
+      <input type="hidden" name="matches" value={JSON.stringify(matched.map((s) => ({ key: s.key, item: s.item, photo: s.field })))} />
       <input type="hidden" name="unused" value={JSON.stringify(shots.filter((s) => !s.item).map((s) => s.field))} />
 
       <ul className="flex flex-col gap-1.5 rounded-xl border border-line bg-surface p-3 text-sm">
@@ -88,7 +100,8 @@ export function AddPhotos({ items, userId, childId, removeBg, back }: { items: P
       {shots.length > 0 && (
         <ul className="grid gap-3 sm:grid-cols-2">
           {shots.map((s) => (
-            <li key={s.key} className="flex gap-3 rounded-xl border border-line bg-surface p-3">
+            <li key={s.key} className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-3 sm:col-span-2">
+              <div className="flex gap-3">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={s.preview} alt="" className="size-24 shrink-0 rounded-lg bg-line object-contain" />
               <label className="flex flex-1 flex-col gap-1 text-sm font-medium">Which item is this?
@@ -101,6 +114,12 @@ export function AddPhotos({ items, userId, childId, removeBg, back }: { items: P
                   ))}
                 </select>
               </label>
+              </div>
+              {s.item && (() => {
+                const it = items.find((i) => i.id === s.item)!;
+                // Re-made when the photo is matched to another item, so the fields start from that item.
+                return <Details key={`${s.key}:${s.item}`} k={s.key} item={it} guess={s.color} hints={s.hints} categories={categories} labels={labels} sizes={sizes} brands={brands} tagNames={tagNames} />;
+              })()}
             </li>
           ))}
         </ul>
@@ -114,5 +133,51 @@ export function AddPhotos({ items, userId, childId, removeBg, back }: { items: P
         <button type="submit" className={btnCls} disabled={saving || busy !== null || matched.length === 0}>{saving ? 'Saving…' : `Save ${matched.length} photo${matched.length === 1 ? '' : 's'}`}</button>
       </StickyActions>
     </form>
+  );
+}
+
+/** The matched item's details, filled in from the item, to change while its photo is added. Field names carry the photo's key. */
+function Details({ k, item, guess, hints, categories, labels, sizes, brands, tagNames }: {
+  k: number; item: PhotoLessItem; guess: string | null; hints: string[];
+  categories: CategoryRow[]; labels: SizeLabelRow[]; sizes: SizeRow[]; brands: string[]; tagNames: string[];
+}) {
+  const [tag, setTag] = useState<TagValue>(() => (item.customTag
+    ? { tagId: '', custom: true, text: item.customTag.replace(/M$/i, '') }
+    : { tagId: item.labelId ?? '', custom: false, text: '' }));
+  // The item's own color stays; an item with none starts from a sure guess from the photo.
+  const [color, setColor] = useState(item.color ?? guess ?? '');
+  return (
+    <details open className="rounded-lg border border-line p-3">
+      <summary className="cursor-pointer text-sm font-medium">Details</summary>
+      <div className="mt-2 grid gap-3 sm:grid-cols-2">
+        <CategoryPicker categories={categories} name={`cat_${k}`} defaultId={item.categoryId} className={labelCls} allowNew />
+        <label className={labelCls}>Name
+          <input className={inputCls} name={`name_${k}`} defaultValue={item.name} maxLength={160} />
+        </label>
+        <label className={labelCls}>Brand
+          <BrandSelect brands={brands} name={`brand_${k}`} defaultValue={item.brand} />
+        </label>
+        <label className={labelCls}>Color
+          <select className={inputCls} name={`color_${k}`} value={color} onChange={(e) => setColor(e.target.value)}>
+            <option value="">Not set</option>
+            {COLORS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
+          {!item.color && guess && color === guess && <span className="text-xs font-normal text-muted">Guessed from the photo</span>}
+          {!color && hints.length > 0 && (
+            <span className="flex flex-wrap items-center gap-1.5 text-xs font-normal text-muted">Looks like:
+              {hints.map((h) => <button key={h} type="button" onClick={() => setColor(h)} className="rounded-full border border-line bg-surface px-2.5 py-1 text-sm text-ink">{COLORS.find(([v]) => v === h)?.[1] ?? h}</button>)}
+            </span>
+          )}
+        </label>
+        <TagSizeField labels={labels} value={tag} onChange={setTag} tagName={`tag_${k}`} customName={`ctag_${k}`} className={labelCls} />
+        <label className={labelCls}>Fits through
+          <select className={inputCls} name={`thru_${k}`} defaultValue={item.thruId ?? ''}>
+            <option value="">{tag.custom ? 'Same as the tag range' : 'Same as tag size'}</option>
+            {sizes.map((z) => <option key={z.id} value={z.id}>{sizeName(z)}</option>)}
+          </select>
+        </label>
+        <TagInput name={`tags_${k}`} suggestions={tagNames} defaultTags={item.tags} className={`${labelCls} sm:col-span-2`} />
+      </div>
+    </details>
   );
 }
