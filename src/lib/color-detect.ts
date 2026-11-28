@@ -42,8 +42,9 @@ export function colorOfPixel(r: number, g: number, b: number): Exclude<ColorValu
     if (l > 0.68) return 'pink';
     return l < 0.28 && chroma < 90 ? 'brown' : 'red';
   }
-  if (h < 45) {
-    if (l < 0.5 || chroma < 70) return 'brown';
+  // Orange stops at 38°: warm light pushes yellow (about 50°) down toward 40°, while real oranges sit around 20 to 30°.
+  if (h < 38) {
+    if (l < 0.42 || chroma < 70) return 'brown';
     return l > 0.75 ? 'pink' : 'orange';
   }
   if (h < 68) return l < 0.3 ? 'brown' : 'yellow';

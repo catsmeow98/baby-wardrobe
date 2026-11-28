@@ -13,8 +13,10 @@ test('names common clothing colors, including dim and pale ones from real photos
     [200, 170, 175, 'pink'], [40, 40, 45, 'black'],
     // From real photos in warm indoor light: a white bodysuit, a cream sweater, an olive shirt in shade.
     [166, 152, 143, 'cream'], [183, 179, 179, 'white'], [160, 140, 126, 'cream'], [87, 79, 64, 'green'], [100, 97, 81, 'green'],
+    // A yellow bodysuit in warm light, and its shaded folds; real oranges stay orange.
+    [196, 161, 86, 'yellow'], [146, 114, 57, 'yellow'], [230, 120, 40, 'orange'], [200, 100, 40, 'orange'], [250, 150, 80, 'orange'],
     // Browns stay brown.
-    [90, 60, 40, 'brown'], [150, 130, 100, 'brown'], [110, 90, 60, 'brown'], [60, 45, 35, 'brown'],
+    [90, 60, 40, 'brown'], [150, 130, 100, 'brown'], [110, 90, 60, 'brown'], [60, 45, 35, 'brown'], [139, 69, 19, 'brown'], [160, 82, 45, 'brown'],
   ];
   for (const [r, g, b, want] of cases) assert.equal(colorOfPixel(r, g, b), want, `${r},${g},${b}`);
 });
