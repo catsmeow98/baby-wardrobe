@@ -57,6 +57,18 @@ export function guessLine(lines: readonly TripLine[], left: ReadonlyMap<string, 
   return lines.find((l) => (left.get(l.itemId) ?? 0) > 0)?.itemId ?? '';
 }
 
-/** "Short-sleeve bodysuit ×3, Pants ×2" for a trip. */
-export const tripSummary = (t: Trip, typeName: (categoryId: string) => string) =>
-  t.lines.map((l) => `${typeName(l.categoryId)}${l.qty > 1 ? ` ×${l.qty}` : ''}`).join(', ');
+/**
+ * "Short-sleeve bodysuit 0-3M ×3, Pants 3-6M ×2" for a trip: one entry per item type and size (lines of the same type and
+ * size are added together). sizeName is optional; without it the sizes are left out.
+ */
+export function tripSummary(t: Trip, typeName: (categoryId: string) => string, sizeName?: (sizeId: string) => string): string {
+  const parts = new Map<string, { label: string; n: number }>();
+  for (const l of t.lines) {
+    const key = `${l.categoryId}|${l.sizeId ?? ''}`;
+    const size = sizeName && l.sizeId ? sizeName(l.sizeId) : '';
+    const p = parts.get(key) ?? { label: `${typeName(l.categoryId)}${size ? ` ${size}` : ''}`, n: 0 };
+    p.n += l.qty;
+    parts.set(key, p);
+  }
+  return [...parts.values()].map((p) => `${p.label}${p.n > 1 ? ` ×${p.n}` : ''}`).join(', ');
+}

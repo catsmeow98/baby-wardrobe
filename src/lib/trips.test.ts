@@ -43,3 +43,13 @@ test('trips: the name comes from the receipts', () => {
   assert.equal(t.find((x) => x.id === 'a')?.name, 'Old Navy sale – part 2');
   assert.equal(t.find((x) => x.id === 'b')?.name, undefined, 'older trips have no name');
 });
+
+test('trips: the summary has sizes and adds up lines of the same type and size', () => {
+  const t = groupTrips([
+    { trip_id: 'a', received_at: 'x', item: { id: 'p1', category_id: 'ls', fit_from_size_id: 's69', label_id: null, quantity: 3 } },
+    { trip_id: 'a', received_at: 'x', item: { id: 'p2', category_id: 'ls', fit_from_size_id: 's912', label_id: null, quantity: 1 } },
+    { trip_id: 'a', received_at: 'x', item: { id: 'p3', category_id: 'ls', fit_from_size_id: 's69', label_id: null, quantity: 1 } },
+  ])[0];
+  const sizes: Record<string, string> = { s69: '6-9M', s912: '9-12M' };
+  assert.equal(tripSummary(t, () => 'Long-sleeve bodysuit', (id) => sizes[id]), 'Long-sleeve bodysuit 6-9M ×4, Long-sleeve bodysuit 9-12M');
+});

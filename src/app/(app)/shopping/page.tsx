@@ -120,7 +120,7 @@ export default async function ShoppingPage({ searchParams }: { searchParams: Pro
       </div>
       <FormMessage error={sp.error} message={sp.ok} />
       {justReceived && (
-        <TripCard trip={justReceived} typeName={(id) => ctx.catById.get(id)?.name ?? 'Item'} back={currentUrl('/shopping', { ...sp, trip: undefined, ok: undefined })} prompt
+        <TripCard trip={justReceived} typeName={(id) => ctx.catById.get(id)?.name ?? 'Item'} sizeName={(id) => { const z = ctx.sizeById.get(id); return z ? sizeName(z) : ''; }} back={currentUrl('/shopping', { ...sp, trip: undefined, ok: undefined })} prompt
           laterHref={currentUrl('/shopping', { ...sp, trip: undefined, ok: undefined })} />
       )}
 

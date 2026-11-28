@@ -42,6 +42,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   // Just received an order from here: offer photos for it (Later leaves it in the list below).
   const justReceived = sp.trip ? trips.find((t) => t.id === sp.trip) : undefined;
   const typeName = (id: string) => ctx.catById.get(id)?.name ?? 'Item';
+  const sizeOf = (id: string) => { const z = ctx.sizeById.get(id); return z ? sizeName(z) : ''; };
   const [{ data: itemRows }, { data: goalRows }, { data: shopRows }] = await Promise.all([
     ctx.supabase.from('inventory_items').select('*').eq('child_id', child.id),
     ctx.supabase.from('wardrobe_goals').select('*').eq('child_id', child.id),
@@ -114,7 +115,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         </div>
       )}
 
-      {justReceived && <TripCard trip={justReceived} typeName={typeName} back="/dashboard" prompt laterHref="/dashboard" />}
 
       {orders.length > 0 && (
         <section className="flex flex-col gap-2">
@@ -138,7 +138,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       {trips.length > 0 && (
         <section className="flex flex-col gap-2">
           <h2 className="font-display text-lg font-bold">Shopping trips needing photos</h2>
-          {trips.filter((t) => t.id !== justReceived?.id).slice(0, 5).map((t) => <TripCard key={t.id} trip={t} typeName={typeName} back="/dashboard" />)}
+          {/* The trip just received comes first, highlighted with Add photos now / Later; Later leaves it here like the rest. */}
+          {justReceived && <TripCard trip={justReceived} typeName={typeName} sizeName={sizeOf} back="/dashboard" prompt laterHref="/dashboard" />}
+          {trips.filter((t) => t.id !== justReceived?.id).slice(0, justReceived ? 4 : 5).map((t) => <TripCard key={t.id} trip={t} typeName={typeName} sizeName={sizeOf} back="/dashboard" />)}
           {trips.length > 5 && <p className="text-sm text-muted">And {trips.length - 5} more.</p>}
         </section>
       )}
