@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { useTurnQueue } from '@/components/use-turn-queue';
-import { BrandSelect } from '@/components/brand-select';
+import { BrandInput, ChoicePills, ColorPills } from '@/components/pickers';
 import { CategoryPicker } from '@/components/category-picker';
 import { ItemIcon, TypeIcon } from '@/components/item-icon';
 import { LocalTime } from '@/components/local-time';
@@ -21,7 +21,7 @@ import { PHOTO_BUCKET } from '@/lib/photos';
 import { detectColor } from '@/lib/color-detect';
 import { TagInput } from '@/components/tag-input';
 import { btnCls, btnGhostCls, inputCls, labelCls } from '@/components/ui';
-import { COLORS, GENDERS, STATUSES, sizeName } from '@/lib/db';
+import { GENDERS, STATUSES, sizeName } from '@/lib/db';
 import type { CategoryRow, SizeLabelRow, SizeRow } from '@/lib/db';
 
 const MAX_ROWS = 50;
@@ -786,30 +786,16 @@ function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onReplace, onRemoveP
           <span className="flex size-32 items-center justify-center rounded-xl border border-line bg-surface text-accent"><TypeIcon type={type} size={72} /></span>
         </div>
       )}
+      <label className={`${labelCls} sm:col-span-6`}>Name (optional)
+        <input className={inputCls} name={`name_${pos}`} maxLength={160} defaultValue={seed?.name ?? ''} placeholder="Made from brand and item type if left blank" />
+      </label>
       {/* Re-made when the trip line changes, so the item type follows "Which one is this?". */}
-      <CategoryPicker key={`${row.id}:${meta.match}`} categories={categories} name={`cat_${pos}`} defaultId={line?.categoryId ?? seed?.categoryId ?? type?.id} className={`${labelCls} sm:col-span-2`} allowNew onTypeChange={setType} />
-      <label className={`${labelCls} sm:col-span-2`}>Name (optional)
-        <input className={inputCls} name={`name_${pos}`} maxLength={160} defaultValue={seed?.name ?? ''} />
-      </label>
-      <label className={`${labelCls} sm:col-span-2`}>Brand
-        <BrandSelect brands={brands} name={`brand_${pos}`} defaultValue={seed?.brand ?? ''} />
-      </label>
-      <label className={`${labelCls} sm:col-span-2`}>Color
-        <select className={inputCls} name={`color_${pos}`} value={color} onChange={(e) => { picked.current = true; setColor(e.target.value); }}>
-          <option value="">Not set</option>
-          {COLORS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-        </select>
-        {!picked.current && row.color && color === row.color && <span className="text-xs font-normal text-muted">Guessed from the photo</span>}
-        {!color && (row.hints?.length ?? 0) > 0 && (
-          <span className="flex flex-wrap items-center gap-1.5 text-xs font-normal text-muted">
-            Looks like:
-            {row.hints!.map((h) => (
-              <button key={h} type="button" onClick={() => { picked.current = true; setColor(h); }}
-                className="rounded-full border border-line bg-surface px-2.5 py-1 text-sm text-ink">{COLORS.find(([v]) => v === h)?.[1] ?? h}</button>
-            ))}
-          </span>
-        )}
-      </label>
+      <CategoryPicker key={`${row.id}:${meta.match}`} categories={categories} name={`cat_${pos}`} defaultId={line?.categoryId ?? seed?.categoryId ?? type?.id} className={`${labelCls} sm:col-span-6`} allowNew onTypeChange={setType} />
+      <div className={`${labelCls} sm:col-span-3`}><BrandInput brands={brands} name={`brand_${pos}`} defaultValue={seed?.brand ?? ''} /></div>
+      <div className={`${labelCls} sm:col-span-6`}>
+        <ColorPills name={`color_${pos}`} value={color} hints={row.hints} onChange={(v) => { picked.current = true; setColor(v); }}
+          note={!picked.current && row.color && color === row.color ? 'Guessed from the photo' : undefined} />
+      </div>
       <TagSizeField labels={labels} value={tag} onChange={setTag} tagName={`tag_${pos}`} customName={`ctag_${pos}`} className={`${labelCls} sm:col-span-2`} />
       {line && differs && sameOk !== diffKey && (
         <div role="alert" className="flex flex-col gap-2 rounded-xl border border-warn bg-warn-soft p-3 text-sm text-warn sm:col-span-6">
@@ -836,19 +822,8 @@ function BulkRow({ row, pos, hidden, onRemove, onSavePhoto, onReplace, onRemoveP
       <TagInput name={`tags_${pos}`} suggestions={tagNames} defaultTags={seed?.tags} className={`${labelCls} sm:col-span-6`}
         hint="Tags for every item (on the first screen) are added too." />
       {/* Blank follows the choice for every item on the first screen; anything picked here wins for this item. */}
-      <label className={`${labelCls} sm:col-span-3`}>Status
-        <select className={inputCls} name={`status_${pos}`} defaultValue="">
-          <option value="">Same as every item</option>
-          {STATUSES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-        </select>
-      </label>
-      <label className={`${labelCls} sm:col-span-3`}>Gender
-        <select className={inputCls} name={`gender_${pos}`} defaultValue="">
-          <option value="">Same as every item</option>
-          <option value="none">Not set</option>
-          {GENDERS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-        </select>
-      </label>
+      <div className={`${labelCls} sm:col-span-6`}><ChoicePills name={`gender_${pos}`} label="Gender" options={[['', 'Same as every item'], ['none', 'Not set'], ...GENDERS]} /></div>
+      <div className={`${labelCls} sm:col-span-6`}><ChoicePills name={`status_${pos}`} label="Status" options={[['', 'Same as every item'], ...STATUSES]} /></div>
       {!row.photo && (
         <div className={`${labelCls} sm:col-span-6`}>
           Photo (optional)

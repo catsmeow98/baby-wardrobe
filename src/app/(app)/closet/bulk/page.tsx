@@ -2,9 +2,10 @@ import type { Metadata } from 'next';
 import { getContext } from '@/lib/context';
 import { NoChild } from '@/components/no-child';
 import { BulkBuilder, type BulkSeed } from '@/components/bulk-builder';
-import { inputCls, labelCls } from '@/components/ui';
+import { labelCls } from '@/components/ui';
 import { GENDERS, STATUSES } from '@/lib/db';
 import { TagInput } from '@/components/tag-input';
+import { ChoicePills } from '@/components/pickers';
 import { loadTags } from '@/lib/tags';
 import type { ItemRow, SizeLabelRow } from '@/lib/db';
 import { bulkCreate } from '../actions';
@@ -88,12 +89,8 @@ export default async function BulkPage({ searchParams }: { searchParams: Promise
           <TagInput name="tags_shared" suggestions={tagNames} label="Tags for every item" defaultTags={tripTag ? [tripTag] : []}
             hint={tripTag ? 'Added to each item, on top of its own tags. The trip’s name is here so you can find these later.' : 'Added to each item, on top of its own tags.'}
             className={`${labelCls} sm:col-span-2`} />
-          <label className={labelCls}>Status
-            <select className={inputCls} name="status" defaultValue="active">{STATUSES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
-          </label>
-          <label className={labelCls}>Gender (optional)
-            <select className={inputCls} name="gender" defaultValue={src?.gender ?? ''}><option value="">Not set</option>{GENDERS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
-          </label>
+          <div className="sm:col-span-2"><ChoicePills name="gender" label="Gender" options={[['', 'Not set'], ...GENDERS]} defaultValue={src?.gender ?? ''} /></div>
+          <div className="sm:col-span-2"><ChoicePills name="status" label="Status" options={STATUSES} defaultValue="active" /></div>
         </div>
       </BulkBuilder>
     </form>

@@ -1,10 +1,10 @@
 import Link from 'next/link';
-import { BrandSelect } from '@/components/brand-select';
+import { BrandInput, ChoicePills, ColorField } from '@/components/pickers';
 import { CategoryPicker } from '@/components/category-picker';
 import { PhotoPicker } from '@/components/photo-picker';
 import { btnCls, inputCls, labelCls } from '@/components/ui';
 import { FitFields } from '@/components/fit-fields';
-import { COLORS, GENDERS, STATUSES } from '@/lib/db';
+import { GENDERS, STATUSES } from '@/lib/db';
 import { TagInput } from '@/components/tag-input';
 import type { CategoryRow, SizeLabelRow, SizeRow } from '@/lib/db';
 import { StickyActions } from '@/components/sticky-actions';
@@ -53,12 +53,9 @@ export function ItemForm({ action, categories, sizes, labels, brands, defaults: 
           Name (optional)
           <input className={inputCls} name="name" maxLength={160} defaultValue={d.name ?? ''} placeholder="Made from brand and item type if left blank" />
         </label>
-        <CategoryPicker categories={categories} name="categoryId" defaultId={d.categoryId} allowNew />
-        <span className="text-xs text-muted sm:col-span-2">Not listed? Choose &quot;+ New item type&quot; above, or <Link className="text-accent underline" href="/categories">manage your item types</Link>.</span>
-        <label className={labelCls}>
-          Brand
-          <BrandSelect brands={brands} name="brand" defaultValue={d.brand ?? ''} />
-        </label>
+        <CategoryPicker categories={categories} name="categoryId" defaultId={d.categoryId} allowNew className={`${labelCls} sm:col-span-2`} />
+        <span className="-mt-2 text-xs text-muted sm:col-span-2">Not listed? Tap &quot;+ New item type&quot;, or <Link className="text-accent underline" href="/categories">manage your item types</Link>.</span>
+        <div className={labelCls}><BrandInput brands={brands} name="brand" defaultValue={d.brand ?? ''} /></div>
         <label className={labelCls}>
           Quantity
           <input className={inputCls} type="number" name="quantity" min={1} max={999} defaultValue={d.quantity ?? 1} required />
@@ -75,26 +72,9 @@ export function ItemForm({ action, categories, sizes, labels, brands, defaults: 
             fitFeedback: d.fitFeedback === null || d.fitFeedback === undefined ? '' : String(d.fitFeedback),
           }}
         />
-        <label className={labelCls}>
-          Gender (optional)
-          <select className={inputCls} name="gender" defaultValue={d.gender ?? ''}>
-            <option value="">Not set</option>
-            {GENDERS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-          </select>
-        </label>
-        <label className={labelCls}>
-          Color (optional)
-          <select className={inputCls} name="color" defaultValue={d.color ?? ''}>
-            <option value="">Not set</option>
-            {COLORS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-          </select>
-        </label>
-        <label className={labelCls}>
-          Status
-          <select className={inputCls} name="status" defaultValue={d.status ?? 'active'}>
-            {STATUSES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-          </select>
-        </label>
+        <div className="sm:col-span-2"><ColorField name="color" defaultValue={d.color ?? ''} /></div>
+        <div className="sm:col-span-2"><ChoicePills name="gender" label="Gender" options={[['', 'Not set'], ...GENDERS]} defaultValue={d.gender ?? ''} /></div>
+        <div className="sm:col-span-2"><ChoicePills name="status" label="Status" options={STATUSES} defaultValue={d.status ?? 'active'} /></div>
         <TagInput name="tags" suggestions={tagNames} defaultTags={d.tags} className={`${labelCls} sm:col-span-2`}
           hint="Anything you like: a season, a holiday, hand-me-down, stained." />
         <label className={`${labelCls} sm:col-span-2`}>

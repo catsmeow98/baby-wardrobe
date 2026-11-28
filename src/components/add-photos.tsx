@@ -11,12 +11,12 @@ import { uploadPhoto } from '@/lib/photo-upload';
 import { joinPhotoField } from '@/lib/photo-paths';
 import { detectColor } from '@/lib/color-detect';
 import { attachItemPhotos } from '@/app/(app)/closet/actions';
-import { BrandSelect } from '@/components/brand-select';
+import { BrandInput, ColorPills } from '@/components/pickers';
 import { CategoryPicker } from '@/components/category-picker';
 import { TagInput } from '@/components/tag-input';
 import { TagSizeField, type TagValue } from '@/components/tag-size-field';
 import { labelCls } from '@/components/ui';
-import { COLORS, sizeName, type CategoryRow, type SizeLabelRow, type SizeRow } from '@/lib/db';
+import { sizeName, type CategoryRow, type SizeLabelRow, type SizeRow } from '@/lib/db';
 
 export interface PhotoLessItem {
   id: string; name: string; typeName: string; icon: string; size: string; hasColor: boolean;
@@ -150,25 +150,15 @@ function Details({ k, item, guess, hints, categories, labels, sizes, brands, tag
     <details open className="rounded-lg border border-line p-3">
       <summary className="cursor-pointer text-sm font-medium">Details</summary>
       <div className="mt-2 grid gap-3 sm:grid-cols-2">
-        <CategoryPicker categories={categories} name={`cat_${k}`} defaultId={item.categoryId} className={labelCls} allowNew />
-        <label className={labelCls}>Name
+        <label className={`${labelCls} sm:col-span-2`}>Name
           <input className={inputCls} name={`name_${k}`} defaultValue={item.name} maxLength={160} />
         </label>
-        <label className={labelCls}>Brand
-          <BrandSelect brands={brands} name={`brand_${k}`} defaultValue={item.brand} />
-        </label>
-        <label className={labelCls}>Color
-          <select className={inputCls} name={`color_${k}`} value={color} onChange={(e) => setColor(e.target.value)}>
-            <option value="">Not set</option>
-            {COLORS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-          </select>
-          {!item.color && guess && color === guess && <span className="text-xs font-normal text-muted">Guessed from the photo</span>}
-          {!color && hints.length > 0 && (
-            <span className="flex flex-wrap items-center gap-1.5 text-xs font-normal text-muted">Looks like:
-              {hints.map((h) => <button key={h} type="button" onClick={() => setColor(h)} className="rounded-full border border-line bg-surface px-2.5 py-1 text-sm text-ink">{COLORS.find(([v]) => v === h)?.[1] ?? h}</button>)}
-            </span>
-          )}
-        </label>
+        <CategoryPicker categories={categories} name={`cat_${k}`} defaultId={item.categoryId} className={`${labelCls} sm:col-span-2`} allowNew />
+        <div className={labelCls}><BrandInput brands={brands} name={`brand_${k}`} defaultValue={item.brand} /></div>
+        <div className={`${labelCls} sm:col-span-2`}>
+          <ColorPills name={`color_${k}`} value={color} onChange={setColor} hints={item.color ? [] : hints}
+            note={!item.color && guess && color === guess ? 'Guessed from the photo' : undefined} />
+        </div>
         <TagSizeField labels={labels} value={tag} onChange={setTag} tagName={`tag_${k}`} customName={`ctag_${k}`} className={labelCls} />
         <label className={labelCls}>Fits through
           <select className={inputCls} name={`thru_${k}`} defaultValue={item.thruId ?? ''}>
