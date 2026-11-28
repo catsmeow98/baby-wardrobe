@@ -102,6 +102,26 @@ export async function cancelItem(formData: FormData) {
   return back(undefined, 'Cancelled.');
 }
 
+/**
+ * Cancel what's left of an order: entries not yet arrived are cancelled; one that partly arrived keeps what came and stops
+ * waiting for the rest. Nothing already received changes.
+ */
+export async function cancelOrderRest(formData: FormData) {
+  const back = backFor(formData);
+  const id = uuid.safeParse(formData.get('id'));
+  if (!id.success) return back('That order could not be found.');
+  const ctx = await getContext();
+  const { data: rows, error } = await ctx.supabase.from('shopping_items').select('id, quantity_received, status').eq('order_id', id.data).in('status', ['ordered', 'partially_received']);
+  if (error) return back('We could not cancel that order.');
+  for (const r of (rows ?? []) as { id: string; quantity_received: number; status: string }[]) {
+    const change = r.status === 'ordered' ? { status: 'cancelled' } : { status: 'received', quantity_ordered: r.quantity_received };
+    const { error: e2 } = await ctx.supabase.from('shopping_items').update(change).eq('id', r.id);
+    if (e2) return back('We could not cancel all of that order. Try again.');
+  }
+  refresh();
+  return back(undefined, 'The rest of that order is cancelled.');
+}
+
 const cartLineSchema = z.object({ categoryId: uuid, sizeId: uuid, qty: z.number().int().min(1).max(99) });
 
 /**

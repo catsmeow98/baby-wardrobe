@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ItemIcon } from '@/components/item-icon';
 import { Sheet } from '@/components/sheet';
+import { ProgressBar } from '@/components/progress-bar';
 import { defaultOrderName } from '@/components/order-select';
 import { btnCls, btnGhostCls, inputCls } from '@/components/ui';
 import { MAX_IN_CART, cartKey, cartLines, cartPieces, cartStorageKey, leftToFind, parseCart, setInCart, splitKey, type Cart } from '@/lib/cart';
@@ -21,7 +22,12 @@ export interface TypeInfo { name: string; icon: string }
  * cart cleared, or everything marked bought (it goes on the shopping list as ordered, so it counts as incoming).
  * The cart is kept on this device only, one per child.
  */
-export function NeedsCart({ childId, columns, rows, types, sizeLabels, allSizes }: {
+/** One need, for the list view: an item type in a size, with its goal and what is owned and coming. */
+export interface NeedsListRow { categoryId: string; sizeId: string; sizeLabel: string; goal: number; owned: number; incoming: number; need: number }
+
+const VIEW_KEY = 'bw-needs-view';
+
+export function NeedsCart({ childId, columns, rows, list, types, sizeLabels, allSizes }: {
   childId: string;
   columns: NeedsColumn[];
   rows: NeedsRow[];
@@ -30,7 +36,26 @@ export function NeedsCart({ childId, columns, rows, types, sizeLabels, allSizes 
   sizeLabels: Record<string, string>;
   /** Every size in order, for adding something not in the table. */
   allSizes: { sizeId: string; label: string }[];
+  /** The same needs as rows, for the list view. */
+  list: NeedsListRow[];
 }) {
+  // Table or list: one at a time, remembered on this device. The table comes first.
+  const [view, setView] = useState<'table' | 'list'>('table');
+  useEffect(() => {
+    try {
+      if (window.localStorage.getItem(VIEW_KEY) === 'list') setView('list');
+    } catch {
+      // No storage: the table it is.
+    }
+  }, []);
+  const pickView = (v: 'table' | 'list') => {
+    setView(v);
+    try {
+      window.localStorage.setItem(VIEW_KEY, v);
+    } catch {
+      // Not remembered, which is fine.
+    }
+  };
   const router = useRouter();
   const [cart, setCart] = useState<Cart>({});
   const [loaded, setLoaded] = useState(false);
@@ -145,8 +170,42 @@ export function NeedsCart({ childId, columns, rows, types, sizeLabels, allSizes 
   return (
     <>
       {message && <p role={message.bad ? 'alert' : 'status'} className={`mt-2 text-sm ${message.bad ? 'text-bad' : 'text-good'}`}>{message.text}</p>}
-      {rows.length > 0 && <p className="mt-1 text-sm text-muted">In the store? Tap a number (or a –, for extras) to put pieces in your cart.</p>}
-      {rows.length > 0 && <div className="mt-3 overflow-x-auto">
+      <div role="group" aria-label="Show needs as" className="mt-2 inline-flex rounded-lg border border-line p-0.5 text-sm">
+        {(['table', 'list'] as const).map((v) => (
+          <button key={v} type="button" aria-pressed={view === v} onClick={() => pickView(v)}
+            className={`rounded-md px-3 py-1 ${view === v ? 'bg-accent text-accent-ink' : 'text-muted'}`}>{v === 'table' ? 'Table' : 'List'}</button>
+        ))}
+      </div>
+      {view === 'table' && rows.length > 0 && <p className="mt-1 text-sm text-muted">Tap a number (or a –, for extras) to put pieces in your cart.</p>}
+      {view === 'list' && list.length > 0 && (
+        <ul className="mt-3 flex flex-col">
+          {list.map((g) => {
+            const got = inCart(g.categoryId, g.sizeId);
+            const rest = leftToFind(g.need, got);
+            return (
+              <li key={cartKey(g.categoryId, g.sizeId)} className="flex flex-wrap items-center gap-3 border-t border-line py-3 first:border-t-0">
+                <button type="button" className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                  onClick={() => setOpen({ categoryId: g.categoryId, sizeId: g.sizeId, need: g.need, info: { goal: g.goal, owned: g.owned, incoming: g.incoming } })}>
+                  <ItemIcon itemKey={icon(g.categoryId)} size={26} className="shrink-0 text-accent" />
+                  <span className="min-w-0">
+                    <b>{name(g.categoryId)}</b> <span className="text-sm text-muted">{g.sizeLabel}</span>
+                    <span className="block text-xs text-muted">Goal {g.goal} · owned {g.owned} · incoming {g.incoming} · {rest === 0 ? 'covered' : `${rest} to find`}</span>
+                    <span className="mt-1 block w-40"><ProgressBar owned={g.owned} incoming={g.incoming + got} goal={g.goal} /></span>
+                  </span>
+                </button>
+                <span className="flex items-center gap-2">
+                  <button type="button" className="flex size-9 items-center justify-center rounded-full border border-line" aria-label={`One fewer ${name(g.categoryId)} in the cart`}
+                    disabled={got === 0} onClick={() => set(g.categoryId, g.sizeId, got - 1)}>−</button>
+                  <span className="w-12 text-center text-sm tabular-nums">{got ? `🛒 ${got}` : '0'}</span>
+                  <button type="button" className="flex size-9 items-center justify-center rounded-full border border-line" aria-label={`One more ${name(g.categoryId)} in the cart`}
+                    disabled={got >= MAX_IN_CART} onClick={() => set(g.categoryId, g.sizeId, got + 1)}>+</button>
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {view === 'table' && rows.length > 0 && <div className="mt-3 overflow-x-auto">
         <table className="w-full min-w-max border-collapse text-sm">
           <thead>
             <tr>
@@ -203,7 +262,7 @@ export function NeedsCart({ childId, columns, rows, types, sizeLabels, allSizes 
         </table>
       </div>}
 
-      <AddOther types={types} sizes={allSizes} onPick={(categoryId, sizeId) => setOpen({ categoryId, sizeId, need: needOf(categoryId, sizeId) })} />
+      <AddOther view={view} types={types} sizes={allSizes} onPick={(categoryId, sizeId) => setOpen({ categoryId, sizeId, need: needOf(categoryId, sizeId) })} />
 
       {/* Room at the end of the page so the cart bar never covers the last lines. */}
       {pieces > 0 && <div aria-hidden="true" className="h-16" />}
@@ -336,13 +395,13 @@ export function NeedsCart({ childId, columns, rows, types, sizeLabels, allSizes 
 }
 
 /** For anything not in the table (no goal for that item type): pick an item type and size, then set how many are in the cart. */
-function AddOther({ types, sizes, onPick }: { types: Record<string, TypeInfo>; sizes: { sizeId: string; label: string }[]; onPick: (categoryId: string, sizeId: string) => void }) {
+function AddOther({ view, types, sizes, onPick }: { view: 'table' | 'list'; types: Record<string, TypeInfo>; sizes: { sizeId: string; label: string }[]; onPick: (categoryId: string, sizeId: string) => void }) {
   const [cat, setCat] = useState('');
   const [size, setSize] = useState('');
   const sorted = Object.entries(types).sort((a, b) => a[1].name.localeCompare(b[1].name));
   return (
     <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-line pt-3">
-      <p className="w-full text-sm text-muted">Buying something not in the table?</p>
+      <p className="w-full text-sm text-muted">Buying something not in the {view}?</p>
       <select className="rounded-lg border border-line bg-surface px-3 py-2 text-sm" value={cat} onChange={(e) => setCat(e.target.value)} aria-label="Item type">
         <option value="">Item type…</option>
         {sorted.map(([id, t]) => <option key={id} value={id}>{t.name}</option>)}
